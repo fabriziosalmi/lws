@@ -224,6 +224,10 @@ Commands:
   setup           📦 Install Docker and Compose on an LXC container.
 ```
 
+> [!TIP]
+> **Debugging**
+> You can change the log level to `DEBUG` in the `setup_logging` function at the beginning of the `lws.py` file (default is `ERROR`).
+
 ## Security Considerations
 
 Given that LWS involves SSH connections and sensitive operations, it's crucial to:
