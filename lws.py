@@ -13,6 +13,8 @@ import yaml
 import click
 
 
+
+
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for logging."""
 
@@ -636,19 +638,76 @@ def px_create_backup(vmid, storage, mode, region, az):
 
 # lxc
 
+# Function to get the next available VMID
+def get_next_vmid(start_vmid=10000, use_local_only=False, host_details=None):
+    """
+    Generate the next available VMID by finding the highest existing VMID and incrementing it.
+
+    Parameters:
+    - start_vmid: The starting VMID to use if no containers exist.
+    - use_local_only: Boolean to determine if the command should be run locally or remotely.
+    - host_details: Dictionary containing the host, user, and ssh_password for remote execution.
+
+    Returns:
+    - The next available VMID as an integer.
+    """
+    # Command to list the existing containers and their VMIDs
+    list_cmd = ["pct", "list"]
+
+    # Execute the command either locally or remotely
+    result = run_proxmox_command(list_cmd, list_cmd, use_local_only, host_details)
+
+    if result and result.returncode == 0:
+        existing_vmids = []
+        lines = result.stdout.splitlines()
+        for line in lines:
+            # Skip the header line and extract VMID from each line
+            if line.startswith("VMID"):
+                continue
+            vmid = int(line.split()[0])
+            existing_vmids.append(vmid)
+        
+        # Find the next available VMID
+        if existing_vmids:
+            next_vmid = max(existing_vmids) + 1
+        else:
+            next_vmid = start_vmid
+
+        return next_vmid
+    else:
+        logging.error("Failed to retrieve existing VMIDs. Defaulting to start_vmid.")
+        return start_vmid
+
+
+# Command to run LXC instances
+import time
+
+def is_container_locked(instance_id, host_details):
+    """Checks if the container is locked by using the pct config command."""
+    check_lock_cmd = ["pct", "config", str(instance_id)]
+    result = run_proxmox_command(check_lock_cmd, check_lock_cmd, config['use_local_only'], host_details)
+    
+    if result.returncode == 0:
+        return 'lock' in result.stdout
+    else:
+        logging.error(f"Failed to check lock status for instance {instance_id}: {result.stderr}")
+        return False  # Assume it's not locked if the command fails to avoid indefinite retries
+
 @lxc.command('run-instances')
-#@command_alias('ri')
 @click.option('--image-id', required=True, help="ID of the container image template.")
 @click.option('--count', default=1, help="Number of instances to run.")
 @click.option('--size', default='small', type=click.Choice(list(config['instance_sizes'].keys())), help="Instance size.")
 @click.option('--hostname', default=None, help="Hostname for the container.")
-@click.option('--net0', default=f"bridge={config.get('default_network', 'vmbr0')}", help="Network settings for the container.")
+@click.option('--net0', default=f"name=eth0,bridge={config.get('default_network', 'vmbr0')}", help="Network settings for the container.")
 @click.option('--storage-size', default=None, help="Override storage size for the container (e.g., 16G).")
 @click.option('--onboot', default=config.get('default_onboot', True), help="Start the container on boot.")
-@click.option('--lock', default=config.get('default_lock', 'none'), help="Set lock for the container.")
+@click.option('--lock', default=None, help="Set lock for the container. By default, no lock is set.")
+@click.option('--init', default=False, is_flag=True, help="Run initialization script after container creation.")
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
-def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, region, az):
+@click.option('--max-retries', default=5, help="Maximum number of retries to start the container.")
+@click.option('--retry-delay', default=5, help="Delay in seconds between retries.")
+def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay):
     """🛠️ Create and start LXC containers."""
     start_vmid = config.get('start_vmid', 10000)
     instance_config = config['instance_sizes'][size]
@@ -660,7 +719,7 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
     host_details = config['regions'][region]['availability_zones'][az]
 
     for i in range(count):
-        instance_id = get_next_vmid(start_vmid=start_vmid, region=region, az=az)
+        instance_id = get_next_vmid(start_vmid=start_vmid, use_local_only=config['use_local_only'], host_details=host_details)
         create_cmd = [
             "pct", "create", str(instance_id),
             image_id,
@@ -668,9 +727,11 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
             "--cpulimit", str(instance_config['cpulimit']),
             "--net0", net0,
             "--rootfs", storage,
-            "--onboot", str(int(onboot)),
-            "--lock", lock
+            "--onboot", str(int(onboot))
         ]
+
+        if lock:
+            create_cmd.extend(["--lock", lock])
 
         if hostname:
             create_cmd.extend(["--hostname", f"{hostname}-{instance_id}"])
@@ -679,13 +740,40 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
 
         if create_result.returncode == 0:
             click.secho(f"✅ Instance {instance_id} created successfully.", fg='green')
-            start_result = run_proxmox_command(["pct", "start", str(instance_id)], ["pct", "start", str(instance_id)], config['use_local_only'], host_details)
-            if start_result.returncode == 0:
-                click.secho(f"🚀 Instance {instance_id} started.", fg='green')
+            
+            # Retry logic for starting the container
+            for attempt in range(max_retries):
+                if is_container_locked(instance_id, host_details):
+                    click.secho(f"🔄 Instance {instance_id} is locked. Retrying in {retry_delay} seconds... (Attempt {attempt + 1}/{max_retries})", fg='yellow')
+                    time.sleep(retry_delay)
+                else:
+                    start_result = run_proxmox_command(
+                        ["pct", "start", str(instance_id)],
+                        ["pct", "start", str(instance_id)],
+                        config['use_local_only'],
+                        host_details
+                    )
+                    if start_result.returncode == 0:
+                        click.secho(f"🚀 Instance {instance_id} started.", fg='green')
+                        
+                        # Run an initialization script if the --init flag is set
+                        if init:
+                            init_cmd = ["pct", "exec", str(instance_id), "--", "/path/to/init-script.sh"]
+                            init_result = run_proxmox_command(init_cmd, init_cmd, config['use_local_only'], host_details)
+                            if init_result.returncode == 0:
+                                click.secho(f"🔧 Initialization script executed successfully on {instance_id}.", fg='green')
+                            else:
+                                click.secho(f"❌ Failed to execute initialization script on {instance_id}: {init_result.stderr}", fg='red')
+
+                        break
+                    else:
+                        click.secho(f"❌ Failed to start instance {instance_id}: {start_result.stderr}", fg='red')
+                        break
             else:
-                click.secho(f"❌ Failed to start instance {instance_id}: {start_result.stderr}", fg='red')
+                click.secho(f"❌ Failed to start instance {instance_id} after {max_retries} attempts.", fg='red')
         else:
             click.secho(f"❌ Failed to create instance {instance_id}: {create_result.stderr}", fg='red')
+
 
 @lxc.command('stop-instances')
 @click.argument('instance_ids', nargs=-1)
@@ -1025,7 +1113,7 @@ def service(action, service_name, instance_ids, region, az):
             if action == 'status':
                 click.secho(f"📊 Instance {instance_id} - Service '{service_name}' status:\n{result.stdout}", fg='cyan')
             else:
-                click.secho(f"✅ Instance {instance_id} - Service '{service_name}' {action}ed successfully.", fg='green')
+                click.secho(f"✅ Instance {instance_id} - '{service_name}' {action} successfully executed.", fg='green')
         else:
             click.secho(f"❌ Instance {instance_id} - Failed to {action} service '{service_name}': {result.stderr.strip()}", fg='red')
 
@@ -2039,7 +2127,7 @@ def remove(instance_ids, region, az, purge):
 @click.option('--bwlimit', default=None, help="Override I/O bandwidth limit (in KiB/s).")
 @click.option('--start/--no-start', default=True, help="Start the cloned container after creation. Default is true.")
 def clone(source_instance_id, target_instance_id, region, az, target_host, description, hostname, storage, full, pool, bwlimit, start):
-    """🔄 Clone an LXC container by creating a unique snapshot and cloning from it."""
+    """🔄 Clone an LXC container locally or remote."""
     host_details = config['regions'][region]['availability_zones'][az]
     logging.info(f"Cloning LXC container {source_instance_id} to {target_instance_id}")
 
@@ -2096,6 +2184,40 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
         click.secho(f"❌ Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}", fg='red')
         logging.error(f"Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}")
 
+
+@lxc.command('exec')
+@click.argument('instance_ids', nargs=-1, required=True)
+@click.argument('command', nargs=1, required=True)
+@click.option('--region', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+def exec_in_container(instance_ids, command, region, az):
+    """👨🏻‍💻 Execute a command in one or more LXC containers."""
+    if not command:
+        click.secho("❌ No command provided to execute.", fg='red')
+        logging.error("No command provided to execute.")
+        return
+
+    host_details = config['regions'][region]['availability_zones'][az]
+
+    # Convert the single command argument into a list of arguments
+    command_list = command.split()
+
+    for instance_id in instance_ids:
+        exec_cmd = ["pct", "exec", str(instance_id), "--"] + command_list
+
+        logging.info(f"Executing command in instance {instance_id}: {command}")
+        click.secho(f"🔧 Executing command in instance {instance_id}: {command}", fg='cyan')
+        
+        exec_result = run_proxmox_command(exec_cmd, exec_cmd, config['use_local_only'], host_details)
+
+        if exec_result.returncode == 0:
+            logging.info(f"Command executed successfully in instance {instance_id}.")
+            click.secho(f"✅ Command executed successfully in instance {instance_id}.", fg='green')
+            logging.debug(f"Command output for instance {instance_id}: {exec_result.stdout}")
+            click.secho(exec_result.stdout, fg='white')
+        else:
+            logging.error(f"Failed to execute command in instance {instance_id}: {exec_result.stderr}")
+            click.secho(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}", fg='red')
 
 
 if __name__ == '__main__':
