@@ -67,7 +67,7 @@ Before using LWS, ensure you have the following prerequisites:
 
 1. **Clone the Repository**
    ```bash
-   git clone https://github.com/yourusername/lws.git
+   git clone https://github.com/fabriziosalmi/lws.git
    cd lws
    ```
 
