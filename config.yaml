@@ -1,0 +1,457 @@
+use_local_only: false
+start_vmid: 10000
+default_storage: local-lvm
+default_network: vmbr0
+minimum_resources:
+  cores: 1
+  memory_mb: 512
+regions:  
+  eu-south-1:
+    availability_zones:
+      az1:
+        host: proxmox1.public-fqdn.com     # example: public FQDN (access must be secured)
+        user: root
+        ssh_password: password
+      az2:
+        host: 172.23.0.2                   # example: VPN address
+        user: root
+        ssh_password: password
+      az3:
+        host: proxmox3.local               # example: local network
+        user: root
+        ssh_password: password
+      az4:
+        host: 192.168.0.4                  # example: LAN address
+        user: root
+        ssh_password: password
+
+  eu-central-1:
+    availability_zones:
+      pve-rhine:
+        host: pve-rhine.mydomain.com
+        user: root
+        ssh_password: password
+      pve-alps:
+        host: pve-alps.mydomain.com
+        user: root
+        ssh_password: password
+
+  customer-1:
+    availability_zones:
+      office-ny:
+        host: customer-ny-pve-1.local
+        user: root
+        ssh_password: customernypassword
+      office-sfo:
+        host: customer-sfo-pve-1.local
+        user: root
+        ssh_password: customersfopassword
+      office-lax:
+        host: customer-lax-pve-1.local
+        user: root
+        ssh_password: customerlaxpassword
+
+  homelab:
+    availability_zones:
+      proxmox1:
+        host: homelab-proxmox1.local
+        user: root
+        ssh_password: mysecurepassword
+      proxmox2:
+        host: homelab-proxmox2.local
+        user: root
+        ssh_password: mysecurepassword
+      proxmox3:
+        host: homelab-proxmox3.local
+        user: root
+        ssh_password: mysecurepassword
+
+  multi-site:
+    availability_zones:
+      pve-harbor:
+        host: corp-ny-pve-1.local
+        user: root
+        ssh_password: nysecurepassword
+      pve-bayview:
+        host: corp-sf-pve-1.local
+        user: root
+        ssh_password: sfsecurepassword
+      pve-siliconhills:
+        host: corp-austin-pve-1.local
+        user: root
+        ssh_password: austinsecurepassword
+      pve-lakeland:
+        host: corp-chicago-pve-1.local
+        user: root
+        ssh_password: chicagosecurepassword
+
+  ap-northeast-1:
+    availability_zones:
+      pve-sakura:
+        host: ap-northeast-pve-1.local
+        user: root
+        ssh_password: japansecurepassword
+      pve-fujisan:
+        host: ap-northeast-pve-2.local
+        user: root
+        ssh_password: japansecurepassword
+
+instance_sizes:
+  # Open-Source Self-Hosted Applications with Abstract Roles
+  lws-object-storage:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: MinIO for object storage.
+
+  lws-key-value-db:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: DynamoDB Local for key-value database.
+
+  lws-relational-db:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: PostgreSQL for relational database.
+
+  lws-nosql-db:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: MongoDB for NoSQL database.
+
+  lws-container-management:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Portainer for container management.
+
+  lws-cdn-proxy:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: Caddy for reverse proxy and CDN.
+
+  lws-metrics-monitoring:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Prometheus for metrics and monitoring.
+
+  lws-metrics-visualization:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Grafana for data visualization.
+
+  lws-messaging-queue:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Apache ActiveMQ for messaging queues.
+
+  lws-firewall-router:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: OPNsense for firewall and routing.
+
+  lws-search-analytics:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: OpenSearch for search and analytics.
+
+  lws-serverless-functions:
+    memory: 2048  # 2 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: OpenFaaS for serverless functions.
+
+  lws-dns-server:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: CoreDNS for DNS management.
+
+  lws-email-server:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: Mailcow for email management.
+
+  lws-machine-learning:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Hugging Face Transformers for machine learning models.
+
+  lws-identity-management:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Keycloak for identity and access management.
+
+  lws-file-storage:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Nextcloud for file storage and collaboration.
+
+  lws-data-warehouse:
+    memory: 16384  # 16 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+    # Example: ClickHouse for data warehousing.
+
+  lws-sql-query-engine:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Presto for distributed SQL query engine.
+
+  lws-cloud-storage-manager:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: Rclone for managing cloud storage.
+
+  lws-speech-to-text:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: DeepSpeech for speech-to-text processing.
+
+  lws-machine-translation:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: OpenNMT for neural machine translation.
+
+  lws-messaging-broker:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: RabbitMQ for messaging broker.
+
+  lws-secret-management:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: HashiCorp Vault for managing secrets.
+
+  lws-code-server:
+    memory: 2048  # 2 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Coder or code-server for online development environment.
+
+  lws-message-queue:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: Apache Kafka for distributed messaging.
+
+  lws-monitoring-dashboard:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Grafana for building monitoring dashboards.
+
+  lws-log-aggregation:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Loki for log aggregation.
+
+  lws-container-registry:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Harbor for container registry.
+
+  lws-object-storage-scaler:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Ceph for scalable object storage.
+
+  lws-web-server:
+    memory: 2048  # 2 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Nginx for web server.
+
+  lws-load-balancer:
+    memory: 2048  # 2 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: HAProxy for load balancing.
+
+  lws-in-memory-cache:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: Redis for in-memory caching.
+
+  lws-configuration-management:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:20  # 20 GB of storage
+    # Example: Ansible for configuration management.
+
+  lws-orchestration-engine:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: Kubernetes for orchestration.
+
+  lws-vpn-server:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: OpenVPN for VPN server.
+
+  lws-backup-system:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+    # Example: Restic or Bacula for backup solutions.
+
+  lws-static-site-generator:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: Hugo for static site generation.
+
+  lws-dns-management:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: PowerDNS for DNS management.
+
+  # General Purpose Instances: balance of compute, memory, and networking resources.
+  t2-pico:
+    memory: 512  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:8  # 8 GB of storage
+  t2-micro:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:8  # 8 GB of storage
+  t2-small:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+  t2-medium:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+  m5-large:
+    memory: 8192  # 8 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+  m5-xlarge:
+    memory: 16384  # 16 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  m5-2xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+
+  # Compute Optimized Instances: applications that benefit from high-performance processors.
+  c5-large:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+  c5-xlarge:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  c5-2xlarge:
+    memory: 16384  # 16 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  c5-4xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 16   # 16 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+
+  # Memory Optimized Instances: memory-intensive applications like databases.
+  r5-large:
+    memory: 16384  # 16 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  r5-xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  r5-2xlarge:
+    memory: 65536  # 64 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  x1e-xlarge:
+    memory: 65536  # 64 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  x1e-2xlarge:
+    memory: 131072  # 128 GB
+    cpulimit: 8     # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  x1e-4xlarge:
+    memory: 262144  # 256 GB
+    cpulimit: 16    # 16 vCPUs
+    storage: local-lvm:800  # 800 GB of storage
+
+  # Storage Optimized Instances: high, sequential read and write access to very large datasets on local storage.
+  i3-large:
+    memory: 15360  # 15 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:500  # 500 GB of storage
+  i3-xlarge:
+    memory: 30720  # 30 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:1000  # 1 TB of storage
+  i3-2xlarge:
+    memory: 61440  # 60 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:2000  # 2 TB of storage
+  i3-4xlarge:
+    memory: 122880  # 120 GB
+    cpulimit: 16    # 16 vCPUs
+    storage: local-lvm:4000  # 4 TB of storage
+
+  # GPU Instances: machine learning, graphics processing, or general-purpose GPU computing.
+  p3-large:
+    memory: 15360  # 15 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  p3-xlarge:
+    memory: 30720  # 30 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  p3-2xlarge:
+    memory: 61440  # 60 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  p3-8xlarge:
+    memory: 245760  # 240 GB
+    cpulimit: 32    # 32 vCPUs
+    storage: local-lvm:1600  # 1.6 TB of storage
+
+  # High Memory Instances: large amount of memory per instance for running in-memory databases.
+  u-6tb1-metal:
+    memory: 6291456  # 6 TB
+    cpulimit: 448    # 448 vCPUs
+    storage: local-lvm:4000  # 4 TB of storage
+  u-9tb1-metal:
+    memory: 9437184  # 9 TB
+    cpulimit: 448    # 448 vCPUs
+    storage: local-lvm:6000  # 6 TB of storage
+  u-12tb1-metal:
+    memory: 12582912  # 12 TB
+    cpulimit: 448     # 448 vCPUs
+    storage: local-lvm:8000  # 8 TB of storage
