@@ -29,7 +29,7 @@ class JsonFormatter(logging.Formatter):
             log_record['exception'] = self.formatException(record.exc_info)
         return json.dumps(log_record)
 
-def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
+def setup_logging(log_level=logging.ERROR, log_file=None, json_log_file=None):
     """
     Sets up the logging configuration.
     
