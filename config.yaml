@@ -36,99 +36,59 @@ regions:
         user: root
         ssh_password: password
 
-  customer-1:
-    availability_zones:
-      office-ny:
-        host: customer-ny-pve-1.local
-        user: root
-        ssh_password: customernypassword
-      office-sfo:
-        host: customer-sfo-pve-1.local
-        user: root
-        ssh_password: customersfopassword
-      office-lax:
-        host: customer-lax-pve-1.local
-        user: root
-        ssh_password: customerlaxpassword
-
-  homelab:
-    availability_zones:
-      proxmox1:
-        host: homelab-proxmox1.local
-        user: root
-        ssh_password: mysecurepassword
-      proxmox2:
-        host: homelab-proxmox2.local
-        user: root
-        ssh_password: mysecurepassword
-      proxmox3:
-        host: homelab-proxmox3.local
-        user: root
-        ssh_password: mysecurepassword
-
-  multi-site:
-    availability_zones:
-      pve-harbor:
-        host: corp-ny-pve-1.local
-        user: root
-        ssh_password: nysecurepassword
-      pve-bayview:
-        host: corp-sf-pve-1.local
-        user: root
-        ssh_password: sfsecurepassword
-      pve-siliconhills:
-        host: corp-austin-pve-1.local
-        user: root
-        ssh_password: austinsecurepassword
-      pve-lakeland:
-        host: corp-chicago-pve-1.local
-        user: root
-        ssh_password: chicagosecurepassword
-
-  ap-northeast-1:
-    availability_zones:
-      pve-sakura:
-        host: ap-northeast-pve-1.local
-        user: root
-        ssh_password: japansecurepassword
-      pve-fujisan:
-        host: ap-northeast-pve-2.local
-        user: root
-        ssh_password: japansecurepassword
-
 instance_sizes:
+  # Generic
+  micro:
+    memory: 512 
+    cpulimit: 1 
+    storage: local-lvm:4  
+  small:
+    memory: 1024 
+    cpulimit: 1 
+    storage: local-lvm:8   
+  mid:
+    memory: 2048 
+    cpulimit: 2
+    storage: local-lvm:16  
+  large:
+    memory: 4096 
+    cpulimit: 2
+    storage: local-lvm:32   
+  x-large:
+    memory: 8192 
+    cpulimit: 4 
+    storage: local-lvm:64   
+  xx-large:
+    memory: 16384 
+    cpulimit: 8 
+    storage: local-lvm:128 
+
   # Open-Source Self-Hosted Applications with Abstract Roles
-  lws-object-storage:
+  lws-minio:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:50  # 50 GB of storage
     # Example: MinIO for object storage.
 
-  lws-key-value-db:
-    memory: 2048  # 2 GB
-    cpulimit: 1   # 1 vCPU
-    storage: local-lvm:20  # 20 GB of storage
-    # Example: DynamoDB Local for key-value database.
-
-  lws-relational-db:
+  lws-postgres:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:40  # 40 GB of storage
     # Example: PostgreSQL for relational database.
 
-  lws-nosql-db:
+  lws-mysql:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: MySQL for relational database.
+    
+  lws-nosql:
     memory: 8192  # 8 GB
     cpulimit: 4   # 4 vCPUs
     storage: local-lvm:50  # 50 GB of storage
     # Example: MongoDB for NoSQL database.
 
-  lws-container-management:
-    memory: 2048  # 2 GB
-    cpulimit: 1   # 1 vCPU
-    storage: local-lvm:20  # 20 GB of storage
-    # Example: Portainer for container management.
-
-  lws-cdn-proxy:
+  lws-cdn:
     memory: 1024  # 1 GB
     cpulimit: 1   # 1 vCPU
     storage: local-lvm:10  # 10 GB of storage
@@ -146,13 +106,13 @@ instance_sizes:
     storage: local-lvm:20  # 20 GB of storage
     # Example: Grafana for data visualization.
 
-  lws-messaging-queue:
+  lws-mq:
     memory: 2048  # 2 GB
     cpulimit: 1   # 1 vCPU
     storage: local-lvm:20  # 20 GB of storage
     # Example: Apache ActiveMQ for messaging queues.
 
-  lws-firewall-router:
+  lws-firewall:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:20  # 20 GB of storage
@@ -164,19 +124,19 @@ instance_sizes:
     storage: local-lvm:50  # 50 GB of storage
     # Example: OpenSearch for search and analytics.
 
-  lws-serverless-functions:
+  lws-serverless:
     memory: 2048  # 2 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:20  # 20 GB of storage
     # Example: OpenFaaS for serverless functions.
 
-  lws-dns-server:
+  lws-dns:
     memory: 1024  # 1 GB
     cpulimit: 1   # 1 vCPU
     storage: local-lvm:10  # 10 GB of storage
     # Example: CoreDNS for DNS management.
 
-  lws-email-server:
+  lws-email:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:40  # 40 GB of storage
@@ -206,59 +166,17 @@ instance_sizes:
     storage: local-lvm:100  # 100 GB of storage
     # Example: ClickHouse for data warehousing.
 
-  lws-sql-query-engine:
-    memory: 8192  # 8 GB
-    cpulimit: 4   # 4 vCPUs
-    storage: local-lvm:50  # 50 GB of storage
-    # Example: Presto for distributed SQL query engine.
-
-  lws-cloud-storage-manager:
-    memory: 1024  # 1 GB
-    cpulimit: 1   # 1 vCPU
-    storage: local-lvm:10  # 10 GB of storage
-    # Example: Rclone for managing cloud storage.
-
-  lws-speech-to-text:
-    memory: 8192  # 8 GB
-    cpulimit: 4   # 4 vCPUs
-    storage: local-lvm:50  # 50 GB of storage
-    # Example: DeepSpeech for speech-to-text processing.
-
-  lws-machine-translation:
-    memory: 8192  # 8 GB
-    cpulimit: 4   # 4 vCPUs
-    storage: local-lvm:50  # 50 GB of storage
-    # Example: OpenNMT for neural machine translation.
-
   lws-messaging-broker:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:40  # 40 GB of storage
     # Example: RabbitMQ for messaging broker.
 
-  lws-secret-management:
-    memory: 4096  # 4 GB
-    cpulimit: 2   # 2 vCPUs
-    storage: local-lvm:20  # 20 GB of storage
-    # Example: HashiCorp Vault for managing secrets.
-
   lws-code-server:
     memory: 2048  # 2 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:20  # 20 GB of storage
     # Example: Coder or code-server for online development environment.
-
-  lws-message-queue:
-    memory: 4096  # 4 GB
-    cpulimit: 2   # 2 vCPUs
-    storage: local-lvm:40  # 40 GB of storage
-    # Example: Apache Kafka for distributed messaging.
-
-  lws-monitoring-dashboard:
-    memory: 4096  # 4 GB
-    cpulimit: 2   # 2 vCPUs
-    storage: local-lvm:20  # 20 GB of storage
-    # Example: Grafana for building monitoring dashboards.
 
   lws-log-aggregation:
     memory: 8192  # 8 GB
@@ -271,12 +189,6 @@ instance_sizes:
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:50  # 50 GB of storage
     # Example: Harbor for container registry.
-
-  lws-object-storage-scaler:
-    memory: 4096  # 4 GB
-    cpulimit: 2   # 2 vCPUs
-    storage: local-lvm:50  # 50 GB of storage
-    # Example: Ceph for scalable object storage.
 
   lws-web-server:
     memory: 2048  # 2 GB
