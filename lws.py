@@ -385,8 +385,8 @@ def list_hosts():
             
 @px.command('reboot')
 #@command_alias('proxmox-reboot')
-@click.option('--region', default='eu-south-1', help="Region in which the Proxmox host is located. Defaults to 'eu-south-1'.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target. Defaults to 'az1'.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--confirm', is_flag=True, help="Confirm that you want to reboot the Proxmox host.")
 def reboot_proxmox(region, az, confirm):
     """🔄 Reboot the Proxmox host.
@@ -428,8 +428,8 @@ def reboot_proxmox(region, az, confirm):
 #@command_alias('upload-template')
 @click.argument('local_path')
 @click.argument('remote_template_name', required=False)
-@click.option('--region', default='eu-south-1', help="Region in which the Proxmox host is located. Defaults to 'eu-south-1'.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target. Defaults to 'az1'.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--storage-path', default='/var/lib/vz/template/cache', help="Remote path to upload the template. Defaults to Proxmox template directory.")
 def upload_template(local_path, remote_template_name, region, az, storage_path):
     """💽 Upload template to Proxmox host.
@@ -469,8 +469,8 @@ def upload_template(local_path, remote_template_name, region, az, storage_path):
 
 
 @px.command('status')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_status(region, az):
     """📊 Monitor resource usage of a Proxmox host."""
     # click.secho(f"🔍 Debug: Loading configuration for region '{region}' and availability zone '{az}'", fg='yellow')
@@ -526,8 +526,8 @@ def px_status(region, az):
             click.secho(f"❌ Failed to retrieve {metric_name} on host {host}: {result.stderr if result else 'Unknown error'}", fg='red')
 
 @px.command('clusters')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_list_clusters(region, az):
     """🔍 List all clusters in the Proxmox environment."""
     
@@ -577,8 +577,8 @@ def px_update_hosts():
         click.secho(f"❌ Failed to update hosts: {result.stderr}", fg='red')
 
 @px.command('cluster-start')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_start_cluster_services(region, az):
     """🚀 Start all cluster services on Proxmox hosts."""
 
@@ -603,8 +603,8 @@ def px_start_cluster_services(region, az):
         click.secho(f"❌ Failed to start cluster services on host {host}: {result.stderr.strip()}", fg='red')
 
 @px.command('cluster-stop')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_stop_cluster_services(region, az):
     """🛑 Stop all cluster services on Proxmox hosts."""
 
@@ -629,8 +629,8 @@ def px_stop_cluster_services(region, az):
         click.secho(f"❌ Failed to stop cluster services on host {host}: {result.stderr.strip()}", fg='red')
 
 @px.command('cluster-restart')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_restart_cluster_services(region, az):
     """🔄 Restart all cluster services on Proxmox hosts."""
 
@@ -660,8 +660,8 @@ def px_restart_cluster_services(region, az):
 @click.argument('vmid')
 @click.option('--storage', required=True, help="The storage target where the backup will be stored.")
 @click.option('--mode', default='snapshot', type=click.Choice(['snapshot', 'suspend', 'stop']), help="Backup mode: snapshot, suspend, or stop.")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def px_create_backup(vmid, storage, mode, region, az):
     """💾 Create a backup of a specific LXC container."""
     
@@ -752,8 +752,8 @@ def is_container_locked(instance_id, host_details):
 @click.option('--onboot', default=config.get('default_onboot', True), help="Start the container on boot.")
 @click.option('--lock', default=None, help="Set lock for the container. By default, no lock is set.")
 @click.option('--init', default=False, is_flag=True, help="Run initialization script after container creation.")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--max-retries', default=5, help="Maximum number of retries to start the container.")
 @click.option('--retry-delay', default=5, help="Delay in seconds between retries.")
 def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay):
@@ -826,24 +826,24 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
 
 @lxc.command('stop')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def stop_instances(instance_ids, region, az):
     """🛑 Stop running LXC containers."""
     process_instance_command(instance_ids, 'stop', region, az)
 
 @lxc.command('terminate')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def terminate_instances(instance_ids, region, az):
     """💥 Terminate (destroy) LXC containers."""
     process_instance_command(instance_ids, 'terminate', region, az)
 
 @lxc.command('show')
 @click.argument('instance_ids', nargs=-1, required=False)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def describe_instances(instance_ids, region, az):
     """🔍 Describe LXC containers."""
     if instance_ids:
@@ -866,8 +866,8 @@ def describe_instances(instance_ids, region, az):
 @click.option('--net-limit', default=None, help="Network bandwidth limit (e.g., 10mbit).")
 @click.option('--disk-read-limit', default=None, help="Disk read limit (e.g., 50mb).")
 @click.option('--disk-write-limit', default=None, help="Disk write limit (e.g., 30mb).")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def scale_instances(instance_ids, memory, cpulimit, cpucores, storage_size, net_limit, disk_read_limit, disk_write_limit, region, az):
     """📏 Scale resources LXC containers."""
     
@@ -915,8 +915,8 @@ def scale_instances(instance_ids, memory, cpulimit, cpucores, storage_size, net_
 @lxc.command('snapshot-add')
 @click.argument('instance_id')
 @click.argument('snapshot_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def create_snapshot(instance_id, snapshot_name, region, az):
     """📸 Create a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_create', region, az, snapshot_name=snapshot_name)
@@ -924,32 +924,32 @@ def create_snapshot(instance_id, snapshot_name, region, az):
 @lxc.command('snapshot-rm')
 @click.argument('instance_id')
 @click.argument('snapshot_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def delete_snapshot(instance_id, snapshot_name, region, az):
     """🗑️ Delete a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_delete', region, az, snapshot_name=snapshot_name)
 
 @lxc.command('show-snapshots')
 @click.argument('instance_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def list_snapshots(instance_id, region, az):
     """🗃️ List all snapshots of an LXC container."""
     process_instance_command([instance_id], 'list_snapshots', region, az)
 
 @lxc.command('start')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def start_instances(instance_ids, region, az):
     """🚀 Start stopped LXC containers."""
     process_instance_command(instance_ids, 'start', region, az)
 
 @lxc.command('reboot')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def reboot_instances(instance_ids, region, az):
     """🔄 Reboot running LXC containers."""
     process_instance_command(instance_ids, 'reboot', region, az)
@@ -957,8 +957,8 @@ def reboot_instances(instance_ids, region, az):
 @px.command('image-add')
 @click.argument('instance_id')
 @click.argument('template_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def create_image(instance_id, template_name, region, az):
     """📦 Create a template image from an LXC container."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -985,8 +985,8 @@ def create_image(instance_id, template_name, region, az):
 
 @px.command('image-rm')
 @click.argument('template_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def delete_image(template_name, region, az):
     """🗑️ Delete a template image from Proxmox host."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1009,8 +1009,8 @@ def delete_image(template_name, region, az):
 @click.argument('volume_name')
 @click.argument('volume_size')
 @click.option('--mount-point', default=None, help="The mount point for the volume inside the container (e.g., /mnt/data).")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def attach_volume(instance_id, volume_name, volume_size, mount_point, region, az):
     """🔗 Attach a storage volume to an LXC container."""
     
@@ -1039,8 +1039,8 @@ def attach_volume(instance_id, volume_name, volume_size, mount_point, region, az
 @lxc.command('volume-detach')
 @click.argument('instance_id')
 @click.argument('volume_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def detach_volume(instance_id, volume_name, region, az):
     """🔓 Detach a storage volume from an LXC container."""
     
@@ -1064,8 +1064,8 @@ def detach_volume(instance_id, volume_name, region, az):
 
 @lxc.command('status')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def monitor_instances(instance_ids, region, az):
     """📊 Monitor resources of LXC containers."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1125,8 +1125,8 @@ import subprocess
 @click.argument('action', type=click.Choice(['status', 'start', 'stop', 'restart', 'reload', 'enable']))
 @click.argument('service_name')
 @click.argument('instance_ids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def service(action, service_name, instance_ids, region, az):
     """🔧 Manage a service of LXC containers."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1151,8 +1151,8 @@ def service(action, service_name, instance_ids, region, az):
 @lxc.command('migrate')
 @click.argument('instance_id')
 @click.option('--target-host', required=True, help="Target Proxmox host where the LXC container will be migrated.")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) where the LXC container currently resides.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def lxc_migrate(instance_id, target_host, region, az):
     """🔄 Migrate LXC container between hosts."""
     
@@ -1200,8 +1200,8 @@ def is_clustered():
 @px.command('security-group-add')
 @click.argument('group_name')
 @click.option('--description', default='', help="Description of the security group.")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def create_security_group_cluster(group_name, description, region, az):
     """🔐 Create security group on Proxmox host."""
 
@@ -1229,8 +1229,8 @@ def create_security_group_cluster(group_name, description, region, az):
 
 @px.command('security-group-rm')
 @click.argument('group_name')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def remove_security_group_cluster(group_name, region, az):
     """🗑️ Delete a security group on Proxmox host."""
 
@@ -1269,8 +1269,8 @@ def remove_security_group_cluster(group_name, region, az):
 @click.option('--source-port', default=None, help="Source port number or range (e.g., 22, 80:443).")
 @click.option('--destination-ip', default=None, help="Destination IP or CIDR for egress rules.")
 @click.option('--destination-port', default=None, help="Destination port number or range (e.g., 22, 80:443).")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def add_rule_to_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
     """➕ Add a rule to a existing security group."""
 
@@ -1313,8 +1313,8 @@ def add_rule_to_group(group_name, direction, action, protocol, source_ip, source
 @click.option('--source-port', default=None, help="Source port number or range (e.g., 22, 80:443).")
 @click.option('--destination-ip', default=None, help="Destination IP or CIDR for egress rules.")
 @click.option('--destination-port', default=None, help="Destination port number or range (e.g., 22, 80:443).")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def remove_rule_from_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
     """➖ Remove a rule from an existing security group."""
 
@@ -1351,8 +1351,8 @@ def remove_rule_from_group(group_name, direction, action, protocol, source_ip, s
 @px.command('security-group-attach')
 @click.argument('group_name')
 @click.argument('vmid')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def attach_security_group_to_lxc(group_name, vmid, region, az):
     """🔗 Attach security group to an LXC container."""
 
@@ -1390,8 +1390,8 @@ def attach_security_group_to_lxc(group_name, vmid, region, az):
 @px.command('security-group-detach')
 @click.argument('group_name')
 @click.argument('vmid')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def detach_security_group_from_lxc(group_name, vmid, region, az):
     """🔓 Detach security group from an LXC container."""
 
@@ -1424,8 +1424,8 @@ def detach_security_group_from_lxc(group_name, vmid, region, az):
 
 @lxc.command('show-storage')
 @click.argument('instance_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def lxc_list_storage(instance_id, region, az):
     """🔍 List storage details for LXC container."""
     
@@ -1525,8 +1525,8 @@ def get_lxc_resources(instance_id, host_details):
 
 @lxc.command('scale-check')
 @click.argument('instance_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def suggest_resources(instance_id, region, az):
     """⚖️ Scaling adjustments for an LXC container."""
     config = load_config()
@@ -1591,8 +1591,8 @@ def app():
 @app.command('setup')
 @click.argument('instance_ids', nargs=-1)  # Accept multiple instance IDs
 @click.argument('package_name', default='docker')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def install_docker(instance_ids, package_name, region, az):
     """📦 Install Docker and Compose on an LXC container."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1662,8 +1662,8 @@ def install_docker(instance_ids, package_name, region, az):
 @app.command('run')
 @click.argument('instance_id')
 @click.argument('docker_command', nargs=-1, type=click.UNPROCESSED)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def run_docker(instance_id, docker_command, region, az):
     """🚀 Execute docker run inside an LXC container."""
     logging.debug(f"Starting dock run with instance_id: {instance_id} and docker_command: {docker_command}")
@@ -1739,8 +1739,8 @@ def run_docker(instance_id, docker_command, region, az):
 @click.argument('action', type=click.Choice(['install', 'uninstall', 'start', 'stop', 'restart', 'status']))
 @click.argument('instance_id')  # Instance ID is now a positional argument
 @click.option('--compose_file', required=True, help="Local path or remote URL to the Docker Compose YAML file.")
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--auto_start', is_flag=True, help="Enable auto-start for the application.")
 def compose(action, instance_id, compose_file, region, az, auto_start):
     """🚀 Manage apps with Compose on LXC containers."""
@@ -1934,8 +1934,8 @@ WantedBy=multi-user.target
 @app.command('update')
 @click.argument('instance_id')
 @click.argument('compose_file', required=True)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def compose_update(instance_id, compose_file, region, az):
     """🆕 Update app within an LXC container via Compose."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1999,8 +1999,8 @@ def compose_update(instance_id, compose_file, region, az):
 @app.command('logs')
 @click.argument('instance_id')
 @click.argument('container_name_or_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--tail', default='all', help="Number of lines to show from the end of the logs.")
 @click.option('--follow', is_flag=True, help="Stream logs in real-time.")
 def logs(instance_id, container_name_or_id, region, az, tail, follow):
@@ -2029,8 +2029,8 @@ def logs(instance_id, container_name_or_id, region, az, tail, follow):
 
 @app.command('list')
 @click.argument('instance_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def containers(instance_id, region, az):
     """📦 List Docker containers in an LXC container."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -2052,8 +2052,8 @@ def containers(instance_id, region, az):
 
 @app.command('remove')
 @click.argument('instance_ids', nargs=-1)  # Accept multiple instance IDs
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--purge', is_flag=True, help="Remove all Docker images, containers, volumes, and networks.")
 def remove(instance_ids, region, az, purge):
     """🗑️ Uninstall Docker and Compose from LXC containers."""
@@ -2087,8 +2087,8 @@ def remove(instance_ids, region, az, purge):
 @lxc.command('clone')
 @click.argument('source_instance_id')
 @click.argument('target_instance_id')
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--target-host', default=None, help="Target Proxmox host for the clone.")
 @click.option('--description', default=None, help="Description for the new container.")
 @click.option('--hostname', default=None, help="Hostname for the new container.")
@@ -2159,8 +2159,8 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 @lxc.command('exec')
 @click.argument('instance_ids', nargs=-1, required=True)
 @click.argument('command', nargs=1, required=True)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def exec_in_container(instance_ids, command, region, az):
     """👨🏻‍💻 Execute a command in one or more LXC containers."""
     if not command:
