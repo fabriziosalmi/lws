@@ -161,8 +161,9 @@ def run_ssh_command(host, user, ssh_password, command):
 
     except subprocess.CalledProcessError as e:
         # Log the error without showing the password
-        logging.error(f"❌ SSH command failed with return code {e.returncode}: {' '.join(sanitized_ssh_cmd)}")
-        logging.error(f"❌ Error output: {e.stderr}")
+
+        logging.debug(f"❌ SSH command failed with return code {e.returncode}: {' '.join(sanitized_ssh_cmd)}")
+        logging.debug(f"❌ Error output: {e.stderr}")
         return e
 
     except Exception as e:
@@ -2688,6 +2689,220 @@ def px_backup_hosts(backup_dir, region, az):
     else:
         logging.error(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}")
         click.secho(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}", fg='red')
+
+
+
+### sec 
+import ipaddress
+
+# Helper function to load the configuration file
+def sec_discovery_load_config(config_path='config.yaml'):
+    """Loads the configuration from a YAML file."""
+    try:
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        logging.debug(f"Configuration loaded successfully from {config_path}.")
+        return config
+    except Exception as e:
+        logging.error(f"Failed to load configuration file: {str(e)}")
+        return {}
+    
+@lws.group()
+@command_alias('sec')
+def sec():
+    """🛠️ Security related commands.."""
+    pass
+
+@sec.command('discovery')
+@click.argument('lxc_id', required=False)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+def sec_discovery(lxc_id, region, az):
+    """🔍 Discover reachable hosts in the same subnet at client, Proxmox, and LXC levels."""
+    logging.info(f"Starting discovery for region {region}, AZ {az}, LXC ID {lxc_id}")
+
+    config = sec_discovery_load_config()
+    if not config:
+        click.secho("❌ Failed to load configuration.", fg='red')
+        return
+
+    discovery_methods = config['security']['discovery'].get('discovery_methods', ['ping', 'curl', 'wget'])
+    max_workers = config['security']['discovery'].get('max_parallel_workers', 10)
+
+    reachable_hosts = {}
+
+    # Perform discovery at the client level
+    client_ip = sec_discovery_get_local_ip_address()
+    if client_ip and not client_ip.startswith("127."):
+        client_subnet = ipaddress.ip_network(client_ip + '/24', strict=False)
+        click.secho(f"🔍 Client IP: {client_ip}, Subnet: {client_subnet}", fg='cyan')
+        client_hosts = sec_discovery_perform_discovery('client', client_ip, client_subnet, discovery_methods, max_workers=max_workers)
+        for host in client_hosts:
+            reachable_hosts.setdefault(host, []).append(f"client ({client_ip})")
+
+    # Perform discovery at the Proxmox node level
+    host_details = sec_discovery_get_proxmox_host_details(region, az)
+    proxmox_ip = sec_discovery_get_remote_ip_address(host_details)
+    if proxmox_ip and not proxmox_ip.startswith("127."):
+        proxmox_subnet = ipaddress.ip_network(proxmox_ip + '/24', strict=False)
+        click.secho(f"🔍 Proxmox Host IP: {proxmox_ip}, Subnet: {proxmox_subnet}", fg='cyan')
+        proxmox_hosts = sec_discovery_perform_discovery('proxmox', proxmox_ip, proxmox_subnet, discovery_methods, max_workers=max_workers, host_details=host_details)
+        for host in proxmox_hosts:
+            reachable_hosts.setdefault(host, []).append(f"proxmox ({proxmox_ip})")
+
+    # Perform discovery at the LXC level if LXC ID is provided
+    if lxc_id:
+        lxc_ip = sec_discovery_get_lxc_ip_address(lxc_id, host_details)
+        if lxc_ip and not lxc_ip.startswith("127."):
+            lxc_subnet = ipaddress.ip_network(lxc_ip + '/24', strict=False)
+            click.secho(f"🔍 LXC ID: {lxc_id}, IP: {lxc_ip}, Subnet: {lxc_subnet}", fg='cyan')
+            lxc_hosts = sec_discovery_perform_discovery('lxc', lxc_ip, lxc_subnet, discovery_methods, max_workers=max_workers, host_details=host_details)
+            for host in lxc_hosts:
+                reachable_hosts.setdefault(host, []).append(f"lxc {lxc_id} ({lxc_ip})")
+
+    # Combine and print the final list of reachable hosts
+    if reachable_hosts:
+        click.secho("🔍 Reachable hosts:", fg='white')
+        for host, sources in reachable_hosts.items():
+            click.secho(f"🟢 -> {host}", fg='green')
+            # click.secho(f"🟢 -> {host} | {' | '.join(sources)}", fg='green')
+    else:
+        click.secho("❌ No reachable hosts found.", fg='red')
+
+# Helper functions (prefix with sec_discovery_ to avoid conflicts)
+def sec_discovery_get_local_ip_address():
+    """Get the local IP address of the client."""
+    hostname = socket.gethostname()
+    local_ip = socket.gethostbyname(hostname)
+    return local_ip
+
+def sec_discovery_get_proxmox_host_details(region, az):
+    """Retrieve Proxmox host details from the configuration."""
+    config = sec_discovery_load_config()
+    try:
+        return config['regions'][region]['availability_zones'][az]
+    except KeyError as e:
+        logging.error(f"Invalid region or availability zone: {e}")
+        return None
+
+def sec_discovery_get_remote_ip_address(host_details):
+    """Retrieve the IP address of a remote Proxmox host."""
+    command = ["hostname", "-I"]
+    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], command)
+    if result.returncode == 0:
+        return result.stdout.split()[0]
+    else:
+        logging.error(f"Failed to retrieve remote IP address: {result.stderr}")
+        return None
+
+def sec_discovery_get_lxc_ip_address(lxc_id, host_details):
+    """Retrieve the IP address of an LXC container."""
+    command = ["pct", "exec", lxc_id, "--", "hostname", "-I"]
+    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], command)
+    if result.returncode == 0:
+        return result.stdout.split()[0]
+    else:
+        logging.error(f"Failed to retrieve LXC IP address for LXC ID {lxc_id}: {result.stderr}")
+        return None
+
+def sec_discovery_perform_discovery(level, source_ip, subnet, discovery_methods, max_workers=10, host_details=None):
+    """Perform the discovery using multiple methods."""
+    discovered_hosts = []
+
+    def run_discovery_method(method, target_ip):
+        command = []
+        if method == "ping":
+            command = ["ping", "-c", "1", "-W", "1", target_ip]
+        elif method == "curl":
+            command = ["curl", "-Is", "--max-time", "2", f"http://{target_ip}"]
+        elif method == "wget":
+            command = ["wget", "--spider", "--timeout", "2", f"http://{target_ip}"]
+
+        if command:
+            if level == "client":
+                result = execute_command(command, use_local_only=True)
+            else:
+                result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], command)
+
+            if result.returncode == 0:
+                logging.debug(f"{method} succeeded for {target_ip} at level {level}.")
+                discovered_hosts.append(target_ip)
+            else:
+                logging.debug(f"{method} failed for {target_ip} at level {level}.")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_ip = {
+            executor.submit(run_discovery_method, method, str(ip)): str(ip)
+            for ip in subnet
+            if not str(ip).startswith("127.") and ip != subnet.network_address and ip != subnet.broadcast_address
+            for method in discovery_methods
+        }
+        for future in as_completed(future_to_ip):
+            ip = future_to_ip[future]
+            try:
+                future.result()
+            except Exception as exc:
+                logging.error(f"Error during discovery for {ip}: {exc}")
+
+    return discovered_hosts
+
+import subprocess
+import signal
+def sec_discovery_perform_discovery(level, source_ip, subnet, discovery_methods, max_workers=10, host_details=None):
+    """Perform the discovery using multiple methods."""
+    discovered_hosts = []
+
+    def run_discovery_method(method, target_ip):
+        command = []
+        if method == "ping":
+            command = ["ping", "-c", "1", "-W", "1", target_ip]
+    #    elif method == "curl":
+    #        command = ["curl", "-Is", "--connect-timeout", "1", "--dns-timeout", "1", "--max-time", "1", f"http://{target_ip}"]
+    #    elif method == "wget":
+    #        command = ["wget", "--read-timeout", "1", "--connect-timeout", "1", "--timeout", "1", f"http://{target_ip}"]
+
+        if command:
+            try:
+                # Execute with a timeout using subprocess's built-in timeout feature
+                result = execute_with_timeout(command, timeout=5, use_local_only=(level == "client"), host_details=host_details)
+                if result.returncode == 0:
+                    logging.debug(f"{method} succeeded for {target_ip} at level {level}.")
+                    discovered_hosts.append(target_ip)
+                else:
+                    logging.debug(f"{method} failed for {target_ip} at level {level}.")
+            except subprocess.TimeoutExpired:
+                logging.error(f"Timeout reached for {method} on {target_ip} at level {level}.")
+            except Exception as e:
+                logging.error(f"An error occurred during discovery with {method} on {target_ip}: {str(e)}")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_ip = {
+            executor.submit(run_discovery_method, method, str(ip)): str(ip)
+            for ip in subnet
+            if not str(ip).startswith("127.") and ip != subnet.network_address and ip != subnet.broadcast_address
+            for method in discovery_methods
+        }
+        for future in as_completed(future_to_ip):
+            ip = future_to_ip[future]
+            try:
+                future.result()
+            except Exception as exc:
+                logging.error(f"Error during discovery for {ip}: {exc}")
+
+    return discovered_hosts
+
+def execute_with_timeout(command, timeout, use_local_only, host_details=None):
+    """Executes a command with a timeout using subprocess."""
+    try:
+        if use_local_only:
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout)
+        else:
+            result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], command)
+        return result
+    except subprocess.TimeoutExpired as e:
+        logging.error(f"Command '{' '.join(command)}' timed out after {timeout} seconds")
+        raise
+
 
 
 if __name__ == '__main__':
