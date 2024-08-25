@@ -2285,6 +2285,36 @@ def net_check(instance_id, protocol, port, region, az, timeout):
             click.secho(f"🔴 Instance {instance_id} is not responding after {attempt + 1} attempts.", fg='red')
             return
 
+@px.command('templates')
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+def list_templates(region, az):
+    """📄 List all available templates in the Proxmox cache directory."""
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+    
+    # Command to list the contents of the /var/lib/vz/template/cache directory
+    list_cmd = ["ls", "-h", "/var/lib/vz/template/cache"]
+    
+    try:
+        # Run the command on the Proxmox host
+        result = run_proxmox_command(
+            local_cmd=list_cmd,
+            remote_cmd=list_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        if result and result.returncode == 0:
+            click.secho("📄 Templates available in /var/lib/vz/template/cache:\n", fg='cyan')
+            click.secho(result.stdout, fg='white')
+        else:
+            click.secho(f"❌ Failed to list templates: {result.stderr.strip()}", fg='red')
+    
+    except Exception as e:
+        click.secho(f"❌ An error occurred while listing templates: {str(e)}", fg='red')
+        logging.error(f"An error occurred while listing templates: {str(e)}")
+
 
 if __name__ == '__main__':
     lws()
