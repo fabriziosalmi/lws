@@ -2315,6 +2315,53 @@ def list_templates(region, az):
         click.secho(f"❌ An error occurred while listing templates: {str(e)}", fg='red')
         logging.error(f"An error occurred while listing templates: {str(e)}")
 
+@px.command('security-groups')
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+def list_security_groups(region, az):
+    """🔐 List all security groups and their rules in the Proxmox cluster."""
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+    
+    # Command to read the entire cluster.fw file
+    list_sg_cmd = ["cat", "/etc/pve/firewall/cluster.fw"]
+    
+    try:
+        # Run the command on the Proxmox host
+        result = run_proxmox_command(
+            local_cmd=list_sg_cmd,
+            remote_cmd=list_sg_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        if result and result.returncode == 0:
+            click.secho("🔐 Security Groups and their rules in the cluster:\n", fg='cyan')
+            
+            lines = result.stdout.splitlines()
+            inside_group = False
+            
+            for line in lines:
+                line = line.strip()
+                
+                if line.startswith("[group "):
+                    # Print the security group name
+                    click.secho(f"\n{line}", fg='yellow')
+                    inside_group = True
+                elif inside_group:
+                    if line == "":
+                        inside_group = False
+                    else:
+                        # Print the rules within the group
+                        click.secho(f"  {line}", fg='white')
+                        
+        else:
+            click.secho(f"❌ Failed to list security groups: {result.stderr.strip()}", fg='red')
+    
+    except Exception as e:
+        click.secho(f"❌ An error occurred while listing security groups: {str(e)}", fg='red')
+        logging.error(f"An error occurred while listing security groups: {str(e)}")
+
 
 if __name__ == '__main__':
     lws()
