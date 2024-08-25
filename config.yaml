@@ -499,3 +499,11 @@ scaling:
     dry_run: false  # If true, simulate scaling adjustments without applying changes
     scaling_log_level: DEBUG  # Log level for scaling operations (DEBUG, INFO, WARN, ERROR)
     use_custom_scaling_algorithms: false  # Enable if custom scaling algorithms are implemented
+
+security:
+  discovery:
+    client_timeout: 2
+    proxmox_timeout: 2
+    lxc_timeout: 2
+    discovery_methods: ['ping']
+    max_parallel_workers: 10  # Maximum number of parallel workers
