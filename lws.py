@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# to create lws alias:
+# chmod +x lws.py && alias lws='python3 lws.py'
+
 import os
 import time
 import subprocess
