@@ -1528,64 +1528,6 @@ def get_lxc_resources(instance_id, host_details):
         return None, None, None
 
 
-@lxc.command('scale-check')
-@click.argument('instance_id')
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def suggest_resources(instance_id, region, az):
-    """⚖️ Scaling adjustments for an LXC container."""
-    config = load_config()
-    host_details = get_host_details(region, az)
-
-    total_cores, total_memory, free_memory = get_host_free_resources(host_details)
-    if total_cores is None or total_memory is None:
-        click.secho("❌ Could not retrieve host resources.", fg='red')
-        return
-
-    click.secho(f"ℹ️ Proxmox Host: {total_cores} cores, {free_memory} MB free memory", fg='cyan')
-
-    cpulimit, cpuunits, memory = get_lxc_resources(instance_id, host_details)
-
-    if cpulimit is None or memory is None:
-        click.secho(f"❌ Could not retrieve resources for container {instance_id}.", fg='red')
-        return
-
-    click.secho(f"ℹ️ Instance {instance_id}: {cpulimit} cores, {memory} MB total memory", fg='cyan')
-
-    # Fetch minimum resources from the config
-    min_cores = config.get('minimum_resources', {}).get('cores', 1)
-    min_memory_mb = config.get('minimum_resources', {}).get('memory_mb', 512)
-
-    suggestions = []
-
-    # Suggest CPU core adjustments
-    if cpulimit < total_cores // 2:
-        suggested_cores = min(total_cores, cpulimit + 1)
-        if suggested_cores > cpulimit:
-            suggestions.append(f"🔧 Consider increasing CPU cores to {suggested_cores} (current: {cpulimit}).")
-    elif cpulimit > total_cores:
-        suggested_cores = max(min_cores, total_cores)
-        if suggested_cores < cpulimit:
-            suggestions.append(f"🔧 Consider decreasing CPU cores to {suggested_cores} (current: {cpulimit}).")
-
-    # Suggest memory adjustments
-    if memory < free_memory // 4:
-        suggested_memory = min(free_memory, memory + 256)  # Increase by 256 MB or to the available free memory
-        if suggested_memory > memory:
-            suggestions.append(f"🔧 Consider increasing memory to {suggested_memory} MB (current: {memory} MB).")
-    elif memory > free_memory // 2:
-        suggested_memory = max(min_memory_mb, memory - 256)  # Decrease by 256 MB but not below minimum memory
-        if suggested_memory < memory:
-            suggestions.append(f"🔧 Consider decreasing memory to {suggested_memory} MB (current: {memory} MB).")
-
-    # Output the suggestions
-    if suggestions:
-        click.secho("\n".join(suggestions), fg='green')
-    else:
-        click.secho("🔧 No changes recommended.", fg='green')
-
-
-
 # Docker Group
 @lws.group()
 @command_alias('app')
@@ -2526,6 +2468,149 @@ def exec_proxmox_command(command, region, az):
     except Exception as e:
         logging.error(f"An error occurred while executing command on Proxmox host {host_details['host']}: {str(e)}")
         click.secho(f"❌ An error occurred while executing the command: {str(e)}", fg='red')
+
+
+
+# Helper function to load the configuration file
+def scale_check_load_config(config_path='config.yaml'):
+    """Loads the configuration from a YAML file."""
+    try:
+        with open(config_path, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    except Exception as e:
+        logging.error(f"Failed to load configuration file: {str(e)}")
+        return {}
+
+@lxc.command('scale-check')
+@click.argument('instance_id')
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+def suggest_resources(instance_id, region, az):
+    """⚖️ Scaling adjustments for an LXC container."""
+
+    config = scale_check_load_config()
+    host_details = scale_check_get_host_details(region, az)
+
+    total_cores, total_memory, free_memory = scale_check_get_host_free_resources(host_details)
+    if total_cores is None or total_memory is None:
+        click.secho("❌ Could not retrieve host resources.", fg='red')
+        return
+
+    click.secho(f"ℹ️ Proxmox Host: {total_cores} cores, {total_memory} MB total memory, {free_memory} MB free memory", fg='cyan')
+
+    cpulimit, cpuunits, memory = scale_check_get_lxc_resources(instance_id, host_details)
+
+    if cpulimit is None or memory is None:
+        click.secho(f"❌ Could not retrieve resources for container {instance_id}.", fg='red')
+        return
+
+    click.secho(f"ℹ️ Instance {instance_id}: {cpulimit} cores, {memory} MB total memory", fg='cyan')
+
+    # Fetch thresholds and minimum resources from the config
+    min_cores = config.get('minimum_resources', {}).get('cores', 1)
+    min_memory_mb = config.get('minimum_resources', {}).get('memory_mb', 512)
+    max_memory_threshold = config.get('maximum_memory_threshold', 0.75)  # Example default threshold 75%
+    max_cpu_threshold = config.get('maximum_cpu_threshold', 0.75)  # Example default threshold 75%
+
+    suggestions = []
+
+    # Suggest CPU core adjustments based on thresholds
+    if cpulimit < total_cores * max_cpu_threshold:
+        suggested_cores = cpulimit + 1
+        if suggested_cores <= total_cores:
+            suggestions.append(f"🔧 Consider increasing CPU cores to {suggested_cores} (current: {cpulimit}).")
+    elif cpulimit > total_cores * max_cpu_threshold:
+        suggested_cores = max(min_cores, cpulimit - 1)
+        if suggested_cores < cpulimit:
+            suggestions.append(f"🔧 Consider decreasing CPU cores to {suggested_cores} (current: {cpulimit}).")
+
+    # Suggest memory adjustments based on thresholds
+    if memory < total_memory * max_memory_threshold:
+        suggested_memory = memory + 256
+        if suggested_memory <= total_memory:
+            suggestions.append(f"🔧 Consider increasing memory to {suggested_memory} MB (current: {memory} MB).")
+    elif memory > total_memory * max_memory_threshold:
+        suggested_memory = max(min_memory_mb, memory - 256)
+        if suggested_memory < memory:
+            suggestions.append(f"🔧 Consider decreasing memory to {suggested_memory} MB (current: {memory} MB).")
+
+    # Output the suggestions with useful insights
+    if suggestions:
+        click.secho("\n".join(suggestions), fg='green')
+    else:
+        click.secho("🔧 No changes recommended.", fg='green')
+
+    # Provide additional insights on decision making
+    click.secho("\n💡 Insights:", fg='yellow')
+    click.secho(f"- CPU core adjustments are suggested based on {max_cpu_threshold * 100}% of the total cores available on the host.", fg='yellow')
+    click.secho(f"- Memory adjustments are suggested based on {max_memory_threshold * 100}% of the total memory available on the host.", fg='yellow')
+    click.secho("- If the container is consistently using high CPU or memory, consider increasing resources.", fg='yellow')
+    click.secho("- If the container is underutilized, consider decreasing resources to optimize the host's performance.", fg='yellow')
+
+
+
+def scale_check_get_host_details(region, az):
+    """Retrieves the host details from the configuration for a given region and availability zone."""
+    config = load_config()
+    try:
+        return config['regions'][region]['availability_zones'][az]
+    except KeyError as e:
+        logging.error(f"Invalid region or availability zone: {e}")
+        return None
+
+def scale_check_get_host_free_resources(host_details):
+    """Retrieve free CPU and memory resources on the host."""
+    cpu_command = ["lscpu"]
+    mem_command = ["free", "-m"]
+
+    cpu_result = run_proxmox_command(cpu_command, cpu_command, config['use_local_only'], host_details)
+    mem_result = run_proxmox_command(mem_command, mem_command, config['use_local_only'], host_details)
+
+    if cpu_result.returncode == 0 and mem_result.returncode == 0:
+        cpu_info = cpu_result.stdout
+        mem_info = mem_result.stdout
+
+        # Extract CPU cores count
+        total_cores = 0
+        for line in cpu_info.splitlines():
+            if "CPU(s):" in line:
+                total_cores = int(line.split(":")[1].strip())
+                break
+
+        # Extract memory info
+        mem_info_lines = mem_info.splitlines()
+        total_memory = int(mem_info_lines[1].split()[1])
+        free_memory = int(mem_info_lines[1].split()[3])
+
+        return total_cores, total_memory, free_memory
+    else:
+        logging.error(f"Failed to retrieve host resources: {cpu_result.stderr} {mem_result.stderr}")
+        return None, None, None
+
+def scale_check_get_lxc_resources(instance_id, host_details):
+    """Retrieve the allocated CPU cores, CPU units, and memory resources of an LXC container."""
+    command = ["pct", "config", instance_id]
+    result = run_proxmox_command(command, command, config['use_local_only'], host_details)
+
+    if result.returncode == 0:
+        config_lines = result.stdout.splitlines()
+        cpulimit = None
+        cpuunits = None
+        memory = None
+
+        for line in config_lines:
+            if "cores" in line:
+                cpulimit = int(line.split(":")[1].strip())
+            if "cpuunits" in line:
+                cpuunits = int(line.split(":")[1].strip())
+            if "memory" in line:
+                memory = int(line.split(":")[1].strip())
+
+        return cpulimit, cpuunits, memory
+    else:
+        logging.error(f"Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
+        return None, None, None
 
 
 if __name__ == '__main__':
