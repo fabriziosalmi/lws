@@ -20,6 +20,11 @@ lws lxc status 108
 📊 Instance 108 - Memory Usage: 184392 kB / 2097152 kB
 📊 Instance 108 - Disk Space: /dev/mapper/pve-vm--108--disk--0
 📊 Instance 108 - Swap Space (none): Used 0 / 524288
+
+lws lxc exec 108 uptime
+🔧 Executing command in instance 108: uptime
+✅ Command executed successfully in instance 108.
+ 09:17:23 up  1:56,  0 users,  load average: 1.55, 1.23, 1.47
 ```
 
 ## Table of Contents
