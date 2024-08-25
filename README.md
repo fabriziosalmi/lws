@@ -57,25 +57,6 @@ Commands:
 
 ---
 
-lws app
-Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
-
-  🐳 Manage Docker on LXC containers.
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  compose         🚀 Manage apps with Compose on LXC containers.
-  compose-update  🆕 Update app within an LXC container via Compose.
-  list            📦 List Docker containers in an LXC container.
-  logs            📄 Fetch Docker logs from an LXC container.
-  remove          🗑️ Uninstall Docker and Compose from LXC containers.
-  run             🚀 Execute docker run inside an LXC container.
-  setup           📦 Install Docker and Compose on an LXC container.
-
----
-
 lws lxc
 Usage: lws.py lxc [OPTIONS] COMMAND [ARGS]...
 
@@ -112,6 +93,25 @@ Commands:
   terminate                💥 Terminate (destroy) LXC containers.
   volume-attach            🔗 Attach a storage volume to an LXC container.
   volume-detach            🔓 Detach a storage volume from an LXC container.
+
+---
+
+lws app
+Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
+
+  🐳 Manage Docker on LXC containers.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  compose         🚀 Manage apps with Compose on LXC containers.
+  compose-update  🆕 Update app within an LXC container via Compose.
+  list            📦 List Docker containers in an LXC container.
+  logs            📄 Fetch Docker logs from an LXC container.
+  remove          🗑️ Uninstall Docker and Compose from LXC containers.
+  run             🚀 Execute docker run inside an LXC container.
+  setup           📦 Install Docker and Compose on an LXC container.
 
 ```
 
