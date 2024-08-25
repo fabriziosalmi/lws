@@ -3,33 +3,116 @@
 **LWS** is a Command-Line Interface (CLI) tool designed to manage Proxmox Virtual Environments (VE), LXC containers, and Docker services. Created as a fun project, LWS is a powerful, yet experimental tool that should be used with caution in any environment.
 
 ```
-lws px list
-🟢 -> Region: eu-south-1 - AZ: az1 - Host: 192.168.100.5
-🔴 -> Region: eu-central-1 - AZ: pve-rhine - Host: pve-rhine.mydomain.com
-🔴 -> Region: eu-central-1 - AZ: pve-alps - Host: pve-alps.mydomain.com
+lws
+Usage: lws.py [OPTIONS] COMMAND [ARGS]...
 
-lws px status
-📊 Proxmox 192.168.100.5 - Load Avg: 2.11 2.36 2.41
-📊 Proxmox 192.168.100.5 - Memory Info: Used 16589180 kB / 131945984 kB
-📊 Proxmox 192.168.100.5 - Disk Space: /dev/mapper/pve-root   94G   15G   75G  17% /
-📊 Proxmox 192.168.100.5 - Swap Space: 436352 kB used / 8388604 kB total (/dev/dm-0)
+  🐧 Linux (Containers) Web Services
 
-lws lxc status 108
-📊 Instance 108 - Load Avg: 0.00 0.00 0.00
-📊 Instance 108 - Memory Usage: 184392 kB / 2097152 kB
-📊 Instance 108 - Disk Space: /dev/mapper/pve-vm--108--disk--0
-📊 Instance 108 - Swap Space (none): Used 0 / 524288
+Options:
+  --help  Show this message and exit.
 
-lws lxc exec 108 uptime
-🔧 Executing command in instance 108: uptime
-✅ Command executed successfully in instance 108.
- 09:17:23 up  1:56,  0 users,  load average: 1.55, 1.23, 1.47
+Commands:
+  app   🐳 Manage Docker on LXC containers.
+  conf  🛠️ Manage client configuration.
+  lxc   ⚙️ Manage LXC containers.
+  px    🌐 Manage Proxmox hosts.
 
-lws lxc scale-suggest 108
-ℹ️ Proxmox Host: 48 cores, 112003 MB free memory
-ℹ️ Instance 108: 1 cores, 2048 MB total memory
-🔧 Consider increasing CPU cores to 2 (current: 1).
-🔧 Consider increasing memory to 2304 MB (current: 2048 MB).
+---
+
+lws px
+Usage: lws.py px [OPTIONS] COMMAND [ARGS]...
+
+  🌐 Manage Proxmox hosts.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  backup-hosts              💾 Backup configurations from all Proxmox hosts.
+  create-backup             💾 Create a backup of a specific LXC container.
+  list                      🌐 List all available Proxmox hosts.
+  list-clusters             🔍 List all clusters in the Proxmox environment.
+  reboot                    🔄 Reboot the Proxmox host.
+  restart-cluster-services  🔄 Restart all cluster services on Proxmox hosts.
+  start-cluster-services    🚀 Start all cluster services on Proxmox hosts.
+  status                    📊 Monitor resource usage of a Proxmox host.
+  stop-cluster-services     🛑 Stop all cluster services on Proxmox hosts.
+  update-hosts              🔄 Update all Proxmox hosts.
+  upload                    💽 Upload template to Proxmox host.
+
+---
+
+lws conf
+Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
+
+  🛠️ Manage client configuration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  backup    💾 Backup the current configuration to a file.
+  show      📄 Show current configuration.
+  validate  📄 Validate the current configuration.
+
+---
+
+lws app
+Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
+
+  🐳 Manage Docker on LXC containers.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  compose         🚀 Manage apps with Compose on LXC containers.
+  compose-update  🆕 Update app within an LXC container via Compose.
+  list            📦 List Docker containers in an LXC container.
+  logs            📄 Fetch Docker logs from an LXC container.
+  remove          🗑️ Uninstall Docker and Compose from LXC containers.
+  run             🚀 Execute docker run inside an LXC container.
+  setup           📦 Install Docker and Compose on an LXC container.
+
+---
+
+lws lxc
+Usage: lws.py lxc [OPTIONS] COMMAND [ARGS]...
+
+  ⚙️ Manage LXC containers.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  clone                    🔄 Clone an LXC container locally or remote.
+  exec                     👨🏻‍💻 Execute a command in one or more LXC...
+  image-add                📦 Create a template image from an LXC container.
+  image-rm                 🗑️ Delete a template image from Proxmox host.
+  migrate                  🔄 Migrate LXC container between hosts.
+  reboot                   🔄 Reboot running LXC containers.
+  run                      🛠️ Create and start LXC containers.
+  scale                    📏 Scale resources LXC containers.
+  scale-check              ⚖️ Scaling adjustments for an LXC container.
+  security-group-add       🔐 Create security group on Proxmox host.
+  security-group-attach    🔗 Attach security group to an LXC container.
+  security-group-detach    🔓 Detach security group from an LXC container.
+  security-group-rm        🗑️ Delete a security group on Proxmox host.
+  security-group-rule-add  ➕ Add a rule to a existing security group.
+  security-group-rule-rm   ➖ Remove a rule from an existing security group.
+  service                  🔧 Manage a service of LXC containers.
+  show                     🔍 Describe LXC containers.
+  snapshot-add             📸 Create a snapshot of an LXC container.
+  snapshot-rm              🗑️ Delete a snapshot of an LXC container.
+  snapshots                🗃️ List all snapshots of an LXC container.
+  start                    🚀 Start stopped LXC containers.
+  status                   📊 Monitor resources of LXC containers.
+  stop                     🛑 Stop running LXC containers.
+  storage-list             🔍 List storage details for LXC container.
+  terminate                💥 Terminate (destroy) LXC containers.
+  volume-attach            🔗 Attach a storage volume to an LXC container.
+  volume-detach            🔓 Detach a storage volume from an LXC container.
+
 ```
 
 ## Table of Contents
