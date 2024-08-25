@@ -2167,7 +2167,7 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def exec_in_container(instance_ids, command, region, az):
-    """👨🏻‍💻 Execute a command in one or more LXC containers."""
+    """👨🏻‍💻 Execute an arbitrary command into an LXC container."""
     if not command:
         click.secho("❌ No command provided to execute.", fg='red')
         logging.error("❌ No command provided to execute.")
@@ -2498,7 +2498,7 @@ def get_lxc_public_ip(instance_id, region, az):
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 def exec_proxmox_command(command, region, az):
-    """👨🏻‍💻 Execute an arbitrary command on a Proxmox host."""
+    """👨🏻‍💻 Execute an arbitrary command into a Proxmox host."""
     
     host_details = config['regions'][region]['availability_zones'][az]
 
