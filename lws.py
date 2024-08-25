@@ -1944,29 +1944,13 @@ WantedBy=multi-user.target
     subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "enable", service_name])
     subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "start", service_name])
 
-
-import os
-import subprocess
-import time
-import click
-import yaml
-import shutil
-import logging
-import gzip
-
-# Assuming the logging setup function exists
-# Logging configuration is expected to be set up as previously shown
-
-# Function to load the configuration, assumed to be defined elsewhere
-# config = load_config()
-
 @app.command('compose-update')
 @click.argument('instance_id')
 @click.argument('compose_file', required=True)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
 def compose_update(instance_id, compose_file, region, az):
-    """🚀 Update app within an LXC container via Compose."""
+    """🆕 Update app within an LXC container via Compose."""
     host_details = config['regions'][region]['availability_zones'][az]
     logging.info(f"Starting Docker Compose update for instance {instance_id}")
 
