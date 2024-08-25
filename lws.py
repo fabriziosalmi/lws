@@ -487,7 +487,6 @@ def px_status(region, az):
     commands = {
         "Load Avg": ["cat", "/proc/loadavg"],
         "Memory Info": ["cat", "/proc/meminfo"],
-        "Established Connections": ["ss", "-s"],
         "Disk Space": ["df", "-h", "/"],
         "Swap Space": ["cat", "/proc/swaps"]
     }
@@ -500,25 +499,19 @@ def px_status(region, az):
             
             if metric_name == "Load Avg":
                 loadavg = output.split()[0:3]
-                click.secho(f"📊 {metric_name}: {' '.join(loadavg)}", fg='cyan')
+                click.secho(f"📊 Proxmox {host} - {metric_name}: {' '.join(loadavg)}", fg='cyan')
             
-            elif metric_name == "Memory Info":
+            elif metric_name == "Memory Usage":
                 meminfo_lines = output.splitlines()
                 meminfo_dict = {line.split(":")[0]: line.split(":")[1].strip() for line in meminfo_lines if line}
                 mem_total = meminfo_dict["MemTotal"].split()[0]
                 mem_free = meminfo_dict["MemFree"].split()[0]
                 mem_used = int(mem_total) - int(mem_free)
-                click.secho(f"📊 {metric_name}: Used {mem_used} kB / {mem_total} kB", fg='cyan')
-
-            elif metric_name == "Established Connections":
-                for line in output.splitlines():
-                    if "TCP:" in line:
-                        established_conns = line.split(",")[0].split()[1]
-                        click.secho(f"📊 {metric_name}: {established_conns} established", fg='cyan')
+                click.secho(f"📊 Proxmox {host} - {metric_name}: Used {mem_used} kB / {mem_total} kB", fg='cyan')
 
             elif metric_name == "Disk Space":
                 disk_info = output.splitlines()[1]  # Assuming the first line is headers
-                click.secho(f"📊 {metric_name}: {disk_info}", fg='cyan')
+                click.secho(f"📊 Proxmox {host} - {metric_name}: {disk_info}", fg='cyan')
 
             elif metric_name == "Swap Space":
                 swap_info_lines = output.splitlines()[1:]  # First line is header
@@ -527,7 +520,7 @@ def px_status(region, az):
                     swap_name = swap_details[0]
                     swap_size = swap_details[2]
                     swap_used = swap_details[3]
-                    click.secho(f"📊 {metric_name}: {swap_used} kB used / {swap_size} kB total ({swap_name})", fg='cyan')
+                    click.secho(f"📊 Proxmox {host} - {metric_name}: {swap_used} kB used / {swap_size} kB total ({swap_name})", fg='cyan')
 
         else:
             click.secho(f"❌ Failed to retrieve {metric_name} on host {host}: {result.stderr if result else 'Unknown error'}", fg='red')
@@ -1081,20 +1074,16 @@ def monitor_instances(instance_ids, region, az):
         # Commands to get various system metrics
         loadavg_cmd = ["pct", "exec", instance_id, "--", "cat", "/proc/loadavg"]
         meminfo_cmd = ["pct", "exec", instance_id, "--", "cat", "/proc/meminfo"]
-        netstat_cmd = ["pct", "exec", instance_id, "--", "ss", "-s"]  # For established connections
-        openfiles_cmd = ["pct", "exec", instance_id, "--", "lsof"]  # For open files
         disk_cmd = ["pct", "exec", instance_id, "--", "df", "-h", "/"]  # For free disk space on root
         swap_cmd = ["pct", "exec", instance_id, "--", "cat", "/proc/swaps"]  # For swap space
 
         # Execute all commands
         loadavg_result = run_proxmox_command(loadavg_cmd, loadavg_cmd, config['use_local_only'], host_details)
         meminfo_result = run_proxmox_command(meminfo_cmd, meminfo_cmd, config['use_local_only'], host_details)
-        netstat_result = run_proxmox_command(netstat_cmd, netstat_cmd, config['use_local_only'], host_details)
-        openfiles_result = run_proxmox_command(openfiles_cmd, openfiles_cmd, config['use_local_only'], host_details)
         disk_result = run_proxmox_command(disk_cmd, disk_cmd, config['use_local_only'], host_details)
         swap_result = run_proxmox_command(swap_cmd, swap_cmd, config['use_local_only'], host_details)
 
-        if all(result.returncode == 0 for result in [loadavg_result, meminfo_result, netstat_result, openfiles_result, disk_result, swap_result]):
+        if all(result.returncode == 0 for result in [loadavg_result, meminfo_result, disk_result, swap_result]):
             # Load average
             loadavg = loadavg_result.stdout.strip().split()[0:3]
             click.secho(f"📊 Instance {instance_id} - Load Avg: {' '.join(loadavg)}", fg='cyan')
@@ -1105,17 +1094,6 @@ def monitor_instances(instance_ids, region, az):
             memory_used = int(meminfo_dict["MemTotal"].split()[0]) - int(meminfo_dict["MemFree"].split()[0])
             memory_total = int(meminfo_dict["MemTotal"].split()[0])
             click.secho(f"📊 Instance {instance_id} - Memory Usage: {memory_used} kB / {memory_total} kB", fg='cyan')
-
-            # Established connections
-            established_conns = None
-            for line in netstat_result.stdout.strip().splitlines():
-                if "TCP:" in line:
-                    established_conns = line.split(",")[0].split()[1]
-            click.secho(f"📊 Instance {instance_id} - Established Connections: {established_conns}", fg='cyan')
-
-            # Open files (count)
-            open_files_count = len(openfiles_result.stdout.strip().splitlines())
-            click.secho(f"📊 Instance {instance_id} - Open Files: {open_files_count}", fg='cyan')
 
             # Free disk space
             disk_info = disk_result.stdout.strip().splitlines()[1]  # Assuming the first line is headers
@@ -1136,10 +1114,6 @@ def monitor_instances(instance_ids, region, az):
                 click.secho(f"  Load Avg Error: {loadavg_result.stderr.strip()}", fg='red')
             if meminfo_result.returncode != 0:
                 click.secho(f"  Mem Info Error: {meminfo_result.stderr.strip()}", fg='red')
-            if netstat_result.returncode != 0:
-                click.secho(f"  Netstat Error: {netstat_result.stderr.strip()}", fg='red')
-            if openfiles_result.returncode != 0:
-                click.secho(f"  Open Files Error: {openfiles_result.stderr.strip()}", fg='red')
             if disk_result.returncode != 0:
                 click.secho(f"  Disk Space Error: {disk_result.stderr.strip()}", fg='red')
             if swap_result.returncode != 0:
