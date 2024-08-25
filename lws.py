@@ -557,19 +557,6 @@ def px_list_clusters(region, az):
         click.secho(f"❌ Failed to list clusters: {result.stderr.strip()}", fg='red')
 
 
-
-@px.command('backup')
-@click.argument('backup_dir')
-def px_backup_hosts(backup_dir):
-    """💾 Backup configurations from all Proxmox hosts."""
-    command = ["tar", "-czf", f"{backup_dir}/proxmox-backup.tar.gz", "/etc/pve"]
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-    if result.returncode == 0:
-        click.secho(f"✅ Backup completed successfully. Saved to {backup_dir}.", fg='green')
-    else:
-        click.secho(f"❌ Failed to backup hosts: {result.stderr}", fg='red')
-
 @px.command('update')
 def px_update_hosts():
     """🔄 Update all Proxmox hosts."""
@@ -2651,6 +2638,56 @@ def scale_check_get_lxc_resources(instance_id, host_details):
     else:
         logging.error(f"Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
         return None, None, None, None
+
+
+@px.command('backup')
+@click.argument('backup_dir')
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Defaults to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Defaults to az1")
+def px_backup_hosts(backup_dir, region, az):
+    """💾 Backup configurations from all Proxmox hosts."""
+    logging.info(f"Starting backup for region {region}, AZ {az}")
+
+    # Load configuration
+    config = load_config()
+    if not config:
+        click.secho("❌ Failed to load configuration.", fg='red')
+        return
+
+    # Get host details from configuration based on region and AZ
+    try:
+        host_details = config['regions'][region]['availability_zones'][az]
+        use_local_only = config.get('use_local_only', False)
+    except KeyError as e:
+        logging.error(f"❌ Invalid region or availability zone: {e}")
+        click.secho(f"❌ Invalid region or availability zone: {e}", fg='red')
+        return
+
+    # Ensure the backup directory exists, or create it
+    if not os.path.exists(backup_dir):
+        try:
+            os.makedirs(backup_dir)
+            logging.info(f"📁 Created backup directory {backup_dir}.")
+        except OSError as e:
+            logging.error(f"❌ Failed to create backup directory {backup_dir}: {str(e)}")
+            click.secho(f"❌ Failed to create backup directory {backup_dir}: {str(e)}", fg='red')
+            return
+
+    backup_file = os.path.join(backup_dir, "proxmox-backup.tar.gz")
+    tar_command = ["tar", "-czf", backup_file, "/etc/pve"]
+
+    logging.info(f"🛠️ Preparing to back up Proxmox configurations to {backup_file}.")
+
+    # Run the backup command
+    result = run_proxmox_command(local_cmd=tar_command, remote_cmd=tar_command, use_local_only=use_local_only, host_details=host_details)
+
+    # Check the result and provide appropriate feedback
+    if result and result.returncode == 0:
+        logging.info(f"✅ Backup completed successfully. Saved to {backup_file}.")
+        click.secho(f"✅ Backup completed successfully. Saved to {backup_file}.", fg='green')
+    else:
+        logging.error(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}")
+        click.secho(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}", fg='red')
 
 
 if __name__ == '__main__':
