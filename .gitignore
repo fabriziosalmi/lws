@@ -1,2 +1,4 @@
 *.yaml
 *.log
+*.tar.gz
+wget-log*
