@@ -366,7 +366,7 @@ def list_hosts():
         status_symbol = check_host_reachability(host)
         return f"{status_symbol[1]} -> Region: {region} - AZ: {az} - Host: {status_symbol[0]}"
 
-    click.secho("Available Proxmox Hosts:", fg='cyan')
+    # click.secho("Available Proxmox Hosts:", fg='cyan')
 
     # Collect tasks for parallel execution
     tasks = []
