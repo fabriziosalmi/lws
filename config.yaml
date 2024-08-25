@@ -441,3 +441,61 @@ instance_sizes:
     memory: 245760  # 240 GB
     cpulimit: 32    # 32 vCPUs
     storage: local-lvm:1600  # 1.6 TB of storage
+
+scaling:
+  host_cpu:
+    max_threshold: 80  # Maximum percentage of host CPU usage before considering a decrease
+    min_threshold: 30  # Minimum percentage of host CPU usage before considering an increase
+    step: 1  # Base increment or decrement of CPU cores on the host
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_cpu:
+    max_threshold: 80  # Maximum percentage of LXC CPU usage before considering a decrease
+    min_threshold: 30  # Minimum percentage of LXC CPU usage before considering an increase
+    step: 1  # Base increment or decrement of CPU cores in the LXC
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  host_memory:
+    max_threshold: 70  # Percentage of total memory on the host before considering a decrease
+    min_threshold: 40  # Percentage of total memory on the host before considering an increase
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  lxc_memory:
+    max_threshold: 70  # Maximum percentage of LXC memory usage before considering a decrease
+    min_threshold: 40  # Minimum percentage of LXC memory usage before considering an increase
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  host_storage:
+    max_threshold: 85  # Maximum percentage of storage usage on the host before considering a decrease
+    min_threshold: 50  # Minimum percentage of storage usage on the host before considering an increase
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_storage:
+    max_threshold: 85  # Maximum percentage of storage usage in the LXC before considering a decrease
+    min_threshold: 50  # Minimum percentage of storage usage in the LXC before considering an increase
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  limits:
+    min_memory_mb: 512  # Minimum allowed memory for any LXC container
+    max_memory_mb: 32768  # Maximum allowed memory for any LXC container
+    min_cpu_cores: 1  # Minimum allowed CPU cores for any LXC container
+    max_cpu_cores: 16  # Maximum allowed CPU cores for any LXC container
+    min_storage_gb: 10  # Minimum allowed storage for any LXC container
+    max_storage_gb: 1024  # Maximum allowed storage for any LXC container
+
+  general:
+    scaling_interval: 5  # Interval in minutes to check for resource adjustments
+    notify_user: true  # Notify user via CLI output when scaling adjustments are made
+    dry_run: false  # If true, simulate scaling adjustments without applying changes
+    scaling_log_level: DEBUG  # Log level for scaling operations (DEBUG, INFO, WARN, ERROR)
+    use_custom_scaling_algorithms: false  # Enable if custom scaling algorithms are implemented
