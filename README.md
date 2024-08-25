@@ -56,7 +56,7 @@ Options:
 
 Commands:
   clone           🔄 Clone an LXC container locally or remote.
-  exec            👨🏻‍💻 Execute a command in one or more LXC containers.
+  exec            👨🏻‍💻 Execute a command in an LXC container.
   migrate         🔄 Migrate LXC container between hosts.
   reboot          🔄 Reboot running LXC containers.
   run             🛠️ Create and start LXC containers.
