@@ -107,7 +107,7 @@ It should show this help content:
 
 ### Configuration
 
-LWS is configured using a `config.yaml` file. This file defines the environment settings, including regions, instance sizes, network settings, and security credentials.
+LWS is configured using a `config.yaml` file. Here the default one that must be change to fit with your setup. This file defines the environment settings, including regions, instance sizes, network settings, and security credentials. You can easily remap regions as locations and availability zones as a Proxmox hosts.
 
 #### Example `config.yaml`
 
