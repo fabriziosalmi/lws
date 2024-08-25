@@ -2457,6 +2457,40 @@ def get_lxc_info(instance_id, region, az):
         click.secho(f"❌ An error occurred while retrieving information: {str(e)}", fg='red')
         logging.error(f"An error occurred while retrieving LXC information: {str(e)}")
 
+@lxc.command('show-public-ip')
+@click.argument('instance_id', required=True)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+def get_lxc_public_ip(instance_id, region, az):
+    """🌐 Retrieve the public IP address(es) of a given LXC container."""
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+    
+    # Command to get the public IP address using an external service
+    get_public_ip_cmd = ["pct", "exec", instance_id, "--", "curl", "-s", "https://ifconfig.io/forwarded"]
+
+    try:
+        # Run the command on the Proxmox host
+        result = run_proxmox_command(
+            local_cmd=get_public_ip_cmd,
+            remote_cmd=get_public_ip_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        if result and result.returncode == 0:
+            public_ips = result.stdout.strip()
+            if public_ips:
+                click.secho(f"🌐 Public IP address(es) for instance {instance_id}: {public_ips}", fg='green')
+            else:
+                click.secho(f"⚠️ No public IP address found for instance {instance_id}.", fg='yellow')
+        else:
+            click.secho(f"❌ Failed to retrieve public IP address: {result.stderr.strip()}", fg='red')
+    
+    except Exception as e:
+        click.secho(f"❌ An error occurred while retrieving the public IP address: {str(e)}", fg='red')
+        logging.error(f"An error occurred while retrieving the public IP address for LXC {instance_id}: {str(e)}")
+
 
 if __name__ == '__main__':
     lws()
