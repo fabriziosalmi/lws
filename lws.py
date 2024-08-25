@@ -135,7 +135,7 @@ config = load_config()
 # lws
 @click.group()
 def lws():
-    """🐧 Linux (Containers) Web Services"""
+    """🐧 linux (containers) web services"""
     pass
 
 def run_ssh_command(host, user, ssh_password, command):
