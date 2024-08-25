@@ -84,8 +84,8 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  compose         🚀 Manage apps with Compose on LXC containers.
-  compose-update  🆕 Update app within an LXC container via Compose.
+  deploy          🚀 Manage apps with Compose on LXC containers.
+  update          🆕 Update app within an LXC container via Compose.
   list            📦 List Docker containers in an LXC container.
   logs            📄 Fetch Docker logs from an LXC container.
   remove          🗑️ Uninstall Docker and Compose from LXC containers.
