@@ -318,15 +318,50 @@ def px():
     """🌐 Manage Proxmox hosts."""
     pass
 
+import click
+import socket
+import subprocess
+
 @px.command('list')
-#@command_alias('list-hosts')
 def list_hosts():
     """🌐 List all available Proxmox hosts."""
+
+    def check_tcp_port(host, port, timeout=0.5):
+        """Check if a TCP port is open."""
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except (socket.timeout, ConnectionRefusedError, OSError):
+            return False
+
+    def check_host_reachability(host):
+        """Check host reachability by first checking port 22, then falling back to ping."""
+        if check_tcp_port(host, 22):
+            return "🟢"  # TCP port 22 is open
+        else:
+            # Fall back to ping
+            try:
+                result = subprocess.run(
+                    ['ping', '-c', '1', '-W', '0.5', host],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                if result.returncode == 0:
+                    return "🟡"  # Host is reachable via ping, but port 22 is closed
+                else:
+                    return "🔴"  # Host is not reachable
+            except subprocess.CalledProcessError:
+                return "🔴"  # Host is not reachable
+
     click.secho("Available Proxmox Hosts:", fg='cyan')
     for region, details in config['regions'].items():
         for az, az_details in details['availability_zones'].items():
-            click.secho(f"🌍 Region: {region} - AZ: {az} - Host: {az_details['host']}", fg='cyan')
+            host = az_details['host']
+            status_symbol = check_host_reachability(host)
 
+            # Print the host with its status
+            click.secho(f"🌍 Region: {region} - AZ: {az} - Host: {host} ({status_symbol})", fg='cyan')
+            
 @px.command('reboot')
 #@command_alias('proxmox-reboot')
 @click.option('--region', default='eu-south-1', help="Region in which the Proxmox host is located. Defaults to 'eu-south-1'.")
