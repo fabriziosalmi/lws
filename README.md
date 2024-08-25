@@ -9,17 +9,17 @@ Available Proxmox Hosts:
 🔴 -> Region: eu-central-1 - AZ: pve-rhine - Host: pve-rhine.mydomain.com
 🔴 -> Region: eu-central-1 - AZ: pve-alps - Host: pve-alps.mydomain.com
 
-lws lxc status 108
-📊 Instance 108 - Load Avg: 0.00 0.00 0.00
-📊 Instance 108 - Memory Usage: 184392 kB / 2097152 kB
-📊 Instance 108 - Disk Space: /dev/mapper/pve-vm--108--disk--0
-📊 Instance 108 - Swap Space (none): Used 0 / 524288
-
 lws px status
 📊 Proxmox 192.168.100.5 - Load Avg: 2.11 2.36 2.41
 📊 Proxmox 192.168.100.5 - Memory Info: Used 16589180 kB / 131945984 kB
 📊 Proxmox 192.168.100.5 - Disk Space: /dev/mapper/pve-root   94G   15G   75G  17% /
 📊 Proxmox 192.168.100.5 - Swap Space: 436352 kB used / 8388604 kB total (/dev/dm-0)
+
+lws lxc status 108
+📊 Instance 108 - Load Avg: 0.00 0.00 0.00
+📊 Instance 108 - Memory Usage: 184392 kB / 2097152 kB
+📊 Instance 108 - Disk Space: /dev/mapper/pve-vm--108--disk--0
+📊 Instance 108 - Swap Space (none): Used 0 / 524288
 ```
 
 ## Table of Contents
