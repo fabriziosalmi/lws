@@ -29,7 +29,7 @@ class JsonFormatter(logging.Formatter):
             log_record['exception'] = self.formatException(record.exc_info)
         return json.dumps(log_record)
 
-def setup_logging(log_level=logging.ERROR, log_file=None, json_log_file=None):
+def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
     """
     Sets up the logging configuration.
     
@@ -93,7 +93,7 @@ log_file_path = os.path.join(os.getcwd(), 'lws.log')  # Standard log file path
 json_log_file_path = os.path.join(os.getcwd(), 'lws.json.log')  # JSON log file path
 
 # Set up logging: standard logging to console and file, JSON logging to a separate file
-setup_logging(log_level=logging.DEBUG, log_file=log_file_path, json_log_file=json_log_file_path)
+setup_logging(log_level=logging.ERROR, log_file=log_file_path, json_log_file=json_log_file_path)
 
 # Load and validate the configuration
 def load_config():
