@@ -441,17 +441,3 @@ instance_sizes:
     memory: 245760  # 240 GB
     cpulimit: 32    # 32 vCPUs
     storage: local-lvm:1600  # 1.6 TB of storage
-
-  # High Memory Instances: large amount of memory per instance for running in-memory databases.
-  u-6tb1-metal:
-    memory: 6291456  # 6 TB
-    cpulimit: 448    # 448 vCPUs
-    storage: local-lvm:4000  # 4 TB of storage
-  u-9tb1-metal:
-    memory: 9437184  # 9 TB
-    cpulimit: 448    # 448 vCPUs
-    storage: local-lvm:6000  # 6 TB of storage
-  u-12tb1-metal:
-    memory: 12582912  # 12 TB
-    cpulimit: 448     # 448 vCPUs
-    storage: local-lvm:8000  # 8 TB of storage
