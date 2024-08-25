@@ -1580,7 +1580,7 @@ def suggest_resources(instance_id, region, az):
         click.secho("❌ Could not retrieve host resources.", fg='red')
         return
 
-    click.secho(f"Proxmox Host: {total_cores} cores, {free_memory} MB free memory", fg='cyan')
+    click.secho(f"ℹ️ Proxmox Host: {total_cores} cores, {free_memory} MB free memory", fg='cyan')
 
     cpulimit, cpuunits, memory = get_lxc_resources(instance_id, host_details)
 
@@ -1588,7 +1588,7 @@ def suggest_resources(instance_id, region, az):
         click.secho(f"❌ Could not retrieve resources for container {instance_id}.", fg='red')
         return
 
-    click.secho(f"Instance {instance_id}: {cpulimit} cores, {memory} MB total memory", fg='cyan')
+    click.secho(f"ℹ️ Instance {instance_id}: {cpulimit} cores, {memory} MB total memory", fg='cyan')
 
     # Fetch minimum resources from the config
     min_cores = config.get('minimum_resources', {}).get('cores', 1)
@@ -1600,27 +1600,27 @@ def suggest_resources(instance_id, region, az):
     if cpulimit < total_cores // 2:
         suggested_cores = min(total_cores, cpulimit + 1)
         if suggested_cores > cpulimit:
-            suggestions.append(f"Consider increasing CPU cores to {suggested_cores} (current: {cpulimit}).")
+            suggestions.append(f"🔧 Consider increasing CPU cores to {suggested_cores} (current: {cpulimit}).")
     elif cpulimit > total_cores:
         suggested_cores = max(min_cores, total_cores)
         if suggested_cores < cpulimit:
-            suggestions.append(f"Consider decreasing CPU cores to {suggested_cores} (current: {cpulimit}).")
+            suggestions.append(f"🔧 Consider decreasing CPU cores to {suggested_cores} (current: {cpulimit}).")
 
     # Suggest memory adjustments
     if memory < free_memory // 4:
         suggested_memory = min(free_memory, memory + 256)  # Increase by 256 MB or to the available free memory
         if suggested_memory > memory:
-            suggestions.append(f"Consider increasing memory to {suggested_memory} MB (current: {memory} MB).")
+            suggestions.append(f"🔧 Consider increasing memory to {suggested_memory} MB (current: {memory} MB).")
     elif memory > free_memory // 2:
         suggested_memory = max(min_memory_mb, memory - 256)  # Decrease by 256 MB but not below minimum memory
         if suggested_memory < memory:
-            suggestions.append(f"Consider decreasing memory to {suggested_memory} MB (current: {memory} MB).")
+            suggestions.append(f"🔧 Consider decreasing memory to {suggested_memory} MB (current: {memory} MB).")
 
     # Output the suggestions
     if suggestions:
         click.secho("\n".join(suggestions), fg='green')
     else:
-        click.secho("No changes recommended.", fg='green')
+        click.secho("🔧 No changes recommended.", fg='green')
 
 
 
