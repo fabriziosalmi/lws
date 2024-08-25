@@ -2363,5 +2363,100 @@ def list_security_groups(region, az):
         logging.error(f"An error occurred while listing security groups: {str(e)}")
 
 
+@lxc.command('show-info')
+@click.argument('instance_id', required=True)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+def get_lxc_info(instance_id, region, az):
+    """🌐 Retrieve IP address, hostname, DNS servers, and LXC name from Proxmox."""
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+    
+    # Commands to get IP address, hostname, and Proxmox LXC name
+    get_ip_cmd = ["pct", "exec", instance_id, "--", "ip", "addr", "show"]
+    get_hostname_cmd = ["pct", "exec", instance_id, "--", "hostname"]
+    get_dns_cmd = ["pct", "exec", instance_id, "--", "cat", "/etc/resolv.conf"]
+    get_lxc_name_cmd = ["pct", "config", instance_id]
+    
+    try:
+        # Get IP address
+        ip_result = run_proxmox_command(
+            local_cmd=get_ip_cmd,
+            remote_cmd=get_ip_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        # Get hostname inside the LXC
+        hostname_result = run_proxmox_command(
+            local_cmd=get_hostname_cmd,
+            remote_cmd=get_hostname_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        # Get DNS servers inside the LXC
+        dns_result = run_proxmox_command(
+            local_cmd=get_dns_cmd,
+            remote_cmd=get_dns_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        # Get LXC name from Proxmox
+        lxc_name_result = run_proxmox_command(
+            local_cmd=get_lxc_name_cmd,
+            remote_cmd=get_lxc_name_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+        
+        if ip_result.returncode == 0 and hostname_result.returncode == 0 and dns_result.returncode == 0 and lxc_name_result.returncode == 0:
+            # Extract IP addresses from the `ip addr show` output
+            ip_address = []
+            for line in ip_result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("inet "):
+                    ip_address.append(line.split()[1].split('/')[0])
+
+            ip_address_str = ", ".join(ip_address) if ip_address else "No IP address found"
+            
+            hostname = hostname_result.stdout.strip()
+            
+            dns_servers = []
+            for line in dns_result.stdout.splitlines():
+                line = line.strip()
+                if line.startswith("nameserver"):
+                    dns_servers.append(line.split()[1])
+            
+            dns_servers_str = ", ".join(dns_servers) if dns_servers else "No DNS servers found"
+            
+            # Parse the LXC name from the configuration output
+            lxc_name = None
+            for line in lxc_name_result.stdout.splitlines():
+                if line.startswith("hostname:"):
+                    lxc_name = line.split(":")[1].strip()
+                    break
+            
+            click.secho(f"🌐 IP address(es) for instance {instance_id}: {ip_address_str}", fg='green')
+            click.secho(f"🏷️ Hostname inside the LXC: {hostname}", fg='green')
+            click.secho(f"🌍 DNS servers inside the LXC: {dns_servers_str}", fg='green')
+            click.secho(f"📛 LXC name in Proxmox: {lxc_name}", fg='green')
+        
+        else:
+            if ip_result.returncode != 0:
+                click.secho(f"❌ Failed to retrieve IP address: {ip_result.stderr.strip()}", fg='red')
+            if hostname_result.returncode != 0:
+                click.secho(f"❌ Failed to retrieve hostname: {hostname_result.stderr.strip()}", fg='red')
+            if dns_result.returncode != 0:
+                click.secho(f"❌ Failed to retrieve DNS servers: {dns_result.stderr.strip()}", fg='red')
+            if lxc_name_result.returncode != 0:
+                click.secho(f"❌ Failed to retrieve LXC name: {lxc_name_result.stderr.strip()}", fg='red')
+    
+    except Exception as e:
+        click.secho(f"❌ An error occurred while retrieving information: {str(e)}", fg='red')
+        logging.error(f"An error occurred while retrieving LXC information: {str(e)}")
+
+
 if __name__ == '__main__':
     lws()
