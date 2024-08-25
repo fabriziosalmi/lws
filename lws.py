@@ -2193,6 +2193,98 @@ def exec_in_container(instance_ids, command, region, az):
             logging.error(f"Failed to execute command in instance {instance_id}: {exec_result.stderr}")
             click.secho(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}", fg='red')
 
+@lxc.command('net')
+@click.argument('instance_id', required=True)
+@click.argument('protocol', type=click.Choice(['tcp', 'udp']), required=True)
+@click.argument('port', type=int, required=True)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+@click.option('--timeout', default=5, help="Timeout in seconds for the network check.")
+def net_check(instance_id, protocol, port, region, az, timeout):
+    """🌐 Perform simple network checks on LXC containers.
+    
+    INSTANCE_ID: The ID of the LXC container.
+    PROTOCOL: The protocol to check (tcp/udp).
+    PORT: The port number to check.
+    """
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+
+    # Step 1: Check if the LXC container is running
+    status_cmd = ["pct", "status", instance_id]
+    status_result = run_proxmox_command(
+        local_cmd=status_cmd, 
+        remote_cmd=status_cmd, 
+        use_local_only=config['use_local_only'], 
+        host_details=host_details
+    )
+
+    if status_result.returncode != 0 or "status: stopped" in status_result.stdout:
+        click.secho(f"❌ Instance {instance_id} is not running.", fg='red')
+        return
+
+    click.secho(f"ℹ️ Instance {instance_id} is running. Proceeding with network check...", fg='yellow')
+
+    # Step 2: Attempt to check the port from within the LXC container
+    check_port_cmd = ["nc", "-zv", "-w", str(timeout), f"127.0.0.1", str(port)]
+    port_check_result = run_proxmox_command(
+        local_cmd=check_port_cmd,
+        remote_cmd=["pct", "exec", instance_id, "--"] + check_port_cmd,
+        use_local_only=config['use_local_only'],
+        host_details=host_details
+    )
+
+    if port_check_result.returncode == 0:
+        click.secho(f"🟢 {protocol.upper()} port {port} on instance {instance_id} is open.", fg='green')
+        return
+    else:
+        click.secho(f"🔴 {protocol.upper()} port {port} on instance {instance_id} seems closed. Trying to confirm...", fg='red')
+
+    # Step 3: If the direct check failed, try checking from the Proxmox host to the LXC container's IP
+    lxc_ip_cmd = ["pct", "exec", instance_id, "--", "hostname", "-I"]
+    lxc_ip_result = run_proxmox_command(
+        local_cmd=lxc_ip_cmd,
+        remote_cmd=lxc_ip_cmd,
+        use_local_only=config['use_local_only'],
+        host_details=host_details
+    )
+
+    if lxc_ip_result.returncode != 0 or not lxc_ip_result.stdout.strip():
+        click.secho(f"❌ Failed to retrieve the IP address of instance {instance_id}.", fg='red')
+        return
+
+    lxc_ip = lxc_ip_result.stdout.strip().split()[0]
+    click.secho(f"ℹ️ Retrieved LXC IP: {lxc_ip}. Checking port from Proxmox host...", fg='yellow')
+
+    proxmox_to_lxc_check_cmd = ["nc", "-zv", "-w", str(timeout), lxc_ip, str(port)]
+    proxmox_to_lxc_result = run_proxmox_command(
+        local_cmd=proxmox_to_lxc_check_cmd,
+        remote_cmd=proxmox_to_lxc_check_cmd,
+        use_local_only=config['use_local_only'],
+        host_details=host_details
+    )
+
+    if proxmox_to_lxc_result.returncode == 0:
+        click.secho(f"🟢 {protocol.upper()} port {port} on instance {instance_id} is open (confirmed from Proxmox host).", fg='green')
+    else:
+        click.secho(f"🔴 {protocol.upper()} port {port} on instance {instance_id} is closed (confirmed from Proxmox host).", fg='red')
+
+    # Step 4: Inform if LXC is not responding after multiple attempts
+    for attempt in range(3):
+        time.sleep(2)  # Wait before retrying
+        status_result = run_proxmox_command(
+            local_cmd=status_cmd,
+            remote_cmd=status_cmd,
+            use_local_only=config['use_local_only'],
+            host_details=host_details
+        )
+
+        if status_result.returncode == 0 and "status: running" in status_result.stdout:
+            click.secho(f"ℹ️ Instance {instance_id} is still running.", fg='yellow')
+        else:
+            click.secho(f"🔴 Instance {instance_id} is not responding after {attempt + 1} attempts.", fg='red')
+            return
+
 
 if __name__ == '__main__':
     lws()
