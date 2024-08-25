@@ -81,7 +81,7 @@ def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
         'handlers': handlers,
         'root': {
             'level': log_level,
-            'handlers': list(handlers.keys()),
+            'handlers': (handlers.keys()),
         },
     }
 
@@ -214,7 +214,7 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
             ["pct", "delsnapshot", instance_id, snapshot_name], 
             ["pct", "delsnapshot", instance_id, snapshot_name]
         ),
-        'list_snapshots': lambda instance_id: (["pct", "listsnapshot", instance_id], ["pct", "listsnapshot", instance_id]),
+        '_snapshots': lambda instance_id: (["pct", "snapshot", instance_id], ["pct", "snapshot", instance_id]),
     }
 
     for instance_id in instance_ids:
@@ -227,7 +227,7 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
         if result.returncode == 0:
             if command_type == 'describe':
                 click.secho(f"🔧 Instance {instance_id} configuration:\n{result.stdout}", fg='cyan')
-            elif command_type == 'list_snapshots':
+            elif command_type == '_snapshots':
                 click.secho(f"📜 Snapshots for instance {instance_id}:\n{result.stdout}", fg='cyan')
             else:
                 click.secho(f"✅ Instance {instance_id} {command_type}d successfully.", fg='green')
@@ -248,7 +248,7 @@ def build_resize_command(instance_id, memory=None, cpulimit=None, storage_size=N
 def mask_sensitive_info(config):
     if isinstance(config, dict):
         return {k: ("***" if "ssh_password" in k.lower() else mask_sensitive_info(v)) for k, v in config.items()}
-    elif isinstance(config, list):
+    elif isinstance(config, ):
         return [mask_sensitive_info(i) for i in config]
     else:
         return config
@@ -322,11 +322,24 @@ import click
 import socket
 import subprocess
 
+
+import click
+import socket
+import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 @px.command('list')
 def list_hosts():
     """🌐 List all available Proxmox hosts."""
 
-    def check_tcp_port(host, port, timeout=0.5):
+    def resolve_host(host, timeout=0.3):
+        """Resolve host with a timeout."""
+        try:
+            return socket.gethostbyname(host)
+        except socket.gaierror:
+            return None
+
+    def check_tcp_port(host, port, timeout=0.3):
         """Check if a TCP port is open."""
         try:
             with socket.create_connection((host, port), timeout=timeout):
@@ -335,32 +348,50 @@ def list_hosts():
             return False
 
     def check_host_reachability(host):
-        """Check host reachability by first checking port 22, then falling back to ping."""
-        if check_tcp_port(host, 22):
-            return "🟢"  # TCP port 22 is open
+        """Check host reachability with DNS timeout, TCP probe, and fallback ping."""
+        resolved_ip = resolve_host(host)
+        if not resolved_ip:
+            return host, "🔴"  # DNS resolution failed
+
+        if check_tcp_port(resolved_ip, 22):
+            return host, "🟢"  # TCP port 22 is open
         else:
             # Fall back to ping
             try:
                 result = subprocess.run(
-                    ['ping', '-c', '1', '-W', '0.5', host],
+                    ['ping', '-c', '1', '-W', '0.3', resolved_ip],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
                 if result.returncode == 0:
-                    return "🟡"  # Host is reachable via ping, but port 22 is closed
+                    return host, "🟡"  # Host is reachable via ping, but port 22 is closed
                 else:
-                    return "🔴"  # Host is not reachable
+                    return host, "🔴"  # Host is not reachable
             except subprocess.CalledProcessError:
-                return "🔴"  # Host is not reachable
+                return host, "🔴"  # Host is not reachable
+
+    def process_host(region, az, az_details):
+        host = az_details['host']
+        status_symbol = check_host_reachability(host)
+        return f"🌍 Region: {region} - AZ: {az} - Host: {status_symbol[0]} ({status_symbol[1]})"
 
     click.secho("Available Proxmox Hosts:", fg='cyan')
-    for region, details in config['regions'].items():
-        for az, az_details in details['availability_zones'].items():
-            host = az_details['host']
-            status_symbol = check_host_reachability(host)
 
-            # Print the host with its status
-            click.secho(f"🌍 Region: {region} - AZ: {az} - Host: {host} ({status_symbol})", fg='cyan')
+    # Collect tasks for parallel execution
+    tasks = []
+    with ThreadPoolExecutor(max_workers=10) as executor:  # Adjust the number of workers if needed
+        for region, details in config['regions'].items():
+            for az, az_details in details['availability_zones'].items():
+                tasks.append(executor.submit(process_host, region, az, az_details))
+
+        # Process results as they complete
+        for future in as_completed(tasks):
+            try:
+                result = future.result()
+                click.secho(result, fg='cyan')
+            except Exception as e:
+                click.secho(f"Error checking host: {e}", fg='red')
+
             
 @px.command('reboot')
 #@command_alias('proxmox-reboot')
