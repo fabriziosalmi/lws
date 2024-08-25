@@ -2493,6 +2493,40 @@ def get_lxc_public_ip(instance_id, region, az):
         click.secho(f"❌ An error occurred while retrieving the public IP address: {str(e)}", fg='red')
         logging.error(f"❌ An error occurred while retrieving the public IP address for LXC {instance_id}: {str(e)}")
 
+@px.command('exec')
+@click.argument('command', nargs=-1, required=True)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
+def exec_proxmox_command(command, region, az):
+    """👨🏻‍💻 Execute an arbitrary command on a Proxmox host."""
+    
+    host_details = config['regions'][region]['availability_zones'][az]
+
+    # Join the command arguments into a single command string
+    command_str = " ".join(command)
+
+    # Build the SSH command to execute the arbitrary command on the Proxmox host
+    ssh_command = ["sshpass", "-p", host_details['ssh_password'], "ssh", f"{host_details['user']}@{host_details['host']}", command_str]
+
+    # Log the command being executed (sanitized)
+    sanitized_ssh_command = ["sshpass", "-p", "****", "ssh", f"{host_details['user']}@{host_details['host']}", command_str]
+    logging.debug(f"Executing SSH command on Proxmox host: {' '.join(sanitized_ssh_command)}")
+
+    try:
+        # Execute the command on the Proxmox host
+        result = subprocess.run(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        
+        if result.returncode == 0:
+            logging.info(f"Command executed successfully on Proxmox host {host_details['host']}:\n{result.stdout.strip()}")
+            click.secho(f"✅ Command executed successfully on Proxmox host {host_details['host']}.\nOutput:\n{result.stdout.strip()}", fg='green')
+        else:
+            logging.error(f"Command failed on Proxmox host {host_details['host']} with return code {result.returncode}:\n{result.stderr.strip()}")
+            click.secho(f"❌ Command failed on Proxmox host {host_details['host']}.\nError:\n{result.stderr.strip()}", fg='red')
+
+    except Exception as e:
+        logging.error(f"An error occurred while executing command on Proxmox host {host_details['host']}: {str(e)}")
+        click.secho(f"❌ An error occurred while executing the command: {str(e)}", fg='red')
+
 
 if __name__ == '__main__':
     lws()
