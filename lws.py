@@ -2,6 +2,8 @@
 
 # to create lws alias:
 # chmod +x lws.py && alias lws='python3 lws.py'
+# then u can just run..
+# lws
 
 import os
 import time
@@ -90,7 +92,7 @@ def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
     }
 
     logging.config.dictConfig(logging_config)
-    logging.info("Logging setup complete. Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
+    logging.info("🔎 Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
 
 # Example usage:
 log_file_path = os.path.join(os.getcwd(), 'lws.log')  # Standard log file path
@@ -107,26 +109,26 @@ def load_config():
         validate_config(config)
         return config
     except FileNotFoundError:
-        logging.error("Configuration file 'config.yaml' not found.")
+        logging.error("❌ Configuration file 'config.yaml' not found.")
         raise
     except yaml.YAMLError as e:
-        logging.error(f"Error parsing configuration file: {e}")
+        logging.error(f"❌ Error parsing configuration file: {e}")
         raise
 
 def validate_config(config):
     required_keys = ['regions', 'instance_sizes']
     for key in required_keys:
         if key not in config:
-            logging.error(f"Missing required configuration key: {key}")
-            raise ValueError(f"Missing required configuration key: {key}")
+            logging.error(f"❌ Missing required configuration key: {key}")
+            raise ValueError(f"❌ Missing required configuration key: {key}")
 
     if not isinstance(config['regions'], dict) or not config['regions']:
-        logging.error("Invalid or empty 'regions' configuration.")
-        raise ValueError("Invalid or empty 'regions' configuration.")
+        logging.error("❌ Invalid or empty 'regions' configuration.")
+        raise ValueError("❌ Invalid or empty 'regions' configuration.")
 
     if not isinstance(config['instance_sizes'], dict) or not config['instance_sizes']:
-        logging.error("Invalid or empty 'instance_sizes' configuration.")
-        raise ValueError("Invalid or empty 'instance_sizes' configuration.")
+        logging.error("❌ Invalid or empty 'instance_sizes' configuration.")
+        raise ValueError("❌ Invalid or empty 'instance_sizes' configuration.")
 
 config = load_config()
 
@@ -145,42 +147,42 @@ def run_ssh_command(host, user, ssh_password, command):
 
     try:
         # Log the sanitized command instead of the real command with the password
-        logging.debug(f"Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
+        logging.debug(f"🔎 Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
         
         # Execute the command
         result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         result.check_returncode()  # This raises CalledProcessError if returncode is non-zero
         
         # Log the successful execution and output
-        logging.debug(f"SSH command executed successfully: {' '.join(sanitized_ssh_cmd)}")
-        logging.debug(f"Command output: {result.stdout}")
+        logging.debug(f"🔎 SSH command executed successfully: {' '.join(sanitized_ssh_cmd)}")
+        logging.debug(f"🔎 Command output: {result.stdout}")
         
         return result  # Return the entire result object
 
     except subprocess.CalledProcessError as e:
         # Log the error without showing the password
-        logging.error(f"SSH command failed with return code {e.returncode}: {' '.join(sanitized_ssh_cmd)}")
-        logging.error(f"Error output: {e.stderr}")
+        logging.error(f"❌ SSH command failed with return code {e.returncode}: {' '.join(sanitized_ssh_cmd)}")
+        logging.error(f"❌ Error output: {e.stderr}")
         return e
 
     except Exception as e:
-        logging.error(f"An unexpected error occurred while running SSH command: {str(e)}")
+        logging.error(f"❌ An unexpected error occurred while running SSH command: {str(e)}")
         return None
 
 def execute_command(cmd, use_local_only, host_details=None):
     """Executes a command locally or via SSH based on the configuration."""
     if use_local_only:
-        logging.debug(f"Executing local command: {' '.join(cmd)}")
+        logging.debug(f"🔎 Executing local command: {' '.join(cmd)}")
         try:
             result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
             result.check_returncode()
-            logging.debug(f"Local command output: {result.stdout}")
+            logging.debug(f"🔎 Local command output: {result.stdout}")
             return result
         except subprocess.CalledProcessError as e:
-            logging.error(f"Local command failed: {e}")
+            logging.error(f"❌ Local command failed: {e}")
             return e
     else:
-        logging.debug(f"Executing remote command: {' '.join(cmd)} on {host_details['host']}")
+        logging.debug(f"🔎 Executing remote command: {' '.join(cmd)} on {host_details['host']}")
         return run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], cmd)
 
 def run_proxmox_command(local_cmd, remote_cmd=None, use_local_only=False, host_details=None):
@@ -277,10 +279,10 @@ def validate_configuration_command():
     try:
         validate_config(config)  # Using the existing validate_config function
         click.secho(f"✅ Configuration is valid.", fg='green')
-        logging.info("Configuration validation succeeded")
+        logging.info("✅ Configuration validation succeeded")
     except ValueError as e:
         click.secho(f"❌ Configuration validation failed: {str(e)}", fg='red')
-        logging.error(f"Configuration validation failed: {str(e)}")
+        logging.error(f"❌ Configuration validation failed: {str(e)}")
 
 
 @conf.command('backup')
@@ -299,7 +301,7 @@ def backup_config(destination_path, timestamp, compress):
         yaml.dump(config, backup_file)
     
     click.secho(f"✅ Configuration backed up to {destination_path}.", fg='green')
-    logging.info(f"Configuration backed up to {destination_path}")
+    logging.info(f"✅ Configuration backed up to {destination_path}")
 
     if compress:
         compressed_path = f"{destination_path}.gz"
@@ -307,7 +309,7 @@ def backup_config(destination_path, timestamp, compress):
             shutil.copyfileobj(f_in, f_out)
         os.remove(destination_path)  # Remove the uncompressed file
         click.secho(f"✅ Backup compressed to {compressed_path}.", fg='green')
-        logging.info(f"Backup compressed to {compressed_path}")
+        logging.info(f"✅ Backup compressed to {compressed_path}")
 
 
 @lws.group()
@@ -727,7 +729,7 @@ def get_next_vmid(start_vmid=10000, use_local_only=False, host_details=None):
 
         return next_vmid
     else:
-        logging.error("Failed to retrieve existing VMIDs. Defaulting to start_vmid.")
+        logging.error("❌ Failed to retrieve existing VMIDs. Defaulting to start_vmid.")
         return start_vmid
 
 
@@ -742,7 +744,7 @@ def is_container_locked(instance_id, host_details):
     if result.returncode == 0:
         return 'lock' in result.stdout
     else:
-        logging.error(f"Failed to check lock status for instance {instance_id}: {result.stderr}")
+        logging.error(f"❌ Failed to check lock status for instance {instance_id}: {result.stderr}")
         return False  # Assume it's not locked if the command fails to avoid indefinite retries
 
 @lxc.command('run')
@@ -1469,7 +1471,7 @@ def get_host_details(region, az):
     try:
         return config['regions'][region]['availability_zones'][az]
     except KeyError as e:
-        logging.error(f"Invalid region or availability zone: {e}")
+        logging.error(f"❌ Invalid region or availability zone: {e}")
         return None
 
 def get_host_free_resources(host_details):
@@ -1498,7 +1500,7 @@ def get_host_free_resources(host_details):
 
         return total_cores, total_memory, free_memory
     else:
-        logging.error(f"Failed to retrieve host resources: {cpu_result.stderr} {mem_result.stderr}")
+        logging.error(f"❌ Failed to retrieve host resources: {cpu_result.stderr} {mem_result.stderr}")
         return None, None, None
 
 def get_lxc_resources(instance_id, host_details):
@@ -1522,7 +1524,7 @@ def get_lxc_resources(instance_id, host_details):
 
         return cpulimit, cpuunits, memory
     else:
-        logging.error(f"Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
+        logging.error(f"❌ Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
         return None, None, None
 
 
@@ -1669,7 +1671,7 @@ def install_docker(instance_ids, package_name, region, az):
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def run_docker(instance_id, docker_command, region, az):
     """🚀 Execute docker run inside an LXC container."""
-    logging.debug(f"Starting dock run with instance_id: {instance_id} and docker_command: {docker_command}")
+    logging.debug(f"🔎 Starting dock run with instance_id: {instance_id} and docker_command: {docker_command}")
     
     if not docker_command:
         click.secho("❌ No Docker command provided.", fg='red')
@@ -1677,14 +1679,14 @@ def run_docker(instance_id, docker_command, region, az):
 
     # Fetch host details from the configuration
     host_details = config['regions'][region]['availability_zones'][az]
-    logging.debug(f"Host details: {host_details}")
+    logging.debug(f"🔎 Host details: {host_details}")
     
     # Check if the container is running
     status_cmd = ["pct", "status", instance_id]
     status_result = run_proxmox_command(status_cmd, status_cmd, config['use_local_only'], host_details)
-    logging.debug(f"Executed status command: {status_cmd}")
-    logging.debug(f"Container status result: {status_result.stdout.strip()}")
-    logging.debug(f"Container status stderr: {status_result.stderr.strip()}")
+    logging.debug(f"🔎 Executed status command: {status_cmd}")
+    logging.debug(f"🔎 Container status result: {status_result.stdout.strip()}")
+    logging.debug(f"🔎 Container status stderr: {status_result.stderr.strip()}")
 
     if "status: running" not in status_result.stdout:
         click.secho(f"❌ LXC container {instance_id} is not running.", fg='red')
@@ -1693,24 +1695,24 @@ def run_docker(instance_id, docker_command, region, az):
     # Ensure Docker is installed
     docker_check_cmd = ["pct", "exec", instance_id, "--", "docker", "--version"]
     docker_check_result = run_proxmox_command(docker_check_cmd, docker_check_cmd, config['use_local_only'], host_details)
-    logging.debug(f"Executed Docker check command: {docker_check_cmd}")
-    logging.debug(f"Docker version check result: {docker_check_result.stdout.strip()}")
-    logging.debug(f"Docker version check stderr: {docker_check_result.stderr.strip()}")
+    logging.debug(f"🔎 Executed Docker check command: {docker_check_cmd}")
+    logging.debug(f"🔎 Docker version check result: {docker_check_result.stdout.strip()}")
+    logging.debug(f"🔎 Docker version check stderr: {docker_check_result.stderr.strip()}")
 
     if docker_check_result.returncode != 0:
         click.secho(f"🔧 Docker not found on instance {instance_id}. Installing Docker...", fg='yellow')
         install_docker_cmd = ["pct", "exec", instance_id, "--", "apt-get", "update"]
         update_result = run_proxmox_command(install_docker_cmd, install_docker_cmd, config['use_local_only'], host_details)
-        logging.debug(f"Executed apt-get update command: {install_docker_cmd}")
-        logging.debug(f"apt-get update result stdout: {update_result.stdout.strip()}")
-        logging.debug(f"apt-get update result stderr: {update_result.stderr.strip()}")
+        logging.debug(f"🔎 Executed apt-get update command: {install_docker_cmd}")
+        logging.debug(f"🔎 apt-get update result stdout: {update_result.stdout.strip()}")
+        logging.debug(f"🔎 apt-get update result stderr: {update_result.stderr.strip()}")
 
         install_docker_cmd = ["pct", "exec", instance_id, "--", "apt-get", "install", "-y", "docker.io"]
         install_result = run_proxmox_command(install_docker_cmd, install_docker_cmd, config['use_local_only'], host_details)
         
-        logging.debug(f"Executed Docker install command: {install_docker_cmd}")
-        logging.debug(f"Docker install result stdout: {install_result.stdout.strip()}")
-        logging.debug(f"Docker install result stderr: {install_result.stderr.strip()}")
+        logging.debug(f"🔎 Executed Docker install command: {install_docker_cmd}")
+        logging.debug(f"🔎 Docker install result stdout: {install_result.stdout.strip()}")
+        logging.debug(f"🔎 Docker install result stderr: {install_result.stderr.strip()}")
 
         if install_result.returncode == 0:
             click.secho(f"✅ Docker installed successfully on instance {instance_id}.", fg='green')
@@ -1720,7 +1722,7 @@ def run_docker(instance_id, docker_command, region, az):
 
     # Prepend "docker run" to the Docker command, remove "-d" if it conflicts with port mapping
     docker_run_cmd = ["pct", "exec", instance_id, "--", "docker", "run"] + list(docker_command)
-    logging.debug(f"Final Docker command to execute: {docker_run_cmd}")
+    logging.debug(f"🔎 Final Docker command to execute: {docker_run_cmd}")
 
     run_result = run_proxmox_command(
         docker_run_cmd,
@@ -1728,8 +1730,8 @@ def run_docker(instance_id, docker_command, region, az):
         config['use_local_only'], host_details
     )
     
-    logging.debug(f"Docker command execution stdout: {run_result.stdout.strip()}")
-    logging.debug(f"Docker command execution stderr: {run_result.stderr.strip()}")
+    logging.debug(f"🔎 Docker command execution stdout: {run_result.stdout.strip()}")
+    logging.debug(f"🔎 Docker command execution stderr: {run_result.stderr.strip()}")
 
     if run_result.returncode == 0:
         click.secho(f"✅ Docker command executed successfully on instance {instance_id}:\n{run_result.stdout.strip()}", fg='green')
@@ -1848,7 +1850,7 @@ def extract_app_name_from_compose(compose_file):
                     # Use the first service name as the app_name
                     return service_names[0]
     except Exception as e:
-        logging.error(f"Failed to parse Docker Compose file: {str(e)}")
+        logging.error(f"❌ Failed to parse Docker Compose file: {str(e)}")
     return None
 
 def verify_docker_service_running(instance_id, host_details):
@@ -1942,12 +1944,12 @@ WantedBy=multi-user.target
 def compose_update(instance_id, compose_file, region, az):
     """🆕 Update app within an LXC container via Compose."""
     host_details = config['regions'][region]['availability_zones'][az]
-    logging.info(f"Starting Docker Compose update for instance {instance_id}")
+    logging.info(f"✅ Starting Docker Compose update for instance {instance_id}")
 
     # Ensure the Docker Compose file is available locally
     if not os.path.exists(compose_file):
         click.secho(f"❌ Docker Compose file not found at {compose_file}.", fg='red')
-        logging.error(f"Docker Compose file not found: {compose_file}")
+        logging.error(f"❌ Docker Compose file not found: {compose_file}")
         return
 
     # Upload the Compose file to the Proxmox host
@@ -1956,22 +1958,22 @@ def compose_update(instance_id, compose_file, region, az):
     result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         click.secho(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}")
+        logging.error(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}")
         return
 
     click.secho(f"✅ Docker Compose file uploaded to Proxmox host at {remote_host_path}.", fg='green')
-    logging.info(f"Docker Compose file uploaded to Proxmox host: {remote_host_path}")
+    logging.info(f"✅ Docker Compose file uploaded to Proxmox host: {remote_host_path}")
 
     # Transfer the file to the LXC container using pct push
     pct_push_cmd = ["sshpass", "-p", host_details['ssh_password'], "ssh", f"{host_details['user']}@{host_details['host']}", "pct", "push", instance_id, remote_host_path, remote_host_path]
     result = subprocess.run(pct_push_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
         click.secho(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}")
+        logging.error(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}")
         return
     
     click.secho(f"✅ Docker Compose file transferred to {remote_host_path} on instance {instance_id}.", fg='green')
-    logging.info(f"Docker Compose file transferred to LXC container: {remote_host_path}")
+    logging.info(f"✅ Docker Compose file transferred to LXC container: {remote_host_path}")
 
     # Define the Docker Compose update commands
     compose_pull_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "-f", remote_host_path, "pull"]
@@ -1982,10 +1984,10 @@ def compose_update(instance_id, compose_file, region, az):
     pull_result = run_proxmox_command(compose_pull_cmd, compose_pull_cmd, config['use_local_only'], host_details)
     if pull_result.returncode == 0:
         click.secho(f"✅ Docker Compose application images pulled successfully on instance {instance_id}.", fg='green')
-        logging.info(f"Docker Compose application images pulled successfully on instance {instance_id}")
+        logging.info(f"✅ Docker Compose application images pulled successfully on instance {instance_id}")
     else:
         click.secho(f"❌ Failed to pull Docker Compose images on instance {instance_id}: {pull_result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to pull Docker Compose images on instance {instance_id}: {pull_result.stderr.strip()}")
+        logging.error(f"❌ Failed to pull Docker Compose images on instance {instance_id}: {pull_result.stderr.strip()}")
         return
 
     # Execute docker-compose up -d
@@ -1993,10 +1995,10 @@ def compose_update(instance_id, compose_file, region, az):
     up_result = run_proxmox_command(compose_up_cmd, compose_up_cmd, config['use_local_only'], host_details)
     if up_result.returncode == 0:
         click.secho(f"✅ Docker Compose application updated successfully on instance {instance_id}.", fg='green')
-        logging.info(f"Docker Compose application updated successfully on instance {instance_id}")
+        logging.info(f"✅ Docker Compose application updated successfully on instance {instance_id}")
     else:
         click.secho(f"❌ Failed to update Docker Compose application on instance {instance_id}: {up_result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to update Docker Compose application on instance {instance_id}: {up_result.stderr.strip()}")
+        logging.error(f"❌ Failed to update Docker Compose application on instance {instance_id}: {up_result.stderr.strip()}")
 
 
 @app.command('logs')
@@ -2024,10 +2026,10 @@ def logs(instance_id, container_name_or_id, region, az, tail, follow):
 
     if result.returncode == 0:
         click.secho(f"📄 Logs for container {container_name_or_id} on instance {instance_id}:\n{result.stdout}", fg='cyan')
-        logging.info(f"Logs fetched for container {container_name_or_id} on instance {instance_id}")
+        logging.info(f"📄 Logs fetched for container {container_name_or_id} on instance {instance_id}")
     else:
         click.secho(f"❌ Failed to fetch logs for container {container_name_or_id} on instance {instance_id}: {result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to fetch logs for container {container_name_or_id} on instance {instance_id}: {result.stderr.strip()}")
+        logging.error(f"❌ Failed to fetch logs for container {container_name_or_id} on instance {instance_id}: {result.stderr.strip()}")
 
 
 @app.command('list')
@@ -2047,10 +2049,10 @@ def containers(instance_id, region, az):
 
     if result.returncode == 0:
         click.secho(f"📦 Running containers on instance {instance_id}:\n{result.stdout}", fg='cyan')
-        logging.info(f"Listed running containers on instance {instance_id}")
+        logging.info(f"📦 Listed running containers on instance {instance_id}")
     else:
         click.secho(f"❌ Failed to list running containers on instance {instance_id}: {result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to list running containers on instance {instance_id}: {result.stderr.strip()}")
+        logging.error(f"❌ Failed to list running containers on instance {instance_id}: {result.stderr.strip()}")
 
 
 @app.command('remove')
@@ -2072,7 +2074,7 @@ def remove(instance_ids, region, az, purge):
             purge_result = run_proxmox_command(purge_cmd, purge_cmd, config['use_local_only'], host_details)
             if purge_result.returncode != 0:
                 click.secho(f"❌ Failed to purge Docker resources on instance {instance_id}: {purge_result.stderr.strip()}", fg='red')
-                logging.error(f"Failed to purge Docker resources on instance {instance_id}: {purge_result.stderr.strip()}")
+                logging.error(f"❌ Failed to purge Docker resources on instance {instance_id}: {purge_result.stderr.strip()}")
                 continue
 
         # Remove Docker and Docker Compose
@@ -2081,10 +2083,10 @@ def remove(instance_ids, region, az, purge):
 
         if remove_result.returncode == 0:
             click.secho(f"✅ Docker and Docker Compose removed successfully from instance {instance_id}.", fg='green')
-            logging.info(f"Docker and Docker Compose removed from instance {instance_id}")
+            logging.info(f"✅ Docker and Docker Compose removed from instance {instance_id}")
         else:
             click.secho(f"❌ Failed to remove Docker and Docker Compose from instance {instance_id}: {remove_result.stderr.strip()}", fg='red')
-            logging.error(f"Failed to remove Docker and Docker Compose from instance {instance_id}: {remove_result.stderr.strip()}")
+            logging.error(f"❌ Failed to remove Docker and Docker Compose from instance {instance_id}: {remove_result.stderr.strip()}")
 
 
 @lxc.command('clone')
@@ -2114,7 +2116,7 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 
     if snapshot_result.returncode != 0:
         click.secho(f"❌ Failed to create snapshot {snapshot_name} on instance {source_instance_id}: {snapshot_result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to create snapshot {snapshot_name} on instance {source_instance_id}: {snapshot_result.stderr.strip()}")
+        logging.error(f"❌ Failed to create snapshot {snapshot_name} on instance {source_instance_id}: {snapshot_result.stderr.strip()}")
         return
 
     # Construct the clone command
@@ -2140,7 +2142,7 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 
     if clone_result.returncode == 0:
         click.secho(f"✅ Successfully cloned instance {source_instance_id} to {target_instance_id} from snapshot {snapshot_name}.", fg='green')
-        logging.info(f"Successfully cloned instance {source_instance_id} to {target_instance_id} from snapshot {snapshot_name}")
+        logging.info(f"✅ Successfully cloned instance {source_instance_id} to {target_instance_id} from snapshot {snapshot_name}")
 
         # Automatically start the cloned container if the option is enabled
         if start:
@@ -2150,13 +2152,13 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 
             if start_result.returncode == 0:
                 click.secho(f"✅ Cloned container {target_instance_id} started successfully.", fg='green')
-                logging.info(f"Cloned container {target_instance_id} started successfully")
+                logging.info(f"✅ Cloned container {target_instance_id} started successfully")
             else:
                 click.secho(f"❌ Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}", fg='red')
-                logging.error(f"Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}")
+                logging.error(f"❌ Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}")
     else:
         click.secho(f"❌ Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}", fg='red')
-        logging.error(f"Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}")
+        logging.error(f"❌ Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}")
 
 
 @lxc.command('exec')
@@ -2168,7 +2170,7 @@ def exec_in_container(instance_ids, command, region, az):
     """👨🏻‍💻 Execute a command in one or more LXC containers."""
     if not command:
         click.secho("❌ No command provided to execute.", fg='red')
-        logging.error("No command provided to execute.")
+        logging.error("❌ No command provided to execute.")
         return
 
     host_details = config['regions'][region]['availability_zones'][az]
@@ -2185,12 +2187,12 @@ def exec_in_container(instance_ids, command, region, az):
         exec_result = run_proxmox_command(exec_cmd, exec_cmd, config['use_local_only'], host_details)
 
         if exec_result.returncode == 0:
-            logging.info(f"Command executed successfully in instance {instance_id}.")
+            logging.info(f"✅ Command executed successfully in instance {instance_id}.")
             click.secho(f"✅ Command executed successfully in instance {instance_id}.", fg='green')
-            logging.debug(f"Command output for instance {instance_id}: {exec_result.stdout}")
+            logging.debug(f"🔎 Command output for instance {instance_id}: {exec_result.stdout}")
             click.secho(exec_result.stdout, fg='white')
         else:
-            logging.error(f"Failed to execute command in instance {instance_id}: {exec_result.stderr}")
+            logging.error(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}")
             click.secho(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}", fg='red')
 
 @lxc.command('net')
@@ -2313,7 +2315,7 @@ def list_templates(region, az):
     
     except Exception as e:
         click.secho(f"❌ An error occurred while listing templates: {str(e)}", fg='red')
-        logging.error(f"An error occurred while listing templates: {str(e)}")
+        logging.error(f"❌ An error occurred while listing templates: {str(e)}")
 
 @px.command('security-groups')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
@@ -2360,7 +2362,7 @@ def list_security_groups(region, az):
     
     except Exception as e:
         click.secho(f"❌ An error occurred while listing security groups: {str(e)}", fg='red')
-        logging.error(f"An error occurred while listing security groups: {str(e)}")
+        logging.error(f"❌ An error occurred while listing security groups: {str(e)}")
 
 
 @lxc.command('show-info')
@@ -2455,7 +2457,7 @@ def get_lxc_info(instance_id, region, az):
     
     except Exception as e:
         click.secho(f"❌ An error occurred while retrieving information: {str(e)}", fg='red')
-        logging.error(f"An error occurred while retrieving LXC information: {str(e)}")
+        logging.error(f"❌ An error occurred while retrieving LXC information: {str(e)}")
 
 @lxc.command('show-public-ip')
 @click.argument('instance_id', required=True)
@@ -2489,7 +2491,7 @@ def get_lxc_public_ip(instance_id, region, az):
     
     except Exception as e:
         click.secho(f"❌ An error occurred while retrieving the public IP address: {str(e)}", fg='red')
-        logging.error(f"An error occurred while retrieving the public IP address for LXC {instance_id}: {str(e)}")
+        logging.error(f"❌ An error occurred while retrieving the public IP address for LXC {instance_id}: {str(e)}")
 
 
 if __name__ == '__main__':
