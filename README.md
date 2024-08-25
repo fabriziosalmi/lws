@@ -182,7 +182,7 @@ Commands:
   delete-snapshot          🗑️ Delete a snapshot of an LXC container.
   describe-instances       🔍 Describe LXC containers.
   detach-volume            🔓 Detach a storage volume from an LXC container.
-  exec                     👨🏻‍💻 Execute a command in one or more LXC...
+  exec                     👨🏻‍💻 Execute command in LXC container.
   list-snapshots           🗃️ List all snapshots of an LXC container.
   list-storage             🔍 List storage details for LXC container.
   migrate                  🔄 Migrate LXC container between hosts.
