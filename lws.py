@@ -2726,7 +2726,7 @@ def sec_discovery(lxc_id, region, az):
         click.secho("❌ Failed to load configuration.", fg='red')
         return
 
-    discovery_methods = config['security']['discovery'].get('discovery_methods', ['ping', 'curl', 'wget'])
+    discovery_methods = config['security']['discovery'].get('discovery_methods', ['ping'])
     max_workers = config['security']['discovery'].get('max_parallel_workers', 10)
 
     reachable_hosts = {}
@@ -2805,46 +2805,6 @@ def sec_discovery_get_lxc_ip_address(lxc_id, host_details):
         logging.error(f"Failed to retrieve LXC IP address for LXC ID {lxc_id}: {result.stderr}")
         return None
 
-def sec_discovery_perform_discovery(level, source_ip, subnet, discovery_methods, max_workers=10, host_details=None):
-    """Perform the discovery using multiple methods."""
-    discovered_hosts = []
-
-    def run_discovery_method(method, target_ip):
-        command = []
-        if method == "ping":
-            command = ["ping", "-c", "1", "-W", "1", target_ip]
-        elif method == "curl":
-            command = ["curl", "-Is", "--max-time", "2", f"http://{target_ip}"]
-        elif method == "wget":
-            command = ["wget", "--spider", "--timeout", "2", f"http://{target_ip}"]
-
-        if command:
-            if level == "client":
-                result = execute_command(command, use_local_only=True)
-            else:
-                result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], command)
-
-            if result.returncode == 0:
-                logging.debug(f"{method} succeeded for {target_ip} at level {level}.")
-                discovered_hosts.append(target_ip)
-            else:
-                logging.debug(f"{method} failed for {target_ip} at level {level}.")
-
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_ip = {
-            executor.submit(run_discovery_method, method, str(ip)): str(ip)
-            for ip in subnet
-            if not str(ip).startswith("127.") and ip != subnet.network_address and ip != subnet.broadcast_address
-            for method in discovery_methods
-        }
-        for future in as_completed(future_to_ip):
-            ip = future_to_ip[future]
-            try:
-                future.result()
-            except Exception as exc:
-                logging.error(f"Error during discovery for {ip}: {exc}")
-
-    return discovered_hosts
 
 import subprocess
 import signal
