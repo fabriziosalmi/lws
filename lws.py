@@ -2710,7 +2710,7 @@ def sec_discovery_load_config(config_path='config.yaml'):
 @lws.group()
 @command_alias('sec')
 def sec():
-    """🛠️ Security related commands.."""
+    """⚠️ Security stuff (experimental)."""
     pass
 
 @sec.command('discovery')
