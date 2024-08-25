@@ -11,7 +11,8 @@ import requests
 import gzip
 import yaml
 import click
-
+import socket
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 
@@ -318,28 +319,18 @@ def px():
     """🌐 Manage Proxmox hosts."""
     pass
 
-import click
-import socket
-import subprocess
-
-
-import click
-import socket
-import subprocess
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 @px.command('list')
 def list_hosts():
     """🌐 List all available Proxmox hosts."""
 
-    def resolve_host(host, timeout=0.3):
+    def resolve_host(host, timeout=0.2):
         """Resolve host with a timeout."""
         try:
             return socket.gethostbyname(host)
         except socket.gaierror:
             return None
 
-    def check_tcp_port(host, port, timeout=0.3):
+    def check_tcp_port(host, port, timeout=0.2):
         """Check if a TCP port is open."""
         try:
             with socket.create_connection((host, port), timeout=timeout):
@@ -359,7 +350,7 @@ def list_hosts():
             # Fall back to ping
             try:
                 result = subprocess.run(
-                    ['ping', '-c', '1', '-W', '0.3', resolved_ip],
+                    ['ping', '-c', '1', '-W', '0.2', resolved_ip],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
@@ -373,7 +364,7 @@ def list_hosts():
     def process_host(region, az, az_details):
         host = az_details['host']
         status_symbol = check_host_reachability(host)
-        return f"🌍 Region: {region} - AZ: {az} - Host: {status_symbol[0]} ({status_symbol[1]})"
+        return f"{status_symbol[1]} - Region: {region} - AZ: {az} - Host: {status_symbol[0]}"
 
     click.secho("Available Proxmox Hosts:", fg='cyan')
 
@@ -391,7 +382,6 @@ def list_hosts():
                 click.secho(result, fg='cyan')
             except Exception as e:
                 click.secho(f"Error checking host: {e}", fg='red')
-
             
 @px.command('reboot')
 #@command_alias('proxmox-reboot')
