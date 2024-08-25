@@ -2,6 +2,29 @@
 
 **LWS** is a Command-Line Interface (CLI) tool designed to manage Proxmox Virtual Environments (VE), LXC containers, and Docker services. Created as a fun project, LWS is a powerful, yet experimental tool that should be used with caution in any environment.
 
+```
+lws px list
+Available Proxmox Hosts:
+🟢 -> Region: eu-south-1 - AZ: az1 - Host: 192.168.100.5
+🔴 -> Region: eu-central-1 - AZ: pve-rhine - Host: pve-rhine.mydomain.com
+🔴 -> Region: eu-central-1 - AZ: pve-alps - Host: pve-alps.mydomain.com
+
+lws px status
+📊 Load Avg: 2.48 2.38 2.36
+📊 Memory Info: Used 16286084 kB / 131945984 kB
+📊 Established Connections: 464 established
+📊 Disk Space: /dev/mapper/pve-root   94G   15G   75G  17% /
+📊 Swap Space: 436608 kB used / 8388604 kB total (/dev/dm-0)
+
+lws lxc status 112
+📊 Instance 112 - Load Avg: 0.00 0.00 0.00
+📊 Instance 112 - Memory Usage: 831788 kB / 2097152 kB
+📊 Instance 112 - Established Connections: 452
+📊 Instance 112 - Open Files: 4537
+📊 Instance 112 - Disk Space: /dev/mapper/pve-vm--112--disk--0   63G   29G   31G  49% /
+📊 Instance 112 - Swap Space (none): Used 0 / 2097152
+```
+
 ## Table of Contents
 
 - [Introduction](#introduction)
