@@ -502,7 +502,6 @@ scaling:
 
 security:
   discovery:
-    client_timeout: 2
     proxmox_timeout: 2
     lxc_timeout: 2
     discovery_methods: ['ping']
