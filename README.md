@@ -17,8 +17,6 @@ Commands:
   lxc   ⚙️ Manage LXC containers.
   px    🌐 Manage Proxmox hosts.
 
----
-
 lws px
 Usage: lws.py px [OPTIONS] COMMAND [ARGS]...
 
@@ -28,34 +26,25 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  backup-hosts              💾 Backup configurations from all Proxmox hosts.
-  create-backup             💾 Create a backup of a specific LXC container.
-  list                      🌐 List all available Proxmox hosts.
-  list-clusters             🔍 List all clusters in the Proxmox environment.
-  reboot                    🔄 Reboot the Proxmox host.
-  restart-cluster-services  🔄 Restart all cluster services on Proxmox hosts.
-  start-cluster-services    🚀 Start all cluster services on Proxmox hosts.
-  status                    📊 Monitor resource usage of a Proxmox host.
-  stop-cluster-services     🛑 Stop all cluster services on Proxmox hosts.
-  update-hosts              🔄 Update all Proxmox hosts.
-  upload                    💽 Upload template to Proxmox host.
-
----
-
-lws conf
-Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
-
-  🛠️ Manage client configuration.
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  backup    💾 Backup the current configuration to a file.
-  show      📄 Show current configuration.
-  validate  📄 Validate the current configuration.
-
----
+  backup                   💾 Backup configurations from all Proxmox hosts.
+  backup-lxc               💾 Create a backup of a specific LXC container.
+  cluster-restart          🔄 Restart all cluster services on Proxmox hosts.
+  cluster-start            🚀 Start all cluster services on Proxmox hosts.
+  cluster-stop             🛑 Stop all cluster services on Proxmox hosts.
+  clusters                 🔍 List all clusters in the Proxmox environment.
+  image-add                📦 Create a template image from an LXC container.
+  image-rm                 🗑️ Delete a template image from Proxmox host.
+  list                     🌐 List all available Proxmox hosts.
+  reboot                   🔄 Reboot the Proxmox host.
+  security-group-add       🔐 Create security group on Proxmox host.
+  security-group-attach    🔗 Attach security group to an LXC container.
+  security-group-detach    🔓 Detach security group from an LXC container.
+  security-group-rm        🗑️ Delete a security group on Proxmox host.
+  security-group-rule-add  ➕ Add a rule to a existing security group.
+  security-group-rule-rm   ➖ Remove a rule from an existing security group.
+  status                   📊 Monitor resource usage of a Proxmox host.
+  update                   🔄 Update all Proxmox hosts.
+  upload                   💽 Upload template to Proxmox host.
 
 lws lxc
 Usage: lws.py lxc [OPTIONS] COMMAND [ARGS]...
@@ -66,35 +55,25 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  clone                    🔄 Clone an LXC container locally or remote.
-  exec                     👨🏻‍💻 Execute a command in one or more LXC...
-  image-add                📦 Create a template image from an LXC container.
-  image-rm                 🗑️ Delete a template image from Proxmox host.
-  migrate                  🔄 Migrate LXC container between hosts.
-  reboot                   🔄 Reboot running LXC containers.
-  run                      🛠️ Create and start LXC containers.
-  scale                    📏 Scale resources LXC containers.
-  scale-check              ⚖️ Scaling adjustments for an LXC container.
-  security-group-add       🔐 Create security group on Proxmox host.
-  security-group-attach    🔗 Attach security group to an LXC container.
-  security-group-detach    🔓 Detach security group from an LXC container.
-  security-group-rm        🗑️ Delete a security group on Proxmox host.
-  security-group-rule-add  ➕ Add a rule to a existing security group.
-  security-group-rule-rm   ➖ Remove a rule from an existing security group.
-  service                  🔧 Manage a service of LXC containers.
-  show                     🔍 Describe LXC containers.
-  snapshot-add             📸 Create a snapshot of an LXC container.
-  snapshot-rm              🗑️ Delete a snapshot of an LXC container.
-  snapshots                🗃️ List all snapshots of an LXC container.
-  start                    🚀 Start stopped LXC containers.
-  status                   📊 Monitor resources of LXC containers.
-  stop                     🛑 Stop running LXC containers.
-  storage-list             🔍 List storage details for LXC container.
-  terminate                💥 Terminate (destroy) LXC containers.
-  volume-attach            🔗 Attach a storage volume to an LXC container.
-  volume-detach            🔓 Detach a storage volume from an LXC container.
-
----
+  clone           🔄 Clone an LXC container locally or remote.
+  exec            👨🏻‍💻 Execute a command in one or more LXC containers.
+  migrate         🔄 Migrate LXC container between hosts.
+  reboot          🔄 Reboot running LXC containers.
+  run             🛠️ Create and start LXC containers.
+  scale           📏 Scale resources LXC containers.
+  scale-check     ⚖️ Scaling adjustments for an LXC container.
+  service         🔧 Manage a service of LXC containers.
+  show            🔍 Describe LXC containers.
+  show-snapshots  🗃️ List all snapshots of an LXC container.
+  show-storage    🔍 List storage details for LXC container.
+  snapshot-add    📸 Create a snapshot of an LXC container.
+  snapshot-rm     🗑️ Delete a snapshot of an LXC container.
+  start           🚀 Start stopped LXC containers.
+  status          📊 Monitor resources of LXC containers.
+  stop            🛑 Stop running LXC containers.
+  terminate       💥 Terminate (destroy) LXC containers.
+  volume-attach   🔗 Attach a storage volume to an LXC container.
+  volume-detach   🔓 Detach a storage volume from an LXC container.
 
 lws app
 Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
@@ -113,6 +92,18 @@ Commands:
   run             🚀 Execute docker run inside an LXC container.
   setup           📦 Install Docker and Compose on an LXC container.
 
+lws conf
+Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
+
+  🛠️ Manage client configuration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  backup    💾 Backup the current configuration to a file.
+  show      📄 Show current configuration.
+  validate  📄 Validate the current configuration.
 ```
 
 ## Table of Contents
@@ -123,7 +114,6 @@ Commands:
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Configuration](#configuration)
-- [Usage](#usage)
   - [Proxmox Management](#proxmox-management)
   - [LXC Container Management](#lxc-container-management)
   - [Docker Management](#docker-management)
