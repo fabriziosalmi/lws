@@ -742,7 +742,7 @@ def is_container_locked(instance_id, host_details):
         logging.error(f"Failed to check lock status for instance {instance_id}: {result.stderr}")
         return False  # Assume it's not locked if the command fails to avoid indefinite retries
 
-@lxc.command('run-instances')
+@lxc.command('instance-run')
 @click.option('--image-id', required=True, help="ID of the container image template.")
 @click.option('--count', default=1, help="Number of instances to run.")
 @click.option('--size', default='small', type=click.Choice(list(config['instance_sizes'].keys())), help="Instance size.")
@@ -824,7 +824,7 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
             click.secho(f"❌ Failed to create instance {instance_id}: {create_result.stderr}", fg='red')
 
 
-@lxc.command('stop-instances')
+@lxc.command('instance-stop')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -832,7 +832,7 @@ def stop_instances(instance_ids, region, az):
     """🛑 Stop running LXC containers."""
     process_instance_command(instance_ids, 'stop', region, az)
 
-@lxc.command('terminate-instances')
+@lxc.command('instance-terminate')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -840,7 +840,7 @@ def terminate_instances(instance_ids, region, az):
     """💥 Terminate (destroy) LXC containers."""
     process_instance_command(instance_ids, 'terminate', region, az)
 
-@lxc.command('describe-instances')
+@lxc.command('instance-show')
 @click.argument('instance_ids', nargs=-1, required=False)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -857,7 +857,7 @@ def describe_instances(instance_ids, region, az):
         else:
             click.secho(f"❌ Failed to list instances: {list_result.stderr}", fg='red')
 
-@lxc.command('scale-instances')
+@lxc.command('instance-scale')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--memory', default=None, help="New memory size in MB.")
 @click.option('--cpulimit', default=None, help="New CPU limit.")
@@ -912,7 +912,7 @@ def scale_instances(instance_ids, memory, cpulimit, cpucores, storage_size, net_
         else:
             click.secho(f"❌ Failed to scale instance '{instance_id}': {result.stderr.strip()}", fg='red')
 
-@lxc.command('create-snapshot')
+@lxc.command('snapshot-add')
 @click.argument('instance_id')
 @click.argument('snapshot_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -921,7 +921,7 @@ def create_snapshot(instance_id, snapshot_name, region, az):
     """📸 Create a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_create', region, az, snapshot_name=snapshot_name)
 
-@lxc.command('delete-snapshot')
+@lxc.command('snapshot-rm')
 @click.argument('instance_id')
 @click.argument('snapshot_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -930,7 +930,7 @@ def delete_snapshot(instance_id, snapshot_name, region, az):
     """🗑️ Delete a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_delete', region, az, snapshot_name=snapshot_name)
 
-@lxc.command('list-snapshots')
+@lxc.command('snapshots')
 @click.argument('instance_id')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -938,7 +938,7 @@ def list_snapshots(instance_id, region, az):
     """🗃️ List all snapshots of an LXC container."""
     process_instance_command([instance_id], 'list_snapshots', region, az)
 
-@lxc.command('start-instances')
+@lxc.command('instances-start')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -946,7 +946,7 @@ def start_instances(instance_ids, region, az):
     """🚀 Start stopped LXC containers."""
     process_instance_command(instance_ids, 'start', region, az)
 
-@lxc.command('reboot-instances')
+@lxc.command('instances-reboot')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -954,7 +954,7 @@ def reboot_instances(instance_ids, region, az):
     """🔄 Reboot running LXC containers."""
     process_instance_command(instance_ids, 'reboot', region, az)
 
-@lxc.command('create-image')
+@lxc.command('image-add')
 @click.argument('instance_id')
 @click.argument('template_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -983,7 +983,7 @@ def create_image(instance_id, template_name, region, az):
     else:
         click.secho(f"❌ Failed to stop instance {instance_id}: {stop_result.stderr}", fg='red')
 
-@lxc.command('delete-image')
+@lxc.command('image-rm')
 @click.argument('template_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -1004,7 +1004,7 @@ def delete_image(template_name, region, az):
         click.secho(f"❌ Failed to delete template '{template_name}' on host {host_details['host']}: {result.stderr.strip()}", fg='red')
 
 
-@lxc.command('attach-volume')
+@lxc.command('volume-attach')
 @click.argument('instance_id')
 @click.argument('volume_name')
 @click.argument('volume_size')
@@ -1036,7 +1036,7 @@ def attach_volume(instance_id, volume_name, volume_size, mount_point, region, az
     else:
         click.secho(f"❌ Failed to attach volume '{volume_name}' to instance '{instance_id}': {result.stderr.strip()}", fg='red')
 
-@lxc.command('detach-volume')
+@lxc.command('volume-detach')
 @click.argument('instance_id')
 @click.argument('volume_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -1465,7 +1465,7 @@ def bulk_stop_vms(vmids, region, az):
         else:
             click.secho(f"❌ Failed to stop VMID {vmid}: {result.stderr}", fg='red')
 
-@lxc.command('list-storage')
+@lxc.command('storage-list')
 @click.argument('instance_id')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -1566,7 +1566,7 @@ def get_lxc_resources(instance_id, host_details):
         return None, None, None
 
 
-@lxc.command('scale-suggest')
+@lxc.command('scale-check')
 @click.argument('instance_id')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
