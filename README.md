@@ -3,10 +3,9 @@
 **lws** is a Command-Line Interface (CLI) tool designed to manage Proxmox Virtual Environments (VE), LXC containers, and Docker services.
 
 ```
-lws
 Usage: lws.py [OPTIONS] COMMAND [ARGS]...
 
-  🐧 Linux (Containers) Web Services
+  🐧 linux (containers) web services
 
 Options:
   --help  Show this message and exit.
@@ -16,8 +15,17 @@ Commands:
   conf  🛠️ Manage client configuration.
   lxc   ⚙️ Manage LXC containers.
   px    🌐 Manage Proxmox hosts.
+Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
 
-lws px
+  🛠️ Manage client configuration.
+
+Options:
+  --help  Show this message and exit.
+
+Commands:
+  backup    💾 Backup the current configuration to a file.
+  show      📄 Show current configuration.
+  validate  📄 Validate the current configuration.
 Usage: lws.py px [OPTIONS] COMMAND [ARGS]...
 
   🌐 Manage Proxmox hosts.
@@ -32,6 +40,7 @@ Commands:
   cluster-start            🚀 Start all cluster services on Proxmox hosts.
   cluster-stop             🛑 Stop all cluster services on Proxmox hosts.
   clusters                 🔍 List all clusters in the Proxmox environment.
+  exec                     👨🏻‍💻 Execute an arbitrary command into a...
   image-add                📦 Create a template image from an LXC container.
   image-rm                 🗑️ Delete a template image from Proxmox host.
   list                     🌐 List all available Proxmox hosts.
@@ -42,11 +51,11 @@ Commands:
   security-group-rm        🗑️ Delete a security group on Proxmox host.
   security-group-rule-add  ➕ Add a rule to a existing security group.
   security-group-rule-rm   ➖ Remove a rule from an existing security group.
+  security-groups          🔐 List all security groups and their rules in...
   status                   📊 Monitor resource usage of a Proxmox host.
+  templates                📄 List all available templates in the Proxmox...
   update                   🔄 Update all Proxmox hosts.
   upload                   💽 Upload template to Proxmox host.
-
-lws lxc
 Usage: lws.py lxc [OPTIONS] COMMAND [ARGS]...
 
   ⚙️ Manage LXC containers.
@@ -56,14 +65,17 @@ Options:
 
 Commands:
   clone           🔄 Clone an LXC container locally or remote.
-  exec            👨🏻‍💻 Execute a command in an LXC container.
+  exec            👨🏻‍💻 Execute an arbitrary command into an LXC container.
   migrate         🔄 Migrate LXC container between hosts.
+  net             🌐 Perform simple network checks on LXC containers.
   reboot          🔄 Reboot running LXC containers.
   run             🛠️ Create and start LXC containers.
   scale           📏 Scale resources LXC containers.
   scale-check     ⚖️ Scaling adjustments for an LXC container.
   service         🔧 Manage a service of LXC containers.
   show            🔍 Describe LXC containers.
+  show-info       🌐 Retrieve IP address, hostname, DNS servers, and LXC...
+  show-public-ip  🌐 Retrieve the public IP address(es) of a given LXC...
   show-snapshots  🗃️ List all snapshots of an LXC container.
   show-storage    🔍 List storage details for LXC container.
   snapshot-add    📸 Create a snapshot of an LXC container.
@@ -74,8 +86,6 @@ Commands:
   terminate       💥 Terminate (destroy) LXC containers.
   volume-attach   🔗 Attach a storage volume to an LXC container.
   volume-detach   🔓 Detach a storage volume from an LXC container.
-
-lws app
 Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
 
   🐳 Manage Docker on LXC containers.
@@ -84,26 +94,13 @@ Options:
   --help  Show this message and exit.
 
 Commands:
-  deploy          🚀 Manage apps with Compose on LXC containers.
-  update          🆕 Update app within an LXC container via Compose.
-  list            📦 List Docker containers in an LXC container.
-  logs            📄 Fetch Docker logs from an LXC container.
-  remove          🗑️ Uninstall Docker and Compose from LXC containers.
-  run             🚀 Execute docker run inside an LXC container.
-  setup           📦 Install Docker and Compose on an LXC container.
-
-lws conf
-Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
-
-  🛠️ Manage client configuration.
-
-Options:
-  --help  Show this message and exit.
-
-Commands:
-  backup    💾 Backup the current configuration to a file.
-  show      📄 Show current configuration.
-  validate  📄 Validate the current configuration.
+  deploy  🚀 Manage apps with Compose on LXC containers.
+  list    📦 List Docker containers in an LXC container.
+  logs    📄 Fetch Docker logs from an LXC container.
+  remove  🗑️ Uninstall Docker and Compose from LXC containers.
+  run     🚀 Execute docker run inside an LXC container.
+  setup   📦 Install Docker and Compose on an LXC container.
+  update  🆕 Update app within an LXC container via Compose.
 ```
 
 ## Table of Contents
