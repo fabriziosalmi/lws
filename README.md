@@ -253,7 +253,7 @@ Given that LWS involves SSH connections and sensitive operations, it's crucial t
 
 - **Protect Your Configuration**: Ensure your `config.yaml` file is not exposed and is secured using appropriate tools.
 - **Use in Non-Production Environments**: As LWS is in its early stages, it is recommended to use it only in test or development environments.
-- **Use over secured connection**: You shluld use a VPN to perform commands against Proxmox hosts and LXC containers in a public setup.
+- **Use over Secured Connections**: Always protect the management communications with a VPN like OpenVPN or Wireguard.
 
 ## Best Practices
 
