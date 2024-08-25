@@ -364,7 +364,7 @@ def list_hosts():
     def process_host(region, az, az_details):
         host = az_details['host']
         status_symbol = check_host_reachability(host)
-        return f"{status_symbol[1]} - Region: {region} - AZ: {az} - Host: {status_symbol[0]}"
+        return f"{status_symbol[1]} -> Region: {region} - AZ: {az} - Host: {status_symbol[0]}"
 
     click.secho("Available Proxmox Hosts:", fg='cyan')
 
