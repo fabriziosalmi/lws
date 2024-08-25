@@ -25,6 +25,12 @@ lws lxc exec 108 uptime
 🔧 Executing command in instance 108: uptime
 ✅ Command executed successfully in instance 108.
  09:17:23 up  1:56,  0 users,  load average: 1.55, 1.23, 1.47
+
+lws lxc scale-suggest 108
+Proxmox Host: 48 cores, 112003 MB free memory
+Instance 108: 1 cores, 2048 MB total memory
+Consider increasing CPU cores to 2 (current: 1).
+Consider increasing memory to 2304 MB (current: 2048 MB).
 ```
 
 ## Table of Contents
