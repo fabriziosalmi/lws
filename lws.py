@@ -1069,7 +1069,7 @@ def detach_volume(instance_id, volume_name, region, az):
     else:
         click.secho(f"❌ Failed to detach volume '{volume_name}' from instance '{instance_id}': {result.stderr.strip()}", fg='red')
 
-@lxc.command('monitor-instances')
+@lxc.command('status')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
