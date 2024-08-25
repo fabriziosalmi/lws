@@ -4,7 +4,6 @@
 
 ```
 lws px list
-Available Proxmox Hosts:
 🟢 -> Region: eu-south-1 - AZ: az1 - Host: 192.168.100.5
 🔴 -> Region: eu-central-1 - AZ: pve-rhine - Host: pve-rhine.mydomain.com
 🔴 -> Region: eu-central-1 - AZ: pve-alps - Host: pve-alps.mydomain.com
