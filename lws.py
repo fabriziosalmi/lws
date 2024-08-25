@@ -231,7 +231,7 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
             elif command_type == '_snapshots':
                 click.secho(f"📜 Snapshots for instance {instance_id}:\n{result.stdout}", fg='cyan')
             else:
-                click.secho(f"✅ Instance {instance_id} {command_type}d successfully.", fg='green')
+                click.secho(f"✅ Instance {instance_id} {command_type} executed successfully.", fg='green')
         else:
             click.secho(f"❌ Failed to {command_type} instance {instance_id}: {result.stderr}", fg='red')
 
@@ -742,7 +742,7 @@ def is_container_locked(instance_id, host_details):
         logging.error(f"Failed to check lock status for instance {instance_id}: {result.stderr}")
         return False  # Assume it's not locked if the command fails to avoid indefinite retries
 
-@lxc.command('instance-run')
+@lxc.command('run')
 @click.option('--image-id', required=True, help="ID of the container image template.")
 @click.option('--count', default=1, help="Number of instances to run.")
 @click.option('--size', default='small', type=click.Choice(list(config['instance_sizes'].keys())), help="Instance size.")
@@ -824,7 +824,7 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
             click.secho(f"❌ Failed to create instance {instance_id}: {create_result.stderr}", fg='red')
 
 
-@lxc.command('instance-stop')
+@lxc.command('stop')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -832,7 +832,7 @@ def stop_instances(instance_ids, region, az):
     """🛑 Stop running LXC containers."""
     process_instance_command(instance_ids, 'stop', region, az)
 
-@lxc.command('instance-terminate')
+@lxc.command('terminate')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -840,7 +840,7 @@ def terminate_instances(instance_ids, region, az):
     """💥 Terminate (destroy) LXC containers."""
     process_instance_command(instance_ids, 'terminate', region, az)
 
-@lxc.command('instance-show')
+@lxc.command('show')
 @click.argument('instance_ids', nargs=-1, required=False)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -857,7 +857,7 @@ def describe_instances(instance_ids, region, az):
         else:
             click.secho(f"❌ Failed to list instances: {list_result.stderr}", fg='red')
 
-@lxc.command('instance-scale')
+@lxc.command('scale')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--memory', default=None, help="New memory size in MB.")
 @click.option('--cpulimit', default=None, help="New CPU limit.")
@@ -938,7 +938,7 @@ def list_snapshots(instance_id, region, az):
     """🗃️ List all snapshots of an LXC container."""
     process_instance_command([instance_id], 'list_snapshots', region, az)
 
-@lxc.command('instances-start')
+@lxc.command('start')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -946,7 +946,7 @@ def start_instances(instance_ids, region, az):
     """🚀 Start stopped LXC containers."""
     process_instance_command(instance_ids, 'start', region, az)
 
-@lxc.command('instances-reboot')
+@lxc.command('reboot')
 @click.argument('instance_ids', nargs=-1)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -1421,49 +1421,6 @@ def detach_security_group_from_lxc(group_name, vmid, region, az):
         click.secho(f"✅ Security group '{group_name}' successfully detached from LXC '{vmid}' on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to detach security group '{group_name}' from LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
-
-
-@lxc.command('bulk-start')
-@click.argument('vmids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
-def bulk_start_vms(vmids, region, az):
-    """🚀 Start a list of LXC containers."""
-    if not vmids:
-        click.secho("❌ No VM IDs provided.", fg='red')
-        return
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-
-    for vmid in vmids:
-        result = run_proxmox_command(["pct", "start", vmid], ["pct", "start", vmid], config['use_local_only'], host_details)
-        
-        if result.returncode == 0:
-            click.secho(f"✅ VMID {vmid} started.", fg='green')
-        else:
-            click.secho(f"❌ Failed to start VMID {vmid}: {result.stderr}", fg='red')
-
-@lxc.command('bulk-stop')
-@click.argument('vmids', nargs=-1)
-@click.option('--region', default='eu-south-1', help="Region in which to operate.")
-@click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
-def bulk_stop_vms(vmids, region, az):
-    """🛑 Stop a list of LXC containers."""
-    if not vmids:
-        click.secho("❌ No VM IDs provided.", fg='red')
-        return
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-
-    for vmid in vmids:
-        result = run_proxmox_command(["pct", "stop", vmid], ["pct", "stop", vmid], config['use_local_only'], host_details)
-
-        if result.returncode == 0:
-            click.secho(f"✅ VMID {vmid} stopped.", fg='green')
-        else:
-            click.secho(f"❌ Failed to stop VMID {vmid}: {result.stderr}", fg='red')
 
 @lxc.command('storage-list')
 @click.argument('instance_id')
