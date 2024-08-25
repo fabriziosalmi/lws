@@ -1735,7 +1735,7 @@ def run_docker(instance_id, docker_command, region, az):
 
 
 ### compose
-@app.command('compose')
+@app.command('deploy')
 @click.argument('action', type=click.Choice(['install', 'uninstall', 'start', 'stop', 'restart', 'status']))
 @click.argument('instance_id')  # Instance ID is now a positional argument
 @click.option('--compose_file', required=True, help="Local path or remote URL to the Docker Compose YAML file.")
@@ -1931,7 +1931,7 @@ WantedBy=multi-user.target
     subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "enable", service_name])
     subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "start", service_name])
 
-@app.command('compose-update')
+@app.command('update')
 @click.argument('instance_id')
 @click.argument('compose_file', required=True)
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
