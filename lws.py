@@ -525,7 +525,7 @@ def px_status(region, az):
         else:
             click.secho(f"❌ Failed to retrieve {metric_name} on host {host}: {result.stderr if result else 'Unknown error'}", fg='red')
 
-@px.command('list-clusters')
+@px.command('clusters')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
 def px_list_clusters(region, az):
@@ -553,7 +553,7 @@ def px_list_clusters(region, az):
 
 
 
-@px.command('backup-hosts')
+@px.command('backup')
 @click.argument('backup_dir')
 def px_backup_hosts(backup_dir):
     """💾 Backup configurations from all Proxmox hosts."""
@@ -565,7 +565,7 @@ def px_backup_hosts(backup_dir):
     else:
         click.secho(f"❌ Failed to backup hosts: {result.stderr}", fg='red')
 
-@px.command('update-hosts')
+@px.command('update')
 def px_update_hosts():
     """🔄 Update all Proxmox hosts."""
     command = ["apt-get", "update", "&&", "apt-get", "upgrade", "-y"]
@@ -576,7 +576,7 @@ def px_update_hosts():
     else:
         click.secho(f"❌ Failed to update hosts: {result.stderr}", fg='red')
 
-@px.command('start-cluster-services')
+@px.command('cluster-start')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
 def px_start_cluster_services(region, az):
@@ -602,7 +602,7 @@ def px_start_cluster_services(region, az):
     else:
         click.secho(f"❌ Failed to start cluster services on host {host}: {result.stderr.strip()}", fg='red')
 
-@px.command('stop-cluster-services')
+@px.command('cluster-stop')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
 def px_stop_cluster_services(region, az):
@@ -628,7 +628,7 @@ def px_stop_cluster_services(region, az):
     else:
         click.secho(f"❌ Failed to stop cluster services on host {host}: {result.stderr.strip()}", fg='red')
 
-@px.command('restart-cluster-services')
+@px.command('cluster-restart')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
 def px_restart_cluster_services(region, az):
@@ -656,7 +656,7 @@ def px_restart_cluster_services(region, az):
 
 
 
-@px.command('create-backup')
+@px.command('backup-lxc')
 @click.argument('vmid')
 @click.option('--storage', required=True, help="The storage target where the backup will be stored.")
 @click.option('--mode', default='snapshot', type=click.Choice(['snapshot', 'suspend', 'stop']), help="Backup mode: snapshot, suspend, or stop.")
@@ -930,7 +930,7 @@ def delete_snapshot(instance_id, snapshot_name, region, az):
     """🗑️ Delete a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_delete', region, az, snapshot_name=snapshot_name)
 
-@lxc.command('snapshots')
+@lxc.command('show-snapshots')
 @click.argument('instance_id')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -954,7 +954,7 @@ def reboot_instances(instance_ids, region, az):
     """🔄 Reboot running LXC containers."""
     process_instance_command(instance_ids, 'reboot', region, az)
 
-@lxc.command('image-add')
+@px.command('image-add')
 @click.argument('instance_id')
 @click.argument('template_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -983,7 +983,7 @@ def create_image(instance_id, template_name, region, az):
     else:
         click.secho(f"❌ Failed to stop instance {instance_id}: {stop_result.stderr}", fg='red')
 
-@lxc.command('image-rm')
+@px.command('image-rm')
 @click.argument('template_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -1197,7 +1197,7 @@ def is_clustered():
     return True
 
 
-@lxc.command('security-group-add')
+@px.command('security-group-add')
 @click.argument('group_name')
 @click.option('--description', default='', help="Description of the security group.")
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -1227,7 +1227,7 @@ def create_security_group_cluster(group_name, description, region, az):
     else:
         click.secho(f"❌ Failed to add security group on host {host}: {result.stderr.strip()}", fg='red')
 
-@lxc.command('security-group-rm')
+@px.command('security-group-rm')
 @click.argument('group_name')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -1260,7 +1260,7 @@ def remove_security_group_cluster(group_name, region, az):
         click.secho(f"❌ Failed to remove security group on host {host}: {result.stderr.strip()}", fg='red')
 
 
-@lxc.command('security-group-rule-add')
+@px.command('security-group-rule-add')
 @click.argument('group_name')
 @click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
 @click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
@@ -1304,7 +1304,7 @@ def add_rule_to_group(group_name, direction, action, protocol, source_ip, source
     else:
         click.secho(f"❌ Failed to add rule to group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
 
-@lxc.command('security-group-rule-rm')
+@px.command('security-group-rule-rm')
 @click.argument('group_name')
 @click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
 @click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
@@ -1348,7 +1348,7 @@ def remove_rule_from_group(group_name, direction, action, protocol, source_ip, s
     else:
         click.secho(f"❌ Failed to remove rule from group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
 
-@lxc.command('security-group-attach')
+@px.command('security-group-attach')
 @click.argument('group_name')
 @click.argument('vmid')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -1387,7 +1387,7 @@ def attach_security_group_to_lxc(group_name, vmid, region, az):
     else:
         click.secho(f"❌ Failed to attach security group to LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
 
-@lxc.command('security-group-detach')
+@px.command('security-group-detach')
 @click.argument('group_name')
 @click.argument('vmid')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
@@ -1422,7 +1422,7 @@ def detach_security_group_from_lxc(group_name, vmid, region, az):
     else:
         click.secho(f"❌ Failed to detach security group '{group_name}' from LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
 
-@lxc.command('storage-list')
+@lxc.command('show-storage')
 @click.argument('instance_id')
 @click.option('--region', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', default='az1', help="Availability zone (Proxmox host) to target.")
