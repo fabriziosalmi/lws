@@ -2,9 +2,6 @@
 
 **LWS** is a Command-Line Interface (CLI) tool designed to manage Proxmox Virtual Environments (VE), LXC containers, and Docker services. Created as a fun project, LWS is a powerful, yet experimental tool that should be used with caution in any environment.
 
-> [!TIP]
-> If you run `alias lws='python3 lws.py'` you can then use the alias like this: `lws lxc scale-suggest 101` instead of `python3 lws.py lxc scale-suggest 101`. 
-
 ## Table of Contents
 
 - [Introduction](#introduction)
@@ -81,10 +78,32 @@ Before using LWS, ensure you have the following prerequisites:
    chmod +x lws.py
    ```
 
-4. **Verify Installation**
+4. **Shorten it!**
    ```bash
-   ./lws.py --help
+   alias lws='./lws.py'
    ```
+   
+5. **Verify Installation**
+   ```bash
+   lws
+   ```
+
+It should show this help content:
+
+  ```
+  Usage: lws.py [OPTIONS] COMMAND [ARGS]...
+  
+    🐧 Linux (Containers) Web Services
+  
+  Options:
+    --help  Show this message and exit.
+  
+  Commands:
+    app   🐳 Manage Docker on LXC containers.
+    conf  🛠️ Manage client configuration.
+    lxc   ⚙️ Manage LXC containers.
+    px    🌐 Manage Proxmox hosts.
+  ```
 
 ### Configuration
 
