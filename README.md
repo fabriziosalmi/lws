@@ -280,7 +280,7 @@ LWS is an open-source project developed for fun and learning. Contributions are 
 LWS is still in its infancy. Planned features and improvements include:
 
 - **Improved Error Handling**: More robust error handling and feedback mechanisms.
-- **Additional Proxmox Commands**: Expanding the set of Proxmox management commands.
+- **Additional Commands**: Expanding the set of management commands.
 - **User Interface Improvements**: Enhanced user experience with better output formatting and additional CLI options.
 
 ## License
