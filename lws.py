@@ -326,7 +326,8 @@ def px():
     pass
 
 @px.command('list')
-def list_hosts():
+@click.option('--region', default=None, help='Filter hosts by region.')
+def list_hosts(region):
     """🌐 List all available Proxmox hosts."""
 
     def resolve_host(host, timeout=0.2):
@@ -372,14 +373,14 @@ def list_hosts():
         status_symbol = check_host_reachability(host)
         return f"{status_symbol[1]} -> Region: {region} - AZ: {az} - Host: {status_symbol[0]}"
 
-    # click.secho("Available Proxmox Hosts:", fg='cyan')
-
     # Collect tasks for parallel execution
     tasks = []
-    with ThreadPoolExecutor(max_workers=10) as executor:  # Adjust the number of workers if needed
-        for region, details in config['regions'].items():
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        for reg, details in config['regions'].items():
+            if region and reg != region:
+                continue
             for az, az_details in details['availability_zones'].items():
-                tasks.append(executor.submit(process_host, region, az, az_details))
+                tasks.append(executor.submit(process_host, reg, az, az_details))
 
         # Process results as they complete
         for future in as_completed(tasks):
@@ -388,7 +389,7 @@ def list_hosts():
                 click.secho(result, fg='cyan')
             except Exception as e:
                 click.secho(f"Error checking host: {e}", fg='red')
-            
+                
 @px.command('reboot')
 #@command_alias('proxmox-reboot')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
