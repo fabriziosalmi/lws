@@ -250,9 +250,7 @@ lws lxc scale 101 --region eu-central-1 --az pve-alps --cpu 4 --memory 8192
 ```
 
 > [!TIP]
-> ng resources can help optimize performance but may also increase resource consumption on your host
-
-.
+> Scaling resources can help optimize performance but may also increase resource consumption on your host.
 
 #### Create a snapshot of an LXC container
 ```bash
