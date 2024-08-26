@@ -212,33 +212,245 @@ LWS is configured using a `config.yaml` file. Here the default one that must be 
 #### Example `config.yaml`
 
 ```yaml
-regions:
-  eu-south-1:
-    availability_zones:
-      az1:
-        host: proxmox-host-1
-        user: root
-        ssh_password: your-password
-      az2:
-        host: proxmox-host-2
-        user: root
-        ssh_password: your-password
-instance_sizes:
-  small:
-    memory: 1024
-    cpulimit: 1
-    storage: 16G
-  medium:
-    memory: 2048
-    cpulimit: 2
-    storage: 32G
-default_network: vmbr0
-default_storage: local-lvm
 use_local_only: false
 start_vmid: 10000
+default_storage: local-lvm
+default_network: vmbr0
 minimum_resources:
   cores: 1
   memory_mb: 512
+regions:  
+  eu-south-1:
+    availability_zones:
+      az1:
+        host: changethis.proxmox-dummy.org   # example: public FQDN (access must be secured)
+        user: root
+        ssh_password: password
+      az2:
+        host: 172.23.0.2                     # example: VPN address
+        user: root
+        ssh_password: password
+      az3:
+        host: proxmox3.local                 # example: local network
+        user: root
+        ssh_password: password
+      dr:
+        host: 192.168.0.4                    # example: LAN address
+        user: root
+        ssh_password: password
+
+  eu-central-1:
+    availability_zones:
+      pve-rhine:
+        host: pve-rhine.mydomain.com
+        user: root
+        ssh_password: password
+      pve-alps:
+        host: pve-alps.mydomain.com
+        user: root
+        ssh_password: password
+
+scaling:
+  host_cpu:
+    max_threshold: 80  # Maximum percentage of host CPU usage before considering a decrease
+    min_threshold: 30  # Minimum percentage of host CPU usage before considering an increase
+    step: 1  # Base increment or decrement of CPU cores on the host
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_cpu:
+    max_threshold: 80  # Maximum percentage of LXC CPU usage before considering a decrease
+    min_threshold: 30  # Minimum percentage of LXC CPU usage before considering an increase
+    step: 1  # Base increment or decrement of CPU cores in the LXC
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  host_memory:
+    max_threshold: 70  # Percentage of total memory on the host before considering a decrease
+    min_threshold: 40  # Percentage of total memory on the host before considering an increase
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  lxc_memory:
+    max_threshold: 70  # Maximum percentage of LXC memory usage before considering a decrease
+    min_threshold: 40  # Minimum percentage of LXC memory usage before considering an increase
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  host_storage:
+    max_threshold: 85  # Maximum percentage of storage usage on the host before considering a decrease
+    min_threshold: 50  # Minimum percentage of storage usage on the host before considering an increase
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_storage:
+    max_threshold: 85  # Maximum percentage of storage usage in the LXC before considering a decrease
+    min_threshold: 50  # Minimum percentage of storage usage in the LXC before considering an increase
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  limits:
+    min_memory_mb: 512  # Minimum allowed memory for any LXC container
+    max_memory_mb: 32768  # Maximum allowed memory for any LXC container
+    min_cpu_cores: 1  # Minimum allowed CPU cores for any LXC container
+    max_cpu_cores: 16  # Maximum allowed CPU cores for any LXC container
+    min_storage_gb: 10  # Minimum allowed storage for any LXC container
+    max_storage_gb: 1024  # Maximum allowed storage for any LXC container
+
+  general:
+    scaling_interval: 5  # Interval in minutes to check for resource adjustments
+    notify_user: true  # Notify user via CLI output when scaling adjustments are made
+    dry_run: false  # If true, simulate scaling adjustments without applying changes
+    scaling_log_level: DEBUG  # Log level for scaling operations (DEBUG, INFO, WARN, ERROR)
+    use_custom_scaling_algorithms: false  # Enable if custom scaling algorithms are implemented
+
+security:
+  discovery:
+    proxmox_timeout: 2
+    lxc_timeout: 2
+    discovery_methods: ['ping']
+    max_parallel_workers: 10  # Maximum number of parallel workers
+    
+instance_sizes:
+  # Generic
+  micro:
+    memory: 512 
+    cpulimit: 1 
+    storage: local-lvm:4  
+  small:
+    memory: 1024 
+    cpulimit: 1 
+    storage: local-lvm:8   
+  mid:
+    memory: 2048 
+    cpulimit: 2
+    storage: local-lvm:16  
+  large:
+    memory: 4096 
+    cpulimit: 2
+    storage: local-lvm:32   
+  x-large:
+    memory: 8192 
+    cpulimit: 4 
+    storage: local-lvm:64   
+  xx-large:
+    memory: 16384 
+    cpulimit: 8 
+    storage: local-lvm:128 
+
+  # General Purpose Instances: balance of compute, memory, and networking resources.
+  t2-pico:
+    memory: 512  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:8  # 8 GB of storage
+  t2-micro:
+    memory: 1024  # 1 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:8  # 8 GB of storage
+  t2-small:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:20  # 20 GB of storage
+  t2-medium:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+  m5-large:
+    memory: 8192  # 8 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+  m5-xlarge:
+    memory: 16384  # 16 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  m5-2xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+
+  # Compute Optimized Instances: applications that benefit from high-performance processors.
+  c5-large:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:50  # 50 GB of storage
+  c5-xlarge:
+    memory: 8192  # 8 GB
+    cpulimit: 4   # 4 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  c5-2xlarge:
+    memory: 16384  # 16 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  c5-4xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 16   # 16 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+
+  # Memory Optimized Instances: memory-intensive applications like databases.
+  r5-large:
+    memory: 16384  # 16 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  r5-xlarge:
+    memory: 32768  # 32 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  r5-2xlarge:
+    memory: 65536  # 64 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  x1e-xlarge:
+    memory: 65536  # 64 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  x1e-2xlarge:
+    memory: 131072  # 128 GB
+    cpulimit: 8     # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  x1e-4xlarge:
+    memory: 262144  # 256 GB
+    cpulimit: 16    # 16 vCPUs
+    storage: local-lvm:800  # 800 GB of storage
+
+  # Storage Optimized Instances: high, sequential read and write access to very large datasets on local storage.
+  i3-large:
+    memory: 15360  # 15 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:500  # 500 GB of storage
+  i3-xlarge:
+    memory: 30720  # 30 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:1000  # 1 TB of storage
+  i3-2xlarge:
+    memory: 61440  # 60 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:2000  # 2 TB of storage
+  i3-4xlarge:
+    memory: 122880  # 120 GB
+    cpulimit: 16    # 16 vCPUs
+    storage: local-lvm:4000  # 4 TB of storage
+
+  # GPU Instances: machine learning, graphics processing, or general-purpose GPU computing.
+  p3-large:
+    memory: 15360  # 15 GB
+    cpulimit: 2    # 2 vCPUs
+    storage: local-lvm:100  # 100 GB of storage
+  p3-xlarge:
+    memory: 30720  # 30 GB
+    cpulimit: 4    # 4 vCPUs
+    storage: local-lvm:200  # 200 GB of storage
+  p3-2xlarge:
+    memory: 61440  # 60 GB
+    cpulimit: 8    # 8 vCPUs
+    storage: local-lvm:400  # 400 GB of storage
+  p3-8xlarge:
+    memory: 245760  # 240 GB
+    cpulimit: 32    # 32 vCPUs
+    storage: local-lvm:1600  # 1.6 TB of storage
 ```
 
 **Note**: Ensure your `config.yaml` file is secured and does not expose sensitive information. Use tools like `ansible-vault` or environment variables to manage sensitive data securely.
