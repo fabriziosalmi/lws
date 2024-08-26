@@ -92,7 +92,7 @@ def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
     }
 
     logging.config.dictConfig(logging_config)
-    logging.info("🔎 Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
+    logging.debug("🔎 Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
 
 # Example usage:
 log_file_path = os.path.join(os.getcwd(), 'lws.log')  # Standard log file path
