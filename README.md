@@ -123,7 +123,7 @@ Commands:
 
 ## Introduction
 
-**LWS** was created out of a desire to explore the intersection of Proxmox VE, LXC containers, and Docker management through a unified command-line interface. While LWS offers a range of powerful features, it is important to note that this project is in an early stage and was developed primarily for fun. Therefore, it should be used with caution, especially in production environments.
+**lws** was created out of a desire to explore the intersection of Proxmox VE, LXC containers, and Docker management through a unified command-line interface. While LWS offers a range of powerful features, it is important to note that this project is in an early stage and was developed primarily for fun. Therefore, it should be used with caution, especially in production environments.
 
 ## Features
 
@@ -153,11 +153,11 @@ Commands:
 
 ### Prerequisites
 
-Before using LWS, ensure you have the following prerequisites:
+Before using **lws**, ensure you have the following prerequisites:
 
-- **Python 3.6+**: LWS is written in Python, and Python 3.6 or later is required.
-- **Proxmox VE**: LWS is designed to work with Proxmox Virtual Environment.
-- **SSH Access**: LWS uses SSH to interact with Proxmox hosts and LXC containers.
+- **Python 3.6+**: **lws** is written in Python, and Python 3.6 or later is required.
+- **Proxmox VE**: **lws** is designed to work with Proxmox Virtual Environment.
+- **SSH Access**: **lws** uses SSH to interact with Proxmox hosts and LXC containers.
 - **Pip**: Python's package installer.
 
 ### Installation
@@ -173,7 +173,7 @@ Before using LWS, ensure you have the following prerequisites:
    pip install -r requirements.txt
    ```
 
-3. **Make LWS Executable**
+3. **Make lws Executable**
    ```bash
    chmod +x lws.py
    ```
@@ -207,7 +207,7 @@ It should show this help content:
 
 ### Configuration
 
-LWS is configured using a `config.yaml` file. Here the default one that must be change to fit with your setup. This file defines the environment settings, including regions, instance sizes, network settings, and security credentials. You can easily remap regions as locations and availability zones as a Proxmox hosts.
+**lws** is configured using a `config.yaml` file. Here the default one that must be change to fit with your setup. This file defines the environment settings, including regions, instance sizes, network settings, and security credentials. You can easily remap regions as locations and availability zones as a Proxmox hosts.
 
 #### Example `config.yaml`
 
@@ -461,21 +461,21 @@ instance_sizes:
 
 ## Security Considerations
 
-Given that LWS involves SSH connections and sensitive operations, it's crucial to:
+Given that **lws** involves SSH connections and sensitive operations, it's crucial to:
 
 - **Protect Your Configuration**: Ensure your `config.yaml` file is not exposed and is secured using appropriate tools.
-- **Use in Non-Production Environments**: As LWS is in its early stages, it is recommended to use it only in test or development environments.
+- **Use in Non-Production Environments**: As **lws** is in its early stages, it is recommended to use it only in test or development environments.
 - **Use over Secured Connections**: Always protect the management communications with a VPN like OpenVPN or Wireguard.
 
 ## Best Practices
 
 - **Regular Backups**: Always back up your configuration and important data regularly.
-- **Testing Before Use**: Thoroughly test LWS commands in a non-production environment before applying them to critical systems.
-- **Keep Updated**: Keep your LWS installation and dependencies updated to benefit from the latest features and fixes.
+- **Testing Before Use**: Thoroughly test **lws** commands in a non-production environment before applying them to critical systems.
+- **Keep Updated**: Keep your **lws** installation and dependencies updated to benefit from the latest features and fixes.
 
 ## Contributing
 
-LWS is an open-source project developed for fun and learning. Contributions are welcome! Feel free to submit issues, feature requests, or pull requests.
+**lws** is an open-source project developed for fun and learning. Contributions are welcome! Feel free to submit issues, feature requests, or pull requests.
 
 ### How to Contribute
 
@@ -489,7 +489,7 @@ LWS is an open-source project developed for fun and learning. Contributions are 
 
 ## Roadmap
 
-LWS is still in its infancy. Planned features and improvements include:
+**lws** is still in its infancy. Planned features and improvements include:
 
 - **Improved Error Handling**: More robust error handling and feedback mechanisms.
 - **Additional Commands**: Expanding the set of management commands.
@@ -509,5 +509,5 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ---
 
 > [!WARNING]
-> **Disclaimer**: LWS is a project created for fun and exploration. It is not intended for production use, and users should exercise caution when using it on live systems. Always test thoroughly in a non-production environment.
+> **Disclaimer**: **lws** is a project created for fun and exploration. It is not intended for production use, and users should exercise caution when using it on live systems. Always test thoroughly in a non-production environment.
 
