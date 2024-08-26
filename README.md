@@ -43,7 +43,7 @@
 
 ### LXC Container Management
 - **Lifecycle Management**: Start, stop, reboot, and terminate LXC containers with ease.
-- **Resource Scaling**: Dynamically adjust container resources (CPU, memory, storage).
+- **Resource ng**: Dynamically adjust container resources (CPU, memory, storage).
 - **Snapshot Management**: Create, delete, and manage snapshots for containers.
 - **Security Group Management**: Implement and manage security groups and rules.
 
@@ -94,7 +94,7 @@ Before using **lws**, ensure you have the following:
 
 ### Configuration
 
-**lws** is configured using a `config.yaml` file. This file defines your environment settings, including regions, availability zones (AZs), instance sizes, network settings, security credentials, and scaling parameters.
+**lws** is configured using a `config.yaml` file. This file defines your environment settings, including regions, availability zones (AZs), instance sizes, network settings, security credentials, and ng parameters.
 
 #### Example `config.yaml`
 
@@ -245,7 +245,7 @@ lws lxc scale 101 --region eu-central-1 --az pve-alps --cpu 4 --memory 8192
 ```
 
 > [!TIP]
-> Scaling resources can help optimize performance but may also increase resource consumption on your host
+> ng resources can help optimize performance but may also increase resource consumption on your host
 
 .
 
@@ -392,7 +392,7 @@ security:
 
 ### Managing Scaling Thresholds and Triggers
 
-Scaling thresholds and triggers allow **lws** to automatically adjust resources (CPU, memory, storage) for both hosts and LXC containers based on defined conditions. This feature ensures optimal performance while preventing resource exhaustion.
+Scaling thresholds and triggers allow **lws** to automatically adjust resources (CPU, memory, storage) for LXC containers based on defined conditions met on both the Proxmox host and the LXC container. This feature ensures optimal performance while preventing resource exhaustion.
 
 #### Example Scaling Configuration
 
