@@ -15,6 +15,9 @@
   - [LXC Container Management](#lxc-container-management)
   - [Docker Management](#docker-management)
   - [Client Configuration Management](#client-configuration-management)
+  - [Managing Instance Profiles](#managing-instance-profiles)
+  - [Managing Security Settings](#managing-security-settings)
+  - [Managing Scaling Thresholds and Triggers](#managing-scaling-thresholds-and-triggers)
 - [Security Considerations](#security-considerations)
 - [Best Practices](#best-practices)
 - [Contributing](#contributing)
@@ -91,7 +94,7 @@ Before using **lws**, ensure you have the following:
 
 ### Configuration
 
-**lws** is configured using a `config.yaml` file. This file defines your environment settings, including regions, availability zones (AZs), instance sizes, network settings, and security credentials.
+**lws** is configured using a `config.yaml` file. This file defines your environment settings, including regions, availability zones (AZs), instance sizes, network settings, security credentials, and scaling parameters.
 
 #### Example `config.yaml`
 
@@ -146,14 +149,14 @@ regions:
 
 Manage your Proxmox hosts and clusters with these commands. Use the `--region` and `--az` options to target specific regions and availability zones.
 
-#### List all Proxmox hosts in a region
+#### List all Proxmox hosts
 ```bash
-lws px list --region eu-south-1
+lws px list
 ```
 > [!TIP]
 > Use the `list` command to quickly verify which Proxmox hosts are available for management in specific regions.
 
-#### Backup configurations from all Proxmox hosts in a region
+#### Backup configurations of a Proxmox host in a region
 ```bash
 lws px backup --region eu-south-1
 ```
@@ -242,7 +245,9 @@ lws lxc scale 101 --region eu-central-1 --az pve-alps --cpu 4 --memory 8192
 ```
 
 > [!TIP]
-> Scaling resources can help optimize performance but may also increase resource consumption on your host.
+> Scaling resources can help optimize performance but may also increase resource consumption on your host
+
+.
 
 #### Create a snapshot of an LXC container
 ```bash
@@ -251,9 +256,7 @@ lws lxc snapshot-add 101 --region eu-central-1 --az pve-alps --name "pre-update"
 
 #### List all snapshots of an LXC container
 ```bash
-l
-
-ws lxc show-snapshots 101 --region eu-central-1 --az pve-alps
+lws lxc show-snapshots 101 --region eu-central-1 --az pve-alps
 ```
 
 #### Attach a storage volume to an LXC container
@@ -323,12 +326,150 @@ lws conf validate
 > [!IMPORTANT]
 > Always validate your configuration after making changes to avoid runtime errors.
 
+### Managing Instance Profiles
+
+Instance profiles define the resource allocations (memory, CPU, storage) for different types of workloads. These can be customized for specific applications, ranging from general-purpose to specialized setups.
+
+#### Example Instance Profiles
+
+```yaml
+instance_sizes:
+  micro:
+    memory: 512 
+    cpulimit: 1 
+    storage: local-lvm:4  
+  small:
+    memory: 1024 
+    cpulimit: 1 
+    storage: local-lvm:8   
+  mid:
+    memory: 2048 
+    cpulimit: 2
+    storage: local-lvm:16  
+  large:
+    memory: 4096 
+    cpulimit: 2
+    storage: local-lvm:32   
+  x-large:
+    memory: 8192 
+    cpulimit: 4 
+    storage: local-lvm:64   
+  
+  # Specialized instance profiles for specific applications
+  lws-postgres:
+    memory: 4096  # 4 GB
+    cpulimit: 2   # 2 vCPUs
+    storage: local-lvm:40  # 40 GB of storage
+    # Example: PostgreSQL for relational database.
+
+  lws-redis:
+    memory: 2048  # 2 GB
+    cpulimit: 1   # 1 vCPU
+    storage: local-lvm:10  # 10 GB of storage
+    # Example: Redis for in-memory caching.
+```
+
+> [!TIP]
+> Customize instance profiles based on the specific requirements of your applications. For example, databases like PostgreSQL may need more memory and CPU, while caching solutions like Redis can operate efficiently with fewer resources.
+
+### Managing Security Settings
+
+Security settings within **lws** control aspects like SSH timeouts, discovery methods, and the number of parallel workers. These settings help secure your environment while ensuring efficient operations.
+
+#### Example Security Configuration
+
+```yaml
+security:
+  discovery:
+    proxmox_timeout: 2  # Timeout in seconds for Proxmox host discovery
+    lxc_timeout: 2  # Timeout in seconds for LXC container discovery
+    discovery_methods: ['ping']  # Methods used for discovering resources
+    max_parallel_workers: 10  # Maximum number of parallel workers during discovery
+```
+
+> [!TIP]
+> Adjust the `max_parallel_workers` setting to optimize discovery operations based on your infrastructure's size and complexity.
+
+### Managing Scaling Thresholds and Triggers
+
+Scaling thresholds and triggers allow **lws** to automatically adjust resources (CPU, memory, storage) for both hosts and LXC containers based on defined conditions. This feature ensures optimal performance while preventing resource exhaustion.
+
+#### Example Scaling Configuration
+
+```yaml
+scaling:
+  host_cpu:
+    max_threshold: 80  # Maximum percentage of host CPU usage before scaling down
+    min_threshold: 30  # Minimum percentage of host CPU usage before scaling up
+    step: 1  # Base increment or decrement of CPU cores on the host
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_cpu:
+    max_threshold: 80  # Maximum percentage of LXC CPU usage before scaling down
+    min_threshold: 30  # Minimum percentage of LXC CPU usage before scaling up
+    step: 1  # Base increment or decrement of CPU cores in the LXC
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  host_memory:
+    max_threshold: 70  # Percentage of total memory on the host before scaling down
+    min_threshold: 40  # Percentage of total memory on the host before scaling up
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  lxc_memory:
+    max_threshold: 70  # Maximum percentage of LXC memory usage before scaling down
+    min_threshold: 40  # Minimum percentage of LXC memory usage before scaling up
+    step_mb: 256  # Base amount of memory in MB to increase or decrease
+    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+
+  host_storage:
+    max_threshold: 85  # Maximum percentage of storage usage on the host before scaling down
+    min_threshold: 50  # Minimum percentage of storage usage on the host before scaling up
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  lxc_storage:
+    max_threshold: 85  # Maximum percentage of storage usage in the LXC before scaling down
+    min_threshold: 50  # Minimum percentage of storage usage in the LXC before scaling up
+    step_gb: 10  # Base increment or decrement of storage in GB
+    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
+    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+
+  limits:
+    min_memory_mb: 512  # Minimum allowed memory for any LXC container
+    max_memory_mb: 32768  # Maximum allowed memory for any LXC container
+    min_cpu_cores: 1  # Minimum allowed CPU cores for any LXC container
+    max_cpu_cores: 16  # Maximum allowed CPU cores for any LXC container
+    min_storage_gb: 10  # Minimum allowed storage for any LXC container
+    max_storage_gb: 1024  # Maximum allowed storage for any LXC container
+
+  general:
+    scaling_interval: 5  # Interval in minutes to check for resource adjustments
+    notify_user: true  # Notify user via CLI output when scaling adjustments are made
+    dry_run: false  # If true, simulate scaling adjustments without applying changes
+    scaling_log_level: DEBUG  # Log level for scaling operations (DEBUG, INFO, WARN, ERROR)
+    use_custom_scaling_algorithms: false  # Enable if custom scaling algorithms are implemented
+```
+
+> [!TIP]
+> Use `notify_user: true` to get immediate feedback on scaling adjustments, which is especially useful in dynamic environments.
+
+> [!WARNING]
+> Be cautious when setting the `dry_run` option to `false`, as real scaling adjustments will be applied. Ensure your thresholds and multipliers are well-tested before applying them in production.
+
 ## Security Considerations
 
 Given that **lws** involves sensitive operations and SSH connections, it's important to:
 
 - **Protect Your Configuration**: Ensure your `config.yaml` file is secure.
-- **Use in Non-Production Environments**: As **lws** is in its early stages, it's safer to use it in test or development environments.
+- **Use in Non-Production Environments**: As **lws** is in its early stages, it's
+
+ safer to use it in test or development environments.
 - **Use Secured Connections**: Always protect management communications with a VPN or similar secured connection.
 
 > [!WARNING]
