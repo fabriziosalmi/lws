@@ -15,6 +15,8 @@ Commands:
   conf  🛠️ Manage client configuration.
   lxc   ⚙️ Manage LXC containers.
   px    🌐 Manage Proxmox hosts.
+
+
 Usage: lws.py conf [OPTIONS] COMMAND [ARGS]...
 
   🛠️ Manage client configuration.
@@ -26,6 +28,8 @@ Commands:
   backup    💾 Backup the current configuration to a file.
   show      📄 Show current configuration.
   validate  📄 Validate the current configuration.
+
+
 Usage: lws.py px [OPTIONS] COMMAND [ARGS]...
 
   🌐 Manage Proxmox hosts.
@@ -56,6 +60,8 @@ Commands:
   templates                📄 List all available templates in the Proxmox...
   update                   🔄 Update all Proxmox hosts.
   upload                   💽 Upload template to Proxmox host.
+
+
 Usage: lws.py lxc [OPTIONS] COMMAND [ARGS]...
 
   ⚙️ Manage LXC containers.
@@ -86,6 +92,8 @@ Commands:
   terminate       💥 Terminate (destroy) LXC containers.
   volume-attach   🔗 Attach a storage volume to an LXC container.
   volume-detach   🔓 Detach a storage volume from an LXC container.
+
+
 Usage: lws.py app [OPTIONS] COMMAND [ARGS]...
 
   🐳 Manage Docker on LXC containers.
@@ -101,6 +109,7 @@ Commands:
   run     🚀 Execute docker run inside an LXC container.
   setup   📦 Install Docker and Compose on an LXC container.
   update  🆕 Update app within an LXC container via Compose.
+
 ```
 
 ## Table of Contents
