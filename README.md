@@ -502,6 +502,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 ## Acknowledgements
 
 - **Proxmox VE**: The powerful virtualization platform that inspired this project.
+- **LXC**: For making Linux containers a reality.
 - **Docker**: For making container management simpler and more efficient.
 - **Open Source Community**: For the tools and libraries that made this project possible.
 
