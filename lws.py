@@ -924,13 +924,29 @@ def delete_snapshot(instance_id, snapshot_name, region, az):
     """🗑️ Delete a snapshot of an LXC container."""
     process_instance_command([instance_id], 'snapshot_delete', region, az, snapshot_name=snapshot_name)
 
-@lxc.command('show-snapshots')
+@lxc.command('snapshots')
 @click.argument('instance_id')
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def list_snapshots(instance_id, region, az):
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Defaults to eu-south-1.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Defaults to az1.")
+@click.option('--use-local-only', is_flag=False, help="Execute the command locally instead of via SSH.")
+def snapshots(instance_id, region, az, use_local_only):
     """🗃️ List all snapshots of an LXC container."""
-    process_instance_command([instance_id], 'list_snapshots', region, az)
+    # Get the host details from the configuration
+    host_details = config['regions'][region]['availability_zones'][az]
+
+    # Command to list snapshots locally on the Proxmox node
+    local_cmd = ["pct", "listsnapshot", instance_id]
+    
+    # Command to list snapshots remotely via SSH
+    remote_cmd = ["pct", "listsnapshot", instance_id]
+
+    # Execute the command using the run_proxmox_command utility
+    result = run_proxmox_command(local_cmd, remote_cmd, use_local_only, host_details)
+
+    if result is not None and result.returncode == 0:
+        click.echo(result.stdout)
+    else:
+        click.echo(f"Failed to list snapshots for LXC container {instance_id}.")
 
 @lxc.command('start')
 @click.argument('instance_ids', nargs=-1)
