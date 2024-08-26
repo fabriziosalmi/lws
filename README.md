@@ -2,7 +2,7 @@
 
 **lws** is a Command-Line Interface (CLI) tool designed to streamline the management of Proxmox Virtual Environments (VE), LXC containers, and Docker services through a unified, efficient interface.
 
-[![asciicast](https://asciinema.org/a/fBQJEdgVqoZolUAErPt97ISkq.svg)](https://asciinema.org/a/fBQJEdgVqoZolUAErPt97ISkq)
+[![asciicast](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O.svg)](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O)
 
 ## Table of Contents
 
