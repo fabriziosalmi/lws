@@ -1564,74 +1564,65 @@ def app():
     pass
 
 @app.command('setup')
-@click.argument('instance_ids', nargs=-1)  # Accept multiple instance IDs
+@click.argument('instance_id')  # Accept a single instance ID
 @click.argument('package_name', default='docker')
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def install_docker(instance_ids, package_name, region, az):
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
+def install_docker(instance_id, package_name, region, az):
     """📦 Install Docker and Compose on an LXC container."""
     host_details = config['regions'][region]['availability_zones'][az]
+    logging.debug(f"🔧 Processing LXC container {instance_id} on host {host_details['host']}")
 
-    for instance_id in instance_ids:
-        click.secho(f"🔧 Processing LXC container {instance_id}...", fg='yellow')
+    click.secho(f"🔧 Processing LXC container {instance_id}...", fg='yellow')
 
-        # Check if the container is running
-        status_result = run_proxmox_command(
-            ["pct", "status", instance_id],
-            ["pct", "status", instance_id],
-            config['use_local_only'], host_details
+    # Check if the container is running
+    status_cmd = ["pct", "status", instance_id]
+    logging.debug(f"🔎 Checking status with command: {' '.join(status_cmd)}")
+    
+    status_result = run_proxmox_command(
+        status_cmd,
+        status_cmd,
+        config['use_local_only'], host_details
+    )
+
+    if status_result is None or "status: running" not in status_result.stdout:
+        logging.error(f"❌ LXC container {instance_id} is not running.")
+        click.secho(f"❌ LXC container {instance_id} is not running.", fg='red')
+        return
+
+    logging.debug(f"✅ LXC container {instance_id} is running.")
+
+    # Check if Docker is already installed inside the container
+    docker_check_cmd = ["pct", "exec", instance_id, "--", "which", "docker"]
+    logging.debug(f"🔎 Checking if Docker is installed with command: {' '.join(docker_check_cmd)}")
+
+    docker_check_result = run_proxmox_command(docker_check_cmd, docker_check_cmd, config['use_local_only'], host_details)
+
+    if docker_check_result.returncode == 0:
+        logging.info(f"✅ Docker is already installed on instance {instance_id}.")
+        click.secho(f"✅ Docker is already installed on instance {instance_id}.", fg='green')
+    else:
+        # Install Docker and Docker Compose using apt inside the LXC container
+        docker_install_cmd = [
+            "pct", "exec", instance_id, "--", "bash", "-c",
+            "\"apt-get update && apt-get install -y docker.io docker-compose\""
+        ]
+        logging.debug(f"🔧 Installing Docker and Docker Compose with command: {' '.join(docker_install_cmd)}")
+        docker_install_result = run_proxmox_command(
+            docker_install_cmd, docker_install_cmd, config['use_local_only'], host_details
         )
 
-        if "status: running" not in status_result.stdout:
-            click.secho(f"❌ LXC container {instance_id} is not running.", fg='red')
-            continue
-
-        # Check if Docker is already installed
-        docker_check_cmd = ["pct", "exec", instance_id, "--", "which", "docker"]
-        docker_check_result = run_proxmox_command(docker_check_cmd, docker_check_cmd, config['use_local_only'], host_details)
-
-        if docker_check_result.returncode == 0:
-            click.secho(f"✅ Docker is already installed on instance {instance_id}.", fg='green')
+        if docker_install_result.returncode == 0:
+            logging.info(f"✅ Docker and Docker Compose installed successfully on instance {instance_id}.")
+            click.secho(f"✅ Docker and Docker Compose installed successfully on instance {instance_id}.", fg='green')
         else:
-            # Install Docker in a non-interactive way
-            docker_install_cmd = [
-                "pct", "exec", instance_id, "--", "bash", "-c",
-                "'DEBIAN_FRONTEND=noninteractive apt-get update && apt-get install -y docker.io'"
-            ]
-            docker_install_result = run_proxmox_command(
-                docker_install_cmd, docker_install_cmd, config['use_local_only'], host_details
-            )
+            logging.error(f"❌ Failed to install Docker and Docker Compose on instance {instance_id}: {docker_install_result.stderr}")
+            click.secho(f"❌ Failed to install Docker and Docker Compose on instance {instance_id}.", fg='red')
+            return
 
-            if docker_install_result.returncode == 0:
-                click.secho(f"✅ Docker installed successfully on instance {instance_id}.", fg='green')
-            else:
-                click.secho(f"❌ Failed to install Docker on instance {instance_id}: {docker_install_result.stderr}", fg='red')
-                continue
+    logging.info(f"🔧 Finished processing LXC container {instance_id}.")
+    click.secho(f"🔧 Finished processing LXC container {instance_id}.\n", fg='yellow')
 
-        # Check if Docker Compose plugin is already installed
-        compose_check_cmd = ["pct", "exec", instance_id, "--", "which", "docker-compose"]
-        compose_check_result = run_proxmox_command(compose_check_cmd, compose_check_cmd, config['use_local_only'], host_details)
-
-        if compose_check_result.returncode == 0:
-            click.secho(f"✅ Docker Compose plugin is already installed on instance {instance_id}.", fg='green')
-        else:
-            # Install Docker Compose plugin in a non-interactive way
-            compose_plugin_install_cmd = [
-                "pct", "exec", instance_id, "--", "bash", "-c",
-                "'DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-plugin'"
-            ]
-            compose_install_result = run_proxmox_command(
-                compose_plugin_install_cmd, compose_plugin_install_cmd, config['use_local_only'], host_details
-            )
-
-            if compose_install_result.returncode == 0:
-                click.secho(f"✅ Docker Compose plugin installed successfully on instance {instance_id}.", fg='green')
-            else:
-                click.secho(f"❌ Failed to install Docker Compose plugin on instance {instance_id}: {compose_install_result.stderr}", fg='red')
-
-        click.secho(f"🔧 Finished processing LXC container {instance_id}.\n", fg='yellow')
-
-    click.secho(f"🎉 All specified LXC containers have been processed: {', '.join(instance_ids)}", fg='cyan')
 
 
 @app.command('run')
