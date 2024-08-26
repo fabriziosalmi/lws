@@ -746,12 +746,18 @@ def is_container_locked(instance_id, host_details):
 @click.option('--onboot', default=config.get('default_onboot', True), help="Start the container on boot.")
 @click.option('--lock', default=None, help="Set lock for the container. By default, no lock is set.")
 @click.option('--init', default=False, is_flag=True, help="Run initialization script after container creation.")
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
 @click.option('--max-retries', default=5, help="Maximum number of retries to start the container.")
 @click.option('--retry-delay', default=5, help="Delay in seconds between retries.")
-def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay):
-    """🛠️ Create and start LXC containers."""
+@click.option('--password', default=None, help="Set the root password for the container.")
+@click.option('--ip', default=None, help="Set a fixed IP address for the container (e.g., 192.168.1.100).")
+@click.option('--netmask', default='24', help="Set the netmask for the fixed IP address. Default is 24.")
+@click.option('--gateway', default=None, help="Set the gateway for the container's network.")
+@click.option('--dns', default=None, help="Set DNS servers for the container (comma-separated).")
+@click.option('--dhcp', is_flag=True, default=False, help="Enable DHCP for the container.")
+def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay, password, ip, netmask, gateway, dns, dhcp):
+    """🛠️ Create and start LXC containers with optional network configuration, root password, gateway, and DNS settings."""
     start_vmid = config.get('start_vmid', 10000)
     instance_config = config['instance_sizes'][size]
     storage = instance_config['storage']
@@ -778,6 +784,22 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
 
         if hostname:
             create_cmd.extend(["--hostname", f"{hostname}-{instance_id}"])
+
+        if password:
+            create_cmd.extend(["--password", password])
+
+        # Set up network configuration
+        if dhcp:
+            create_cmd.extend(["--net0", f"{net0},ip=dhcp"])
+        elif ip:
+            net_config = f"{net0},ip={ip}/{netmask}"
+            if gateway:
+                net_config += f",gw={gateway}"
+            create_cmd.extend(["--net0", net_config])
+
+        # Add DNS settings if provided
+        if dns:
+            create_cmd.extend(["--nameserver", dns])
 
         create_result = run_proxmox_command(create_cmd, create_cmd, config['use_local_only'], host_details)
 
@@ -816,6 +838,7 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
                 click.secho(f"❌ Failed to start instance {instance_id} after {max_retries} attempts.", fg='red')
         else:
             click.secho(f"❌ Failed to create instance {instance_id}: {create_result.stderr}", fg='red')
+
 
 
 @lxc.command('stop')
