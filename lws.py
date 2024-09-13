@@ -255,7 +255,7 @@ def build_resize_command(instance_id, memory=None, cpulimit=None, storage_size=N
 def mask_sensitive_info(config):
     if isinstance(config, dict):
         return {k: ("***" if "ssh_password" in k.lower() else mask_sensitive_info(v)) for k, v in config.items()}
-    elif isinstance(config, ):
+    elif isinstance(config, list):
         return [mask_sensitive_info(i) for i in config]
     else:
         return config
