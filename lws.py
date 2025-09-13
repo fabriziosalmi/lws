@@ -78,10 +78,15 @@ def validate_command_args(args):
     dangerous_patterns = [
         r'[;&|`$()]',  # Shell metacharacters
         r'\.\./|\.\.\\',  # Directory traversal
-        r'rm\s+-rf',  # Dangerous rm commands
         r'eval\s+',  # Code evaluation
         r'exec\s+',  # Code execution
     ]
+    
+    # Check for dangerous rm commands
+    args_str = ' '.join(args)
+    if re.search(r'rm\s+.*-rf\s+/', args_str, re.IGNORECASE):
+        logging.warning(f"Dangerous rm -rf command detected: {args_str}")
+        return False
     
     for arg in args:
         if not isinstance(arg, str):
