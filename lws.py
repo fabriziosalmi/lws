@@ -17,12 +17,86 @@ import gzip
 import yaml
 import click
 import socket
+import tempfile
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tqdm import tqdm
 
 # Global version information
 __version__ = '1.1.0'
+
+
+# Input validation functions for security
+def validate_instance_id(instance_id):
+    """
+    Validate instance ID to prevent command injection.
+    
+    Parameters:
+    - instance_id: The instance ID to validate
+    
+    Returns:
+    - Boolean indicating if the instance ID is valid
+    """
+    if not isinstance(instance_id, (str, int)):
+        return False
+    instance_str = str(instance_id)
+    # Allow only numeric IDs (Proxmox container IDs are numeric)
+    return re.match(r'^[0-9]+$', instance_str) is not None
+
+
+def sanitize_hostname(hostname):
+    """
+    Sanitize hostname to prevent command injection.
+    
+    Parameters:
+    - hostname: The hostname to sanitize
+    
+    Returns:
+    - Sanitized hostname or None if invalid
+    """
+    if not isinstance(hostname, str):
+        return None
+    # Remove dangerous characters, allow only valid hostname chars
+    sanitized = re.sub(r'[^a-zA-Z0-9.-]', '', hostname)
+    return sanitized if len(sanitized) > 0 and len(sanitized) <= 255 else None
+
+
+def validate_command_args(args):
+    """
+    Validate command arguments to prevent injection attacks.
+    
+    Parameters:
+    - args: List of command arguments
+    
+    Returns:
+    - Boolean indicating if arguments are safe
+    """
+    if not isinstance(args, list):
+        return False
+    
+    dangerous_patterns = [
+        r'[;&|`$()]',  # Shell metacharacters
+        r'\.\./|\.\.\\',  # Directory traversal
+        r'eval\s+',  # Code evaluation
+        r'exec\s+',  # Code execution
+    ]
+    
+    # Check for dangerous rm commands
+    args_str = ' '.join(args)
+    if re.search(r'rm\s+.*-rf\s+/', args_str, re.IGNORECASE):
+        logging.warning(f"Dangerous rm -rf command detected: {args_str}")
+        return False
+    
+    for arg in args:
+        if not isinstance(arg, str):
+            return False
+        for pattern in dangerous_patterns:
+            if re.search(pattern, arg, re.IGNORECASE):
+                logging.warning(f"Dangerous pattern detected in argument: {arg}")
+                return False
+    
+    return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -210,6 +284,24 @@ def validate_config(config):
                     error_msg = f"Missing '{key}' for availability zone '{az_name}' in region '{region_name}'"
                     logging.error(f"❌ {error_msg}")
                     raise ValueError(error_msg)
+            
+            # Validate host format (basic hostname/IP validation)
+            host = az.get('host', '')
+            if not re.match(r'^[a-zA-Z0-9.-]+$', host) or len(host) > 255:
+                error_msg = f"Invalid host format for AZ '{az_name}': {host}"
+                logging.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Validate user format (no dangerous characters)
+            user = az.get('user', '')
+            if not re.match(r'^[a-zA-Z0-9_.-]+$', user) or len(user) > 32:
+                error_msg = f"Invalid user format for AZ '{az_name}': {user}"
+                logging.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Warn about password security
+            if az.get('ssh_password') and len(az['ssh_password']) < 8:
+                logging.warning(f"⚠️ Short password detected for AZ '{az_name}'. Consider using SSH keys instead.")
 
     # Validate instance sizes
     for size_name, size_config in config['instance_sizes'].items():
@@ -314,7 +406,7 @@ def run_ssh_command(host, user, ssh_password, command):
             # For other errors, don't retry - just return the error
             return result
             
-        except subprocess.TimeoutExpired as te:
+        except subprocess.TimeoutExpired:
             logging.error(f"❌ SSH command timed out after 60 seconds: {' '.join(sanitized_ssh_cmd)}")
             retry_count += 1
             if retry_count <= max_retries:
@@ -326,7 +418,7 @@ def run_ssh_command(host, user, ssh_password, command):
                 args=sanitized_ssh_cmd,
                 returncode=124,  # Common timeout exit code
                 stdout="",
-                stderr=f"Error: SSH command timed out after 60 seconds"
+                stderr="Error: SSH command timed out after 60 seconds"
             )
             return error_result
         except Exception as e:
@@ -1012,7 +1104,6 @@ def get_next_vmid(start_vmid=10000, use_local_only=False, host_details=None):
 
 
 # Command to run LXC instances
-import time
 
 def is_container_locked(instance_id, host_details):
     """Checks if the container is locked by using the pct config command."""
@@ -1441,7 +1532,6 @@ def monitor_instances(instance_ids, region, az):
             if swap_result.returncode != 0:
                 click.secho(f"  Swap Space Error: {swap_result.stderr.strip()}", fg='red')
 
-import subprocess
 
 @lxc.command('service')
 @click.argument('action', type=click.Choice(['status', 'start', 'stop', 'restart', 'reload', 'enable']))
@@ -1779,7 +1869,6 @@ def lxc_list_storage(instance_id, region, az):
 
 
 import click
-import subprocess
 import logging
 
 def get_host_details(region, az):
@@ -2005,11 +2094,13 @@ def compose(action, instance_id, compose_file, region, az, auto_start):
     if not os.path.exists(compose_file):
         if compose_file.startswith("http://") or compose_file.startswith("https://"):
             click.secho(f"🔧 Downloading Docker Compose file from {compose_file}...", fg='yellow')
-            local_compose_file = f"/tmp/docker-compose.yml"
+            # Use secure temporary file creation instead of hardcoded /tmp
+            temp_fd, local_compose_file = tempfile.mkstemp(suffix=".yml", prefix="docker-compose-")
             try:
-                response = requests.get(compose_file)
+                # Add timeout to prevent indefinite blocking
+                response = requests.get(compose_file, timeout=30)
                 response.raise_for_status()
-                with open(local_compose_file, 'wb') as file:
+                with os.fdopen(temp_fd, 'wb') as file:
                     file.write(response.content)
                 compose_file = local_compose_file
                 click.secho(f"✅ Docker Compose file downloaded to {compose_file}.", fg='green')
@@ -2026,8 +2117,10 @@ def compose(action, instance_id, compose_file, region, az, auto_start):
         click.secho(f"❌ Failed to extract application name from Docker Compose file.", fg='red')
         return
 
-    # Upload the Compose file to the Proxmox host
-    remote_host_path = f"/tmp/{app_name}-docker-compose.yml"
+    # Upload the Compose file to the Proxmox host using secure temp directory
+    # Use timestamp to ensure uniqueness and avoid collisions
+    timestamp = int(time.time())
+    remote_host_path = f"/var/tmp/lws-{app_name}-{timestamp}-docker-compose.yml"
     scp_cmd = ["scp", compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}"]
     result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
@@ -2202,8 +2295,10 @@ def compose_update(instance_id, compose_file, region, az):
         logging.error(f"❌ Docker Compose file not found: {compose_file}")
         return
 
-    # Upload the Compose file to the Proxmox host
-    remote_host_path = f"/tmp/{os.path.basename(compose_file)}"
+    # Upload the Compose file to the Proxmox host using secure temp directory
+    timestamp = int(time.time())
+    compose_basename = os.path.basename(compose_file)
+    remote_host_path = f"/var/tmp/lws-{timestamp}-{compose_basename}"
     scp_cmd = ["scp", compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}"]
     result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if result.returncode != 0:
@@ -3126,8 +3221,7 @@ def sec_discovery_get_lxc_ip_address(lxc_id, host_details):
         return None
 
 
-import subprocess
-import signal
+
 def sec_discovery_perform_discovery(level, source_ip, subnet, discovery_methods, max_workers=10, host_details=None):
     """Perform the discovery using multiple methods."""
     discovered_hosts = []
@@ -3296,8 +3390,10 @@ def container_health_check(instance_id, region, az, fix):
                 click.secho(f"⚠️ High disk space usage detected: {disk_usage_pct:.1f}%", fg='yellow')
                 if fix:
                     click.secho("🔧 Attempting to free up disk space...", fg='yellow')
-                    # Example fix: Clean up temporary files
-                    cleanup_cmd = ["pct", "exec", instance_id, "--", "rm", "-rf", "/tmp/*"]
+                    # Example fix: Clean up temporary files using safer approach
+                    # Only remove files older than 7 days to avoid breaking running processes
+                    cleanup_cmd = ["pct", "exec", instance_id, "--", "find", "/tmp", "/var/tmp", 
+                                 "-type", "f", "-mtime", "+7", "-delete", "2>/dev/null", "||", "true"]
                     run_proxmox_command(cleanup_cmd, cleanup_cmd, config['use_local_only'], host_details)
             else:
                 click.secho(f"✅ Disk space usage is normal: {disk_usage_pct:.1f}%", fg='green')
@@ -3350,9 +3446,10 @@ def restore_container(instance_id, backup_file, region, az, force):
     
     # First, check if backup file exists on local system
     if os.path.exists(backup_file):
-        # Upload backup to Proxmox host
+        # Upload backup to Proxmox host using secure temp directory
         click.secho(f"📤 Uploading backup file to Proxmox host...", fg='yellow')
-        remote_backup_path = f"/tmp/backup_{instance_id}.tar.gz"
+        timestamp = int(time.time())
+        remote_backup_path = f"/var/tmp/lws-backup-{instance_id}-{timestamp}.tar.gz"
         
         scp_cmd = ["scp", backup_file, f"{host_details['user']}@{host_details['host']}:{remote_backup_path}"]
         scp_result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -3375,8 +3472,9 @@ def restore_container(instance_id, backup_file, region, az, force):
     
     click.secho(f"🔄 Restoring container {instance_id} from backup...", fg='yellow')
     
-    # Extract the backup to a temporary directory
-    temp_dir = f"/tmp/restore_{instance_id}"
+    # Extract the backup to a secure temporary directory
+    timestamp = int(time.time())
+    temp_dir = f"/var/tmp/lws-restore-{instance_id}-{timestamp}"
     mkdir_cmd = ["mkdir", "-p", temp_dir]
     mkdir_result = run_proxmox_command(mkdir_cmd, mkdir_cmd, config['use_local_only'], host_details)
     
@@ -3674,7 +3772,8 @@ def monitor_container_resources(instance_id, region, az, interval, count):
                     usage_pct = 100.0 - idle_pct
                     cpu_color = 'green' if usage_pct < 70 else ('yellow' if usage_pct < 90 else 'red')
                     click.secho(f"CPU Usage: {usage_pct:.1f}%", fg=cpu_color)
-            except:
+            except (ValueError, IndexError, KeyError) as e:
+                logging.warning(f"Failed to parse CPU usage data: {e}")
                 click.secho(f"CPU Usage: Unable to parse", fg='red')
         else:
             click.secho(f"CPU Usage: Unable to retrieve", fg='red')
@@ -3690,7 +3789,8 @@ def monitor_container_resources(instance_id, region, az, interval, count):
                     mem_usage_pct = (used_mem / total_mem) * 100 if total_mem > 0 else 0
                     mem_color = 'green' if mem_usage_pct < 70 else ('yellow' if mem_usage_pct < 90 else 'red')
                     click.secho(f"Memory Usage: {used_mem} MB / {total_mem} MB ({mem_usage_pct:.1f}%)", fg=mem_color)
-            except:
+            except (ValueError, IndexError, ZeroDivisionError) as e:
+                logging.warning(f"Failed to parse memory usage data: {e}")
                 click.secho(f"Memory Usage: Unable to parse", fg='red')
         else:
             click.secho(f"Memory Usage: Unable to retrieve", fg='red')
@@ -3705,7 +3805,8 @@ def monitor_container_resources(instance_id, region, az, interval, count):
                         disk_usage = disk_values[4].rstrip('%')
                         disk_color = 'green' if float(disk_usage) < 70 else ('yellow' if float(disk_usage) < 90 else 'red')
                         click.secho(f"Disk Usage: {disk_usage}% of {disk_values[1]}", fg=disk_color)
-            except:
+            except (ValueError, IndexError) as e:
+                logging.warning(f"Failed to parse disk usage data: {e}")
                 click.secho(f"Disk Usage: Unable to parse", fg='red')
         else:
             click.secho(f"Disk Usage: Unable to retrieve", fg='red')
@@ -3715,7 +3816,8 @@ def monitor_container_resources(instance_id, region, az, interval, count):
             try:
                 proc_count = int(proc_result.stdout.strip())
                 click.secho(f"Running Processes: {proc_count}", fg='cyan')
-            except:
+            except ValueError as e:
+                logging.warning(f"Failed to parse process count: {e}")
                 click.secho(f"Running Processes: Unable to parse", fg='red')
         else:
             click.secho(f"Running Processes: Unable to retrieve", fg='red')
@@ -3796,7 +3898,8 @@ def generate_container_report(instance_id, region, az, output, file):
                     idle_part = cpu_line.split("id,")[0].split()[-1]
                     idle_pct = float(idle_part)
                     cpu_info["usage_percent"] = round(100.0 - idle_pct, 1)
-                except:
+                except (ValueError, IndexError) as e:
+                    logging.debug(f"Could not parse CPU usage: {e}")
                     cpu_info["usage_percent"] = None
             
             report["cpu"] = cpu_info
@@ -3818,7 +3921,8 @@ def generate_container_report(instance_id, region, az, output, file):
                     mem_info["used_mb"] = int(mem_values[2])
                     mem_info["free_mb"] = int(mem_values[3])
                     mem_info["usage_percent"] = round((mem_info["used_mb"] / mem_info["total_mb"]) * 100, 1)
-            except:
+            except (ValueError, IndexError, ZeroDivisionError) as e:
+                logging.debug(f"Could not parse memory details: {e}")
                 pass
             
             report["memory"] = mem_info
@@ -3847,7 +3951,8 @@ def generate_container_report(instance_id, region, az, output, file):
                         filesystems.append(fs_info)
                 
                 disk_info["filesystems"] = filesystems
-            except:
+            except (ValueError, IndexError) as e:
+                logging.debug(f"Could not parse disk details: {e}")
                 pass
             
             report["disk"] = disk_info
@@ -3907,7 +4012,8 @@ def generate_container_report(instance_id, region, az, output, file):
                                     process[header.lower()] = int(parts[i])
                                 else:
                                     process[header.lower()] = parts[i]
-                            except:
+                            except (ValueError, IndexError) as e:
+                                logging.debug(f"Could not convert process value {parts[i] if i < len(parts) else 'N/A'} for {header}: {e}")
                                 process[header.lower()] = parts[i]
                     
                     top_processes.append(process)
