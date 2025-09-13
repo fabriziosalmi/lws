@@ -441,11 +441,47 @@ Interactive API documentation is available via Swagger UI.
 
 ## Security Considerations
 
-- **Secure Storage of Credentials**: Consider using environment variables or a secure key store instead of plaintext passwords in configuration files.
-- **Restricted Access**: Limit access to the configuration file containing sensitive credentials.
-- **Regular Security Scans**: Run `lws sec scan` regularly on your containers to detect security issues.
-- **Firewall Rules**: Use the security group functionality to restrict network access to containers.
-- **Update Regularly**: Keep your container images and software up to date.
+### 🔒 **Critical Security Recommendations**
+
+- **Secure Storage of Credentials**: 
+  - **Never use plaintext passwords in production** - Use SSH key-based authentication instead
+  - If passwords are required, store them in environment variables or a secure key vault
+  - Set restrictive file permissions on `config.yaml` (600 or 640)
+  
+- **Network Security**:
+  - Use VPN or private networks for Proxmox host access
+  - Configure firewall rules to restrict SSH access to known IP addresses
+  - Change default SSH ports and disable password authentication when possible
+  
+- **API Security**:
+  - Use strong, randomly generated API keys (minimum 32 characters)
+  - Enable HTTPS/TLS for all API communications in production
+  - Implement rate limiting to prevent abuse
+  - Regularly rotate API keys
+  
+- **Container Security**:
+  - Run `lws sec scan` regularly on your containers to detect security issues
+  - Keep container images and software up to date
+  - Use security groups to restrict network access between containers
+  - Enable container logging and monitoring
+  
+- **Input Validation**:
+  - LWS now includes enhanced input validation to prevent command injection
+  - Instance IDs are validated to contain only numeric characters
+  - Hostnames and usernames are sanitized to remove dangerous characters
+  
+- **File Security**:
+  - Temporary files are now created securely using system temp directories
+  - File cleanup operations are safer and more targeted
+  - HTTP requests include timeouts to prevent indefinite blocking
+
+### 🛡️ **Security Features Added**
+- ✅ Input validation and sanitization for all user inputs
+- ✅ Secure temporary file handling 
+- ✅ Enhanced error handling with specific exception types
+- ✅ Command injection prevention in subprocess calls
+- ✅ HTTP request timeouts to prevent indefinite blocking
+- ✅ Configuration validation with security checks
 
 ## Best Practices
 

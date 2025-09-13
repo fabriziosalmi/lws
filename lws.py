@@ -18,12 +18,80 @@ import yaml
 import click
 import socket
 import tempfile
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tqdm import tqdm
 
 # Global version information
 __version__ = '1.1.0'
+
+
+# Input validation functions for security
+def validate_instance_id(instance_id):
+    """
+    Validate instance ID to prevent command injection.
+    
+    Parameters:
+    - instance_id: The instance ID to validate
+    
+    Returns:
+    - Boolean indicating if the instance ID is valid
+    """
+    if not isinstance(instance_id, (str, int)):
+        return False
+    instance_str = str(instance_id)
+    # Allow only numeric IDs (Proxmox container IDs are numeric)
+    return re.match(r'^[0-9]+$', instance_str) is not None
+
+
+def sanitize_hostname(hostname):
+    """
+    Sanitize hostname to prevent command injection.
+    
+    Parameters:
+    - hostname: The hostname to sanitize
+    
+    Returns:
+    - Sanitized hostname or None if invalid
+    """
+    if not isinstance(hostname, str):
+        return None
+    # Remove dangerous characters, allow only valid hostname chars
+    sanitized = re.sub(r'[^a-zA-Z0-9.-]', '', hostname)
+    return sanitized if len(sanitized) > 0 and len(sanitized) <= 255 else None
+
+
+def validate_command_args(args):
+    """
+    Validate command arguments to prevent injection attacks.
+    
+    Parameters:
+    - args: List of command arguments
+    
+    Returns:
+    - Boolean indicating if arguments are safe
+    """
+    if not isinstance(args, list):
+        return False
+    
+    dangerous_patterns = [
+        r'[;&|`$()]',  # Shell metacharacters
+        r'\.\./|\.\.\\',  # Directory traversal
+        r'rm\s+-rf',  # Dangerous rm commands
+        r'eval\s+',  # Code evaluation
+        r'exec\s+',  # Code execution
+    ]
+    
+    for arg in args:
+        if not isinstance(arg, str):
+            return False
+        for pattern in dangerous_patterns:
+            if re.search(pattern, arg, re.IGNORECASE):
+                logging.warning(f"Dangerous pattern detected in argument: {arg}")
+                return False
+    
+    return True
 
 
 class JsonFormatter(logging.Formatter):
@@ -211,6 +279,24 @@ def validate_config(config):
                     error_msg = f"Missing '{key}' for availability zone '{az_name}' in region '{region_name}'"
                     logging.error(f"❌ {error_msg}")
                     raise ValueError(error_msg)
+            
+            # Validate host format (basic hostname/IP validation)
+            host = az.get('host', '')
+            if not re.match(r'^[a-zA-Z0-9.-]+$', host) or len(host) > 255:
+                error_msg = f"Invalid host format for AZ '{az_name}': {host}"
+                logging.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Validate user format (no dangerous characters)
+            user = az.get('user', '')
+            if not re.match(r'^[a-zA-Z0-9_.-]+$', user) or len(user) > 32:
+                error_msg = f"Invalid user format for AZ '{az_name}': {user}"
+                logging.error(f"❌ {error_msg}")
+                raise ValueError(error_msg)
+            
+            # Warn about password security
+            if az.get('ssh_password') and len(az['ssh_password']) < 8:
+                logging.warning(f"⚠️ Short password detected for AZ '{az_name}'. Consider using SSH keys instead.")
 
     # Validate instance sizes
     for size_name, size_config in config['instance_sizes'].items():

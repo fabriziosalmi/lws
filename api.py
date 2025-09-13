@@ -11,6 +11,7 @@ import subprocess
 import yaml
 import logging
 import sys
+import re
 from functools import wraps
 import shlex  # Import shlex for safe command splitting
 
@@ -71,6 +72,25 @@ logging.basicConfig(
 logging.info("API starting up...")
 logging.info(f"Log level set to {log_level_str}")
 
+
+# --- Input Validation Functions ---
+def validate_instance_id(instance_id):
+    """Validate instance ID to prevent command injection."""
+    if not isinstance(instance_id, (str, int)):
+        return False
+    instance_str = str(instance_id)
+    return re.match(r'^[0-9]+$', instance_str) is not None
+
+
+def sanitize_input(input_value, max_length=255):
+    """Sanitize input to prevent injection attacks."""
+    if not isinstance(input_value, str):
+        return None
+    # Remove dangerous characters
+    sanitized = re.sub(r'[;&|`$(){}[\]<>]', '', input_value)
+    return sanitized[:max_length] if len(sanitized) <= max_length else None
+
+
 # --- Authentication ---
 def require_api_key(f):
     @wraps(f)
@@ -111,7 +131,7 @@ def handle_generic_exception(e):
 # --- Helper Function to Run lws.py Commands ---
 def run_lws_command(command_parts, data=None):
     """
-    Executes an lws.py command using subprocess.
+    Executes an lws.py command using subprocess with input validation.
 
     Args:
         command_parts (list): A list containing the command and its subcommands/arguments
@@ -121,8 +141,27 @@ def run_lws_command(command_parts, data=None):
     Returns:
         tuple: (output, error, return_code)
     """
-    base_cmd = [sys.executable, LWS_SCRIPT_PATH] # Use sys.executable to ensure correct python interpreter
-    full_cmd = base_cmd + command_parts
+    # Validate command parts for security
+    if not isinstance(command_parts, list) or not command_parts:
+        logging.error("Invalid command_parts provided")
+        return None, "Invalid command parameters", 1
+    
+    # Sanitize command parts
+    sanitized_parts = []
+    for part in command_parts:
+        if not isinstance(part, str):
+            logging.error(f"Non-string command part: {part}")
+            return None, "Invalid command parameter type", 1
+        
+        # Basic validation - no shell metacharacters
+        if re.search(r'[;&|`$(){}]', part):
+            logging.warning(f"Dangerous characters detected in command part: {part}")
+            return None, "Invalid characters in command", 1
+        
+        sanitized_parts.append(part)
+    
+    base_cmd = [sys.executable, LWS_SCRIPT_PATH]  # Use sys.executable to ensure correct python interpreter
+    full_cmd = base_cmd + sanitized_parts
 
     # Add options from query parameters and JSON body
     options = {}
@@ -259,25 +298,89 @@ def swagger_spec():
 
         methods = [m for m in rule.methods if m not in ignore_methods]
         for method in methods:
-            # Basic placeholder structure - NEEDS MANUAL COMPLETION
-            spec['paths'][path][method.lower()] = {
-                "summary": f"Placeholder for {rule.endpoint}",
-                "description": f"TODO: Describe the {method} operation for {path}",
-                "tags": [rule.endpoint.split('.')[0] if '.' in rule.endpoint else 'default'], # Basic tagging
-                "parameters": [
-                    # TODO: Add path parameters like {instance_id} here manually or via introspection
-                    # Example: {"name": "instance_id", "in": "path", "required": True, "schema": {"type": "string"}}
-                ],
-                # TODO: Add requestBody for POST/PUT manually
-                # TODO: Add detailed responses manually
-                "responses": {
-                    "200": {"description": "TODO: Describe success response"},
-                    "400": {"description": "TODO: Describe bad request response"},
-                    "401": {"description": "Unauthorized (if require_api_key is used)"},
-                    "404": {"description": "TODO: Describe not found response"},
-                    "500": {"description": "Command execution failed or Internal Server Error"}
-                }
+            # Create more detailed API documentation based on endpoint patterns
+            endpoint_parts = rule.endpoint.split('.')
+            category = endpoint_parts[0] if len(endpoint_parts) > 0 else 'default'
+            operation = endpoint_parts[1] if len(endpoint_parts) > 1 else 'operation'
+            
+            # Generate better descriptions based on endpoint patterns
+            if 'health' in rule.endpoint:
+                description = "Check API health status"
+                summary = "Health Check"
+            elif 'lxc' in rule.endpoint and 'list' in rule.endpoint:
+                description = "List all LXC containers with their current status"
+                summary = "List LXC Containers"
+            elif 'lxc' in rule.endpoint and 'show' in rule.endpoint:
+                description = "Get detailed information about a specific LXC container"
+                summary = "Show LXC Container Details"
+            elif 'lxc' in rule.endpoint and 'start' in rule.endpoint:
+                description = "Start one or more LXC containers"
+                summary = "Start LXC Containers"
+            elif 'lxc' in rule.endpoint and 'stop' in rule.endpoint:
+                description = "Stop one or more LXC containers"
+                summary = "Stop LXC Containers"
+            elif 'proxmox' in rule.endpoint:
+                description = f"Manage Proxmox host operations for {operation}"
+                summary = f"Proxmox {operation.title()}"
+            else:
+                description = f"Perform {method.upper()} operation on {path}"
+                summary = f"{category.title()} {operation.title()}"
+            
+            # Build parameters list based on path
+            parameters = []
+            if '{instance_id}' in path:
+                parameters.append({
+                    "name": "instance_id",
+                    "in": "path",
+                    "required": True,
+                    "schema": {"type": "string", "pattern": "^[0-9]+$"},
+                    "description": "Numeric LXC container ID"
+                })
+            
+            # Add common query parameters for certain endpoints
+            if method.upper() in ['GET'] and 'list' in rule.endpoint:
+                parameters.extend([
+                    {"name": "region", "in": "query", "schema": {"type": "string"}, "description": "Region name"},
+                    {"name": "az", "in": "query", "schema": {"type": "string"}, "description": "Availability zone"}
+                ])
+            
+            # Build response descriptions
+            responses = {
+                "200": {"description": f"Successful {operation} operation"},
+                "400": {"description": "Bad request - invalid parameters or malformed request"},
+                "401": {"description": "Unauthorized - invalid or missing API key"},
+                "404": {"description": "Resource not found"},
+                "500": {"description": "Internal server error or command execution failed"}
             }
+            
+            # Add request body for POST/PUT methods
+            request_body = None
+            if method.upper() in ['POST', 'PUT']:
+                request_body = {
+                    "description": f"Request body for {operation} operation",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "region": {"type": "string", "description": "Target region"},
+                                    "az": {"type": "string", "description": "Target availability zone"}
+                                }
+                            }
+                        }
+                    }
+                }
+            
+            spec['paths'][path][method.lower()] = {
+                "summary": summary,
+                "description": description,
+                "tags": [category],
+                "parameters": parameters,
+                "responses": responses
+            }
+            
+            if request_body:
+                spec['paths'][path][method.lower()]["requestBody"] = request_body
             # Apply default security if not the health check
             if rule.endpoint != 'health_check':
                  spec['paths'][path][method.lower()]['security'] = [{"ApiKeyAuth": []}]
