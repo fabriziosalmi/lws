@@ -1,0 +1,600 @@
+api.py:9:1: F401 'time' imported but unused
+api.py:16:13: E261 at least two spaces before inline comment
+api.py:19:1: F401 'flask.Response' imported but unused
+api.py:19:89: E261 at least two spaces before inline comment
+api.py:28:1: E302 expected 2 blank lines, found 0
+api.py:42:1: E305 expected 2 blank lines after class or function definition, found 1
+api.py:49:68: E261 at least two spaces before inline comment
+api.py:52:57: E261 at least two spaces before inline comment
+api.py:55:35: E261 at least two spaces before inline comment
+api.py:76:1: E302 expected 2 blank lines, found 1
+api.py:79:20: E261 at least two spaces before inline comment
+api.py:88:1: E302 expected 2 blank lines, found 1
+api.py:101:1: E302 expected 2 blank lines, found 1
+api.py:105:1: E302 expected 2 blank lines, found 1
+api.py:125:49: E261 at least two spaces before inline comment
+api.py:141:32: E261 at least two spaces before inline comment
+api.py:143:40: E261 at least two spaces before inline comment
+api.py:150:90: E261 at least two spaces before inline comment
+api.py:155:58: E261 at least two spaces before inline comment
+api.py:167:75: E261 at least two spaces before inline comment
+api.py:172:1: E302 expected 2 blank lines, found 1
+api.py:180:18: E114 indentation is not a multiple of 4 (comment)
+api.py:180:18: E117 over-indented (comment)
+api.py:183:14: E114 indentation is not a multiple of 4 (comment)
+api.py:183:14: E117 over-indented (comment)
+api.py:192:16: E261 at least two spaces before inline comment
+api.py:195:1: E305 expected 2 blank lines after class or function definition, found 1
+api.py:211:1: E302 expected 2 blank lines, found 1
+api.py:225:14: E131 continuation line unaligned for hanging indent
+api.py:226:14: E131 continuation line unaligned for hanging indent
+api.py:228:21: E261 at least two spaces before inline comment
+api.py:238:22: E261 at least two spaces before inline comment
+api.py:267:94: E261 at least two spaces before inline comment
+api.py:284:18: E111 indentation is not a multiple of 4
+api.py:284:18: E117 over-indented
+api.py:287:5: E303 too many blank lines (2)
+api.py:300:1: E302 expected 2 blank lines, found 1
+api.py:306:1: E302 expected 2 blank lines, found 1
+api.py:313:1: E302 expected 2 blank lines, found 1
+api.py:320:1: E302 expected 2 blank lines, found 1
+api.py:327:1: W293 blank line contains whitespace
+api.py:334:1: W293 blank line contains whitespace
+api.py:339:1: E302 expected 2 blank lines, found 1
+api.py:350:1: E302 expected 2 blank lines, found 1
+api.py:357:1: W293 blank line contains whitespace
+api.py:359:24: E701 multiple statements on one line (colon)
+api.py:360:20: E701 multiple statements on one line (colon)
+api.py:361:1: W293 blank line contains whitespace
+api.py:365:1: E302 expected 2 blank lines, found 1
+api.py:371:10: E111 indentation is not a multiple of 4
+api.py:371:10: E117 over-indented
+api.py:374:38: E701 multiple statements on one line (colon)
+api.py:375:1: W293 blank line contains whitespace
+api.py:380:1: E302 expected 2 blank lines, found 1
+api.py:388:1: E302 expected 2 blank lines, found 1
+api.py:396:1: E302 expected 2 blank lines, found 1
+api.py:406:1: E302 expected 2 blank lines, found 1
+api.py:415:1: E302 expected 2 blank lines, found 1
+api.py:424:1: E302 expected 2 blank lines, found 1
+api.py:433:1: E302 expected 2 blank lines, found 1
+api.py:439:10: E111 indentation is not a multiple of 4
+api.py:439:10: E117 over-indented
+api.py:440:1: W293 blank line contains whitespace
+api.py:442:58: E261 at least two spaces before inline comment
+api.py:445:1: E302 expected 2 blank lines, found 1
+api.py:451:10: E111 indentation is not a multiple of 4
+api.py:451:10: E117 over-indented
+api.py:457:1: E302 expected 2 blank lines, found 1
+api.py:461:34: E261 at least two spaces before inline comment
+api.py:466:1: E302 expected 2 blank lines, found 1
+api.py:472:10: E111 indentation is not a multiple of 4
+api.py:472:10: E117 over-indented
+api.py:473:1: W293 blank line contains whitespace
+api.py:478:1: E302 expected 2 blank lines, found 1
+api.py:482:34: E261 at least two spaces before inline comment
+api.py:487:1: E302 expected 2 blank lines, found 1
+api.py:493:10: E111 indentation is not a multiple of 4
+api.py:493:10: E117 over-indented
+api.py:499:1: E302 expected 2 blank lines, found 1
+api.py:507:10: E111 indentation is not a multiple of 4
+api.py:507:10: E117 over-indented
+api.py:513:1: E302 expected 2 blank lines, found 1
+api.py:519:10: E111 indentation is not a multiple of 4
+api.py:519:10: E117 over-indented
+api.py:525:1: E302 expected 2 blank lines, found 1
+api.py:531:10: E111 indentation is not a multiple of 4
+api.py:531:10: E117 over-indented
+api.py:537:1: E302 expected 2 blank lines, found 1
+api.py:545:1: E302 expected 2 blank lines, found 1
+api.py:553:1: E302 expected 2 blank lines, found 1
+api.py:559:10: E111 indentation is not a multiple of 4
+api.py:559:10: E117 over-indented
+api.py:564:53: E261 at least two spaces before inline comment
+api.py:571:1: W293 blank line contains whitespace
+api.py:574:1: W293 blank line contains whitespace
+api.py:578:1: E302 expected 2 blank lines, found 1
+api.py:584:10: E111 indentation is not a multiple of 4
+api.py:584:10: E117 over-indented
+api.py:598:10: E111 indentation is not a multiple of 4
+api.py:598:10: E117 over-indented
+api.py:604:1: E302 expected 2 blank lines, found 1
+api.py:610:10: E111 indentation is not a multiple of 4
+api.py:610:10: E117 over-indented
+api.py:616:1: E302 expected 2 blank lines, found 1
+api.py:616:64: E261 at least two spaces before inline comment
+api.py:622:10: E111 indentation is not a multiple of 4
+api.py:622:10: E117 over-indented
+api.py:628:1: E302 expected 2 blank lines, found 1
+api.py:632:32: E261 at least two spaces before inline comment
+api.py:636:1: E302 expected 2 blank lines, found 1
+api.py:644:1: E302 expected 2 blank lines, found 1
+api.py:644:60: E261 at least two spaces before inline comment
+api.py:650:10: E111 indentation is not a multiple of 4
+api.py:650:10: E117 over-indented
+api.py:658:1: E302 expected 2 blank lines, found 1
+api.py:664:10: E111 indentation is not a multiple of 4
+api.py:664:10: E117 over-indented
+api.py:670:1: E302 expected 2 blank lines, found 1
+api.py:674:34: E261 at least two spaces before inline comment
+api.py:679:1: E302 expected 2 blank lines, found 1
+api.py:687:1: E302 expected 2 blank lines, found 1
+api.py:693:10: E111 indentation is not a multiple of 4
+api.py:693:10: E117 over-indented
+api.py:699:1: E302 expected 2 blank lines, found 1
+api.py:705:10: E111 indentation is not a multiple of 4
+api.py:705:10: E117 over-indented
+api.py:711:1: E302 expected 2 blank lines, found 1
+api.py:717:10: E111 indentation is not a multiple of 4
+api.py:717:10: E117 over-indented
+api.py:723:1: E302 expected 2 blank lines, found 1
+api.py:729:10: E111 indentation is not a multiple of 4
+api.py:729:10: E117 over-indented
+api.py:735:1: E302 expected 2 blank lines, found 1
+api.py:735:61: E261 at least two spaces before inline comment
+api.py:741:10: E111 indentation is not a multiple of 4
+api.py:741:10: E117 over-indented
+api.py:747:1: E302 expected 2 blank lines, found 1
+api.py:753:10: E111 indentation is not a multiple of 4
+api.py:753:10: E117 over-indented
+api.py:754:1: W293 blank line contains whitespace
+api.py:763:1: E302 expected 2 blank lines, found 1
+api.py:769:10: E111 indentation is not a multiple of 4
+api.py:769:10: E117 over-indented
+api.py:775:1: E302 expected 2 blank lines, found 1
+api.py:783:1: E302 expected 2 blank lines, found 1
+api.py:791:1: E302 expected 2 blank lines, found 1
+api.py:797:10: E111 indentation is not a multiple of 4
+api.py:797:10: E117 over-indented
+api.py:803:1: E302 expected 2 blank lines, found 1
+api.py:809:10: E111 indentation is not a multiple of 4
+api.py:809:10: E117 over-indented
+api.py:814:53: E261 at least two spaces before inline comment
+api.py:822:1: W293 blank line contains whitespace
+api.py:829:1: E302 expected 2 blank lines, found 1
+api.py:841:1: E302 expected 2 blank lines, found 1
+api.py:849:1: E302 expected 2 blank lines, found 1
+api.py:857:1: E302 expected 2 blank lines, found 1
+api.py:865:1: E302 expected 2 blank lines, found 1
+api.py:871:10: E111 indentation is not a multiple of 4
+api.py:871:10: E117 over-indented
+api.py:877:1: E302 expected 2 blank lines, found 1
+api.py:881:36: E261 at least two spaces before inline comment
+api.py:886:1: E302 expected 2 blank lines, found 1
+api.py:894:1: E302 expected 2 blank lines, found 1
+api.py:910:54: E261 at least two spaces before inline comment
+api.py:915:1: E302 expected 2 blank lines, found 1
+api.py:921:10: E111 indentation is not a multiple of 4
+api.py:921:10: E117 over-indented
+api.py:927:10: E111 indentation is not a multiple of 4
+api.py:927:10: E117 over-indented
+api.py:931:1: W293 blank line contains whitespace
+api.py:938:1: E302 expected 2 blank lines, found 1
+api.py:944:10: E111 indentation is not a multiple of 4
+api.py:944:10: E117 over-indented
+api.py:945:1: W293 blank line contains whitespace
+api.py:954:1: E302 expected 2 blank lines, found 1
+api.py:960:10: E111 indentation is not a multiple of 4
+api.py:960:10: E117 over-indented
+api.py:966:1: E302 expected 2 blank lines, found 1
+api.py:974:1: E302 expected 2 blank lines, found 1
+api.py:982:1: E302 expected 2 blank lines, found 1
+api.py:982:65: E261 at least two spaces before inline comment
+api.py:988:10: E111 indentation is not a multiple of 4
+api.py:988:10: E117 over-indented
+api.py:1003:41: E261 at least two spaces before inline comment
+api.py:1004:1: W293 blank line contains whitespace
+api.py:1008:1: E302 expected 2 blank lines, found 1
+lws.py:46:1: W293 blank line contains whitespace
+lws.py:103:1: E305 expected 2 blank lines after class or function definition, found 1
+lws.py:113:1: W293 blank line contains whitespace
+lws.py:116:1: W293 blank line contains whitespace
+lws.py:123:36: W291 trailing whitespace
+lws.py:137:1: W293 blank line contains whitespace
+lws.py:140:1: W293 blank line contains whitespace
+lws.py:151:1: W293 blank line contains whitespace
+lws.py:170:1: W293 blank line contains whitespace
+lws.py:173:1: W293 blank line contains whitespace
+lws.py:181:1: W293 blank line contains whitespace
+lws.py:198:1: W293 blank line contains whitespace
+lws.py:205:1: W293 blank line contains whitespace
+lws.py:248:1: W293 blank line contains whitespace
+lws.py:254:1: W293 blank line contains whitespace
+lws.py:262:1: W293 blank line contains whitespace
+lws.py:267:1: W293 blank line contains whitespace
+lws.py:269:46: W291 trailing whitespace
+lws.py:270:42: W291 trailing whitespace
+lws.py:275:1: W293 blank line contains whitespace
+lws.py:278:40: W291 trailing whitespace
+lws.py:279:42: W291 trailing whitespace
+lws.py:292:1: W293 blank line contains whitespace
+lws.py:295:1: W293 blank line contains whitespace
+lws.py:301:1: W293 blank line contains whitespace
+lws.py:305:1: W293 blank line contains whitespace
+lws.py:313:1: W293 blank line contains whitespace
+lws.py:316:1: W293 blank line contains whitespace
+lws.py:317:9: F841 local variable 'te' is assigned to but never used
+lws.py:329:24: F541 f-string is missing placeholders
+lws.py:347:1: W293 blank line contains whitespace
+lws.py:352:1: W293 blank line contains whitespace
+lws.py:358:1: W293 blank line contains whitespace
+lws.py:388:1: W293 blank line contains whitespace
+lws.py:394:1: W293 blank line contains whitespace
+lws.py:408:1: W293 blank line contains whitespace
+lws.py:411:1: W293 blank line contains whitespace
+lws.py:426:1: W293 blank line contains whitespace
+lws.py:437:1: W293 blank line contains whitespace
+lws.py:452:61: W291 trailing whitespace
+lws.py:456:64: W291 trailing whitespace
+lws.py:477:1: W293 blank line contains whitespace
+lws.py:497:1: W293 blank line contains whitespace
+lws.py:503:1: W293 blank line contains whitespace
+lws.py:521:1: W293 blank line contains whitespace
+lws.py:524:1: W293 blank line contains whitespace
+lws.py:560:21: F541 f-string is missing placeholders
+lws.py:582:1: W293 blank line contains whitespace
+lws.py:682:1: E302 expected 2 blank lines, found 1
+lws.py:683:1: E265 block comment should start with '# '
+lws.py:723:1: E303 too many blank lines (3)
+lws.py:724:1: E265 block comment should start with '# '
+lws.py:732:1: W293 blank line contains whitespace
+lws.py:773:1: W293 blank line contains whitespace
+lws.py:776:1: W293 blank line contains whitespace
+lws.py:778:1: W293 blank line contains whitespace
+lws.py:782:1: W293 blank line contains whitespace
+lws.py:789:1: W293 blank line contains whitespace
+lws.py:792:1: W293 blank line contains whitespace
+lws.py:795:1: W293 blank line contains whitespace
+lws.py:799:1: W293 blank line contains whitespace
+lws.py:824:1: E302 expected 2 blank lines, found 1
+lws.py:829:1: W293 blank line contains whitespace
+lws.py:833:1: W293 blank line contains whitespace
+lws.py:862:1: E302 expected 2 blank lines, found 1
+lws.py:871:1: W293 blank line contains whitespace
+lws.py:888:1: E302 expected 2 blank lines, found 1
+lws.py:897:1: W293 blank line contains whitespace
+lws.py:914:1: E302 expected 2 blank lines, found 1
+lws.py:923:1: W293 blank line contains whitespace
+lws.py:942:1: E303 too many blank lines (3)
+lws.py:950:1: W293 blank line contains whitespace
+lws.py:1001:1: W293 blank line contains whitespace
+lws.py:1015:1: F811 redefinition of unused 'time' from line 9
+lws.py:1015:1: E402 module level import not at top of file
+lws.py:1017:1: E302 expected 2 blank lines, found 1
+lws.py:1021:1: W293 blank line contains whitespace
+lws.py:1028:1: E302 expected 2 blank lines, found 1
+lws.py:1097:1: W293 blank line contains whitespace
+lws.py:1112:1: W293 blank line contains whitespace
+lws.py:1133:1: E303 too many blank lines (3)
+lws.py:1141:1: E302 expected 2 blank lines, found 1
+lws.py:1149:1: E302 expected 2 blank lines, found 1
+lws.py:1160:1: W293 blank line contains whitespace
+lws.py:1166:1: E302 expected 2 blank lines, found 1
+lws.py:1179:1: W293 blank line contains whitespace
+lws.py:1182:5: F841 local variable 'host' is assigned to but never used
+lws.py:1183:5: F841 local variable 'user' is assigned to but never used
+lws.py:1184:5: F841 local variable 'ssh_password' is assigned to but never used
+lws.py:1185:1: W293 blank line contains whitespace
+lws.py:1190:1: W293 blank line contains whitespace
+lws.py:1193:1: W293 blank line contains whitespace
+lws.py:1196:1: W293 blank line contains whitespace
+lws.py:1199:1: W293 blank line contains whitespace
+lws.py:1202:1: W293 blank line contains whitespace
+lws.py:1211:1: W293 blank line contains whitespace
+lws.py:1214:1: W293 blank line contains whitespace
+lws.py:1221:1: E302 expected 2 blank lines, found 1
+lws.py:1230:1: E302 expected 2 blank lines, found 1
+lws.py:1239:1: E302 expected 2 blank lines, found 1
+lws.py:1251:1: W293 blank line contains whitespace
+lws.py:1263:1: E302 expected 2 blank lines, found 1
+lws.py:1271:1: E302 expected 2 blank lines, found 1
+lws.py:1279:1: E302 expected 2 blank lines, found 1
+lws.py:1308:1: E302 expected 2 blank lines, found 1
+lws.py:1338:1: W293 blank line contains whitespace
+lws.py:1342:1: W293 blank line contains whitespace
+lws.py:1345:1: W293 blank line contains whitespace
+lws.py:1348:5: F841 local variable 'host' is assigned to but never used
+lws.py:1349:5: F841 local variable 'user' is assigned to but never used
+lws.py:1350:5: F841 local variable 'ssh_password' is assigned to but never used
+lws.py:1351:1: W293 blank line contains whitespace
+lws.py:1354:1: W293 blank line contains whitespace
+lws.py:1361:1: E302 expected 2 blank lines, found 1
+lws.py:1368:1: W293 blank line contains whitespace
+lws.py:1370:46: F541 f-string is missing placeholders
+lws.py:1371:1: W293 blank line contains whitespace
+lws.py:1374:5: F841 local variable 'host' is assigned to but never used
+lws.py:1375:5: F841 local variable 'user' is assigned to but never used
+lws.py:1376:5: F841 local variable 'ssh_password' is assigned to but never used
+lws.py:1377:1: W293 blank line contains whitespace
+lws.py:1380:1: W293 blank line contains whitespace
+lws.py:1387:1: E302 expected 2 blank lines, found 1
+lws.py:1444:1: F811 redefinition of unused 'subprocess' from line 10
+lws.py:1444:1: E305 expected 2 blank lines after class or function definition, found 1
+lws.py:1444:1: E402 module level import not at top of file
+lws.py:1446:1: E302 expected 2 blank lines, found 1
+lws.py:1480:1: W293 blank line contains whitespace
+lws.py:1510:1: W293 blank line contains whitespace
+lws.py:1514:1: W293 blank line contains whitespace
+lws.py:1532:5: E266 too many leading '#' for block comment
+lws.py:1552:1: E302 expected 2 blank lines, found 1
+lws.py:1629:1: E302 expected 2 blank lines, found 1
+lws.py:1673:1: E302 expected 2 blank lines, found 1
+lws.py:1712:1: E302 expected 2 blank lines, found 1
+lws.py:1747:1: E302 expected 2 blank lines, found 1
+lws.py:1753:1: W293 blank line contains whitespace
+lws.py:1781:1: E303 too many blank lines (3)
+lws.py:1781:1: E402 module level import not at top of file
+lws.py:1782:1: F811 redefinition of unused 'subprocess' from line 1444
+lws.py:1782:1: E402 module level import not at top of file
+lws.py:1783:1: E402 module level import not at top of file
+lws.py:1785:1: E302 expected 2 blank lines, found 1
+lws.py:1794:1: E302 expected 2 blank lines, found 1
+lws.py:1823:1: E302 expected 2 blank lines, found 1
+lws.py:1855:1: E302 expected 2 blank lines, found 1
+lws.py:1870:1: W293 blank line contains whitespace
+lws.py:1917:1: E303 too many blank lines (3)
+lws.py:1925:1: W293 blank line contains whitespace
+lws.py:1933:1: W293 blank line contains whitespace
+lws.py:1944:1: W293 blank line contains whitespace
+lws.py:1962:1: W293 blank line contains whitespace
+lws.py:1982:1: W293 blank line contains whitespace
+lws.py:1992:1: E266 too many leading '#' for block comment
+lws.py:2008:34: F541 f-string is missing placeholders
+lws.py:2026:21: F541 f-string is missing placeholders
+lws.py:2036:1: W293 blank line contains whitespace
+lws.py:2045:1: W293 blank line contains whitespace
+lws.py:2059:1: W293 blank line contains whitespace
+lws.py:2062:1: W293 blank line contains whitespace
+lws.py:2072:1: W293 blank line contains whitespace
+lws.py:2075:1: W293 blank line contains whitespace
+lws.py:2092:1: E302 expected 2 blank lines, found 1
+lws.py:2106:1: E302 expected 2 blank lines, found 1
+lws.py:2131:1: W293 blank line contains whitespace
+lws.py:2140:1: E302 expected 2 blank lines, found 1
+lws.py:2144:1: W293 blank line contains whitespace
+lws.py:2147:1: W293 blank line contains whitespace
+lws.py:2152:1: W293 blank line contains whitespace
+lws.py:2161:1: E302 expected 2 blank lines, found 1
+lws.py:2180:1: W293 blank line contains whitespace
+lws.py:2189:1: E302 expected 2 blank lines, found 1
+lws.py:2224:1: W293 blank line contains whitespace
+lws.py:2436:1: W293 blank line contains whitespace
+lws.py:2448:1: E302 expected 2 blank lines, found 1
+lws.py:2457:1: W293 blank line contains whitespace
+lws.py:2462:1: W293 blank line contains whitespace
+lws.py:2468:30: W291 trailing whitespace
+lws.py:2469:31: W291 trailing whitespace
+lws.py:2470:49: W291 trailing whitespace
+lws.py:2481:56: F541 f-string is missing placeholders
+lws.py:2540:1: E302 expected 2 blank lines, found 1
+lws.py:2545:1: W293 blank line contains whitespace
+lws.py:2547:1: W293 blank line contains whitespace
+lws.py:2550:1: W293 blank line contains whitespace
+lws.py:2559:1: W293 blank line contains whitespace
+lws.py:2565:1: W293 blank line contains whitespace
+lws.py:2570:1: E302 expected 2 blank lines, found 1
+lws.py:2575:1: W293 blank line contains whitespace
+lws.py:2577:1: W293 blank line contains whitespace
+lws.py:2580:1: W293 blank line contains whitespace
+lws.py:2589:1: W293 blank line contains whitespace
+lws.py:2592:1: W293 blank line contains whitespace
+lws.py:2595:1: W293 blank line contains whitespace
+lws.py:2598:1: W293 blank line contains whitespace
+lws.py:2609:1: W293 blank line contains whitespace
+lws.py:2612:1: W293 blank line contains whitespace
+lws.py:2624:1: W293 blank line contains whitespace
+lws.py:2626:1: W293 blank line contains whitespace
+lws.py:2632:1: W293 blank line contains whitespace
+lws.py:2641:1: W293 blank line contains whitespace
+lws.py:2649:1: W293 blank line contains whitespace
+lws.py:2657:1: W293 blank line contains whitespace
+lws.py:2665:1: W293 blank line contains whitespace
+lws.py:2675:1: W293 blank line contains whitespace
+lws.py:2677:1: W293 blank line contains whitespace
+lws.py:2683:1: W293 blank line contains whitespace
+lws.py:2685:1: W293 blank line contains whitespace
+lws.py:2692:1: W293 blank line contains whitespace
+lws.py:2697:1: W293 blank line contains whitespace
+lws.py:2707:1: W293 blank line contains whitespace
+lws.py:2712:1: E302 expected 2 blank lines, found 1
+lws.py:2718:1: W293 blank line contains whitespace
+lws.py:2720:1: W293 blank line contains whitespace
+lws.py:2732:1: W293 blank line contains whitespace
+lws.py:2741:1: W293 blank line contains whitespace
+lws.py:2746:1: E302 expected 2 blank lines, found 1
+lws.py:2752:1: W293 blank line contains whitespace
+lws.py:2768:1: W293 blank line contains whitespace
+lws.py:2781:1: E266 too many leading '#' for block comment
+lws.py:2783:1: E402 module level import not at top of file
+lws.py:2784:1: E402 module level import not at top of file
+lws.py:2785:1: E402 module level import not at top of file
+lws.py:2788:1: E302 expected 2 blank lines, found 1
+lws.py:2799:1: E302 expected 2 blank lines, found 1
+lws.py:2806:1: W293 blank line contains whitespace
+lws.py:2833:5: F841 local variable 'cpu_thresholds_host' is assigned to but never used
+lws.py:2835:5: F841 local variable 'memory_thresholds_host' is assigned to but never used
+lws.py:2904:1: E302 expected 2 blank lines, found 1
+lws.py:2933:1: E302 expected 2 blank lines, found 1
+lws.py:3015:1: E303 too many blank lines (3)
+lws.py:3015:1: E266 too many leading '#' for block comment
+lws.py:3015:8: W291 trailing whitespace
+lws.py:3016:1: E305 expected 2 blank lines after class or function definition, found 3
+lws.py:3016:1: E402 module level import not at top of file
+lws.py:3019:1: E302 expected 2 blank lines, found 1
+lws.py:3029:1: W293 blank line contains whitespace
+lws.py:3030:1: E302 expected 2 blank lines, found 1
+lws.py:3036:1: E302 expected 2 blank lines, found 1
+lws.py:3093:1: E302 expected 2 blank lines, found 1
+lws.py:3099:1: E302 expected 2 blank lines, found 1
+lws.py:3108:1: E302 expected 2 blank lines, found 1
+lws.py:3118:1: E302 expected 2 blank lines, found 1
+lws.py:3129:1: F811 redefinition of unused 'subprocess' from line 1782
+lws.py:3129:1: E402 module level import not at top of file
+lws.py:3130:1: F401 'signal' imported but unused
+lws.py:3130:1: E402 module level import not at top of file
+lws.py:3131:1: E302 expected 2 blank lines, found 0
+lws.py:3174:1: E302 expected 2 blank lines, found 1
+lws.py:3182:5: F841 local variable 'e' is assigned to but never used
+lws.py:3191:1: W293 blank line contains whitespace
+lws.py:3195:1: W293 blank line contains whitespace
+lws.py:3227:1: E302 expected 2 blank lines, found 1
+lws.py:3235:1: W293 blank line contains whitespace
+lws.py:3237:1: W293 blank line contains whitespace
+lws.py:3241:1: W293 blank line contains whitespace
+lws.py:3245:1: W293 blank line contains whitespace
+lws.py:3249:1: W293 blank line contains whitespace
+lws.py:3264:1: W293 blank line contains whitespace
+lws.py:3268:1: W293 blank line contains whitespace
+lws.py:3285:1: W293 blank line contains whitespace
+lws.py:3289:1: W293 blank line contains whitespace
+lws.py:3304:1: W293 blank line contains whitespace
+lws.py:3316:1: W293 blank line contains whitespace
+lws.py:3319:1: E302 expected 2 blank lines, found 1
+lws.py:3328:1: W293 blank line contains whitespace
+lws.py:3331:1: W293 blank line contains whitespace
+lws.py:3335:1: W293 blank line contains whitespace
+lws.py:3339:1: W293 blank line contains whitespace
+lws.py:3344:1: W293 blank line contains whitespace
+lws.py:3348:1: W293 blank line contains whitespace
+lws.py:3350:1: W293 blank line contains whitespace
+lws.py:3354:21: F541 f-string is missing placeholders
+lws.py:3356:1: W293 blank line contains whitespace
+lws.py:3359:1: W293 blank line contains whitespace
+lws.py:3363:1: W293 blank line contains whitespace
+lws.py:3369:1: W293 blank line contains whitespace
+lws.py:3373:1: W293 blank line contains whitespace
+lws.py:3375:1: W293 blank line contains whitespace
+lws.py:3377:1: W293 blank line contains whitespace
+lws.py:3382:1: W293 blank line contains whitespace
+lws.py:3386:1: W293 blank line contains whitespace
+lws.py:3390:1: W293 blank line contains whitespace
+lws.py:3394:1: W293 blank line contains whitespace
+lws.py:3398:1: W293 blank line contains whitespace
+lws.py:3402:1: W293 blank line contains whitespace
+lws.py:3406:1: W293 blank line contains whitespace
+lws.py:3408:1: W293 blank line contains whitespace
+lws.py:3412:1: W293 blank line contains whitespace
+lws.py:3418:1: E302 expected 2 blank lines, found 1
+lws.py:3428:1: W293 blank line contains whitespace
+lws.py:3432:1: W293 blank line contains whitespace
+lws.py:3436:1: W293 blank line contains whitespace
+lws.py:3441:1: W293 blank line contains whitespace
+lws.py:3444:31: W291 trailing whitespace
+lws.py:3449:1: W293 blank line contains whitespace
+lws.py:3451:1: W293 blank line contains whitespace
+lws.py:3455:1: W293 blank line contains whitespace
+lws.py:3461:1: W293 blank line contains whitespace
+lws.py:3463:1: W293 blank line contains whitespace
+lws.py:3466:21: F541 f-string is missing placeholders
+lws.py:3468:1: W293 blank line contains whitespace
+lws.py:3471:1: W293 blank line contains whitespace
+lws.py:3477:1: E302 expected 2 blank lines, found 1
+lws.py:3485:1: W293 blank line contains whitespace
+lws.py:3487:1: W293 blank line contains whitespace
+lws.py:3491:1: W293 blank line contains whitespace
+lws.py:3495:1: W293 blank line contains whitespace
+lws.py:3501:1: W293 blank line contains whitespace
+lws.py:3507:1: W293 blank line contains whitespace
+lws.py:3511:1: W293 blank line contains whitespace
+lws.py:3516:1: W293 blank line contains whitespace
+lws.py:3519:9: F841 local variable 'in_services_section' is assigned to but never used
+lws.py:3525:1: W293 blank line contains whitespace
+lws.py:3530:1: W293 blank line contains whitespace
+lws.py:3543:1: W293 blank line contains whitespace
+lws.py:3549:1: W293 blank line contains whitespace
+lws.py:3563:1: W293 blank line contains whitespace
+lws.py:3565:29: F541 f-string is missing placeholders
+lws.py:3572:1: W293 blank line contains whitespace
+lws.py:3577:1: W293 blank line contains whitespace
+lws.py:3580:1: W293 blank line contains whitespace
+lws.py:3584:1: W293 blank line contains whitespace
+lws.py:3588:1: W293 blank line contains whitespace
+lws.py:3592:1: W293 blank line contains whitespace
+lws.py:3601:1: W293 blank line contains whitespace
+lws.py:3604:1: E302 expected 2 blank lines, found 1
+lws.py:3613:1: W293 blank line contains whitespace
+lws.py:3617:1: W293 blank line contains whitespace
+lws.py:3621:1: W293 blank line contains whitespace
+lws.py:3623:1: W293 blank line contains whitespace
+lws.py:3627:1: W293 blank line contains whitespace
+lws.py:3631:1: W293 blank line contains whitespace
+lws.py:3635:1: W293 blank line contains whitespace
+lws.py:3641:1: W293 blank line contains whitespace
+lws.py:3643:1: W293 blank line contains whitespace
+lws.py:3648:1: W293 blank line contains whitespace
+lws.py:3652:1: W293 blank line contains whitespace
+lws.py:3656:1: W293 blank line contains whitespace
+lws.py:3660:1: W293 blank line contains whitespace
+lws.py:3664:1: W293 blank line contains whitespace
+lws.py:3665:38: E226 missing whitespace around arithmetic operator
+lws.py:3666:1: W293 blank line contains whitespace
+lws.py:3677:13: E722 do not use bare 'except'
+lws.py:3678:29: F541 f-string is missing placeholders
+lws.py:3680:25: F541 f-string is missing placeholders
+lws.py:3681:1: W293 blank line contains whitespace
+lws.py:3693:13: E722 do not use bare 'except'
+lws.py:3694:29: F541 f-string is missing placeholders
+lws.py:3696:25: F541 f-string is missing placeholders
+lws.py:3697:1: W293 blank line contains whitespace
+lws.py:3708:13: E722 do not use bare 'except'
+lws.py:3709:29: F541 f-string is missing placeholders
+lws.py:3711:25: F541 f-string is missing placeholders
+lws.py:3712:1: W293 blank line contains whitespace
+lws.py:3718:13: E722 do not use bare 'except'
+lws.py:3719:29: F541 f-string is missing placeholders
+lws.py:3721:25: F541 f-string is missing placeholders
+lws.py:3722:1: W293 blank line contains whitespace
+lws.py:3725:1: E302 expected 2 blank lines, found 1
+lws.py:3734:1: W293 blank line contains whitespace
+lws.py:3736:1: W293 blank line contains whitespace
+lws.py:3743:1: W293 blank line contains whitespace
+lws.py:3747:1: W293 blank line contains whitespace
+lws.py:3759:1: W293 blank line contains whitespace
+lws.py:3763:1: W293 blank line contains whitespace
+lws.py:3767:1: W293 blank line contains whitespace
+lws.py:3772:1: W293 blank line contains whitespace
+lws.py:3776:1: W293 blank line contains whitespace
+lws.py:3782:1: W293 blank line contains whitespace
+lws.py:3785:1: W293 blank line contains whitespace
+lws.py:3792:1: W293 blank line contains whitespace
+lws.py:3799:17: E722 do not use bare 'except'
+lws.py:3801:1: W293 blank line contains whitespace
+lws.py:3805:1: W293 blank line contains whitespace
+lws.py:3809:1: W293 blank line contains whitespace
+lws.py:3812:1: W293 blank line contains whitespace
+lws.py:3821:13: E722 do not use bare 'except'
+lws.py:3823:1: W293 blank line contains whitespace
+lws.py:3827:1: W293 blank line contains whitespace
+lws.py:3831:1: W293 blank line contains whitespace
+lws.py:3834:1: W293 blank line contains whitespace
+lws.py:3840:1: W293 blank line contains whitespace
+lws.py:3848:1: W293 blank line contains whitespace
+lws.py:3850:13: E722 do not use bare 'except'
+lws.py:3852:1: W293 blank line contains whitespace
+lws.py:3856:1: W293 blank line contains whitespace
+lws.py:3860:1: W293 blank line contains whitespace
+lws.py:3863:1: W293 blank line contains whitespace
+lws.py:3867:1: W293 blank line contains whitespace
+lws.py:3870:1: W293 blank line contains whitespace
+lws.py:3874:1: W293 blank line contains whitespace
+lws.py:3879:1: W293 blank line contains whitespace
+lws.py:3884:1: W293 blank line contains whitespace
+lws.py:3888:1: W293 blank line contains whitespace
+lws.py:3891:1: W293 blank line contains whitespace
+lws.py:3895:1: W293 blank line contains whitespace
+lws.py:3899:1: W293 blank line contains whitespace
+lws.py:3910:29: E722 do not use bare 'except'
+lws.py:3912:1: W293 blank line contains whitespace
+lws.py:3914:1: W293 blank line contains whitespace
+lws.py:3923:1: W293 blank line contains whitespace
+lws.py:3931:1: W293 blank line contains whitespace
+lws.py:3934:1: W293 blank line contains whitespace
+lws.py:3940:1: W293 blank line contains whitespace
+lws.py:3944:1: W293 blank line contains whitespace
+lws.py:3948:1: W293 blank line contains whitespace
+lws.py:3952:1: W293 blank line contains whitespace
+lws.py:3959:1: W293 blank line contains whitespace
+lws.py:3965:1: W293 blank line contains whitespace
+lws.py:3971:1: W293 blank line contains whitespace
+lws.py:3979:1: W293 blank line contains whitespace
+lws.py:3982:1: E305 expected 2 blank lines after class or function definition, found 1
