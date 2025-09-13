@@ -6,17 +6,16 @@ This module provides a REST API interface to the functionality available in lws.
 """
 
 import os
-import time
 import json
 import subprocess
 import yaml
 import logging
 import sys
 from functools import wraps
-import shlex # Import shlex for safe command splitting
+import shlex  # Import shlex for safe command splitting
 
 # Import Flask and related extensions
-from flask import Flask, request, jsonify, Response, abort, send_from_directory, url_for # Added url_for
+from flask import Flask, request, jsonify, send_from_directory, url_for, abort  # Added abort
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 # Import Swagger UI
