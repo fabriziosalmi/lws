@@ -11,6 +11,7 @@ Recently, LWS has been expanded to include:
 *   **Swagger Documentation:** Interactive API documentation generated via Swagger UI.
 
 [![asciicast](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O.svg)](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffabriziosalmi%2Flws.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffabriziosalmi%2Flws?ref=badge_shield)
 
 ## Table of Contents
 - [Introduction](#introduction)
@@ -522,6 +523,9 @@ Interactive API documentation is available via Swagger UI.
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Ffabriziosalmi%2Flws.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Ffabriziosalmi%2Flws?ref=badge_large)
 
 ## Acknowledgements
 
