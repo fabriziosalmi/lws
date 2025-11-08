@@ -49,11 +49,13 @@
                 <h1 class="hero-title">
                     <span class="gradient-text">Linux Web Services</span>
                     <br>
-                    <span class="subtitle">AWS-like CLI for Proxmox Containers</span>
+                    <span class="subtitle">Unified CLI for Proxmox + LXC + Docker</span>
                 </h1>
                 <p class="hero-description">
-                    Powerful command-line interface to manage LXC containers on Proxmox VE
-                    with the simplicity and elegance of AWS CLI
+                    <strong>One CLI to rule them all:</strong> Manage Proxmox hosts, deploy LXC containers,
+                    and run Docker applications - all from a single unified interface.
+                    <br>
+                    <em>Install anything on your Proxmox infrastructure with simple commands.</em>
                 </p>
                 <div class="hero-buttons">
                     <a href="#quickstart" class="btn btn-primary">Get Started</a>
@@ -70,17 +72,72 @@
         <div class="hero-background"></div>
     </section>
 
+    <!-- Unified Platform Section -->
+    <section class="unified-platform">
+        <div class="container">
+            <h2 class="section-title">The Unified Platform</h2>
+            <p class="section-subtitle">From Bare Metal to Running Applications in 3 Simple Steps</p>
+
+            <div class="platform-workflow">
+                <div class="workflow-step">
+                    <div class="step-icon">🖥️</div>
+                    <h3>1. Proxmox</h3>
+                    <p>Manage your Proxmox hosts</p>
+                    <div class="code-snippet">
+                        <code>lws px list</code>
+                    </div>
+                </div>
+
+                <div class="workflow-arrow">→</div>
+
+                <div class="workflow-step">
+                    <div class="step-icon">📦</div>
+                    <h3>2. LXC</h3>
+                    <p>Deploy containers instantly</p>
+                    <div class="code-snippet">
+                        <code>lws lxc run --size medium</code>
+                    </div>
+                </div>
+
+                <div class="workflow-arrow">→</div>
+
+                <div class="workflow-step">
+                    <div class="step-icon">🐳</div>
+                    <h3>3. Docker</h3>
+                    <p>Run any application</p>
+                    <div class="code-snippet">
+                        <code>lws app deploy install</code>
+                    </div>
+                </div>
+            </div>
+
+            <div class="platform-example">
+                <h3>Complete Example: Deploy WordPress in 60 Seconds</h3>
+                <pre><code><span class="code-comment"># 1. Create LXC container</span>
+<span class="code-command">lws lxc run</span> --image-id ubuntu-22.04 --size lws-web --hostname wordpress-1
+
+<span class="code-comment"># 2. Install Docker in the container</span>
+<span class="code-command">lws app setup</span> 100
+
+<span class="code-comment"># 3. Deploy WordPress with Docker Compose</span>
+<span class="code-command">lws app deploy install</span> 100 --compose-file wordpress-compose.yml
+
+<span class="code-comment"># Done! Your WordPress is running 🎉</span></code></pre>
+            </div>
+        </div>
+    </section>
+
     <!-- Stats Section -->
     <section class="stats">
         <div class="container">
             <div class="stats-grid">
                 <div class="stat-item">
-                    <div class="stat-number">50+</div>
-                    <div class="stat-label">CLI Commands</div>
+                    <div class="stat-number">3</div>
+                    <div class="stat-label">Platforms Unified</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-number">5</div>
-                    <div class="stat-label">Command Groups</div>
+                    <div class="stat-number">50+</div>
+                    <div class="stat-label">CLI Commands</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-number">100%</div>

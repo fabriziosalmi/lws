@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ page.title }} - LWS Documentation">
+    <title>{{ page.title }} - LWS Documentation</title>
+
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/docs.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+</head>
+<body class="docs-page">
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <a href="../index.html" class="logo">🐧 LWS</a>
+            </div>
+            <div class="nav-links">
+                <a href="../index.html">Home</a>
+                <a href="getting-started.html">Getting Started</a>
+                <a href="cli-reference.html">CLI</a>
+                <a href="api-reference.html">API</a>
+                <a href="https://github.com/fabriziosalmi/lws" target="_blank">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Page Content -->
+    <div class="docs-container">
+        <aside class="docs-sidebar">
+            <div class="sidebar-section">
+                <h3>Getting Started</h3>
+                <a href="getting-started.html">Installation</a>
+                <a href="getting-started.html#your-first-container">Your First Container</a>
+                <a href="getting-started.html#using-the-api-server">Using the API</a>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Documentation</h3>
+                <a href="architecture.html">Architecture</a>
+                <a href="cli-reference.html">CLI Reference</a>
+                <a href="api-reference.html">API Reference</a>
+                <a href="configuration.html">Configuration</a>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Community</h3>
+                <a href="contributing.html">Contributing</a>
+                <a href="https://github.com/fabriziosalmi/lws/issues" target="_blank">Issues</a>
+                <a href="https://github.com/fabriziosalmi/lws/discussions" target="_blank">Discussions</a>
+            </div>
+        </aside>
+
+        <main class="docs-content">
+            <article class="markdown-body">
+                {{ content }}
+            </article>
+        </main>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="logo">🐧 LWS</span>
+                    <p>Linux Web Services</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Documentation</h4>
+                        <a href="getting-started.html">Getting Started</a>
+                        <a href="cli-reference.html">CLI Reference</a>
+                        <a href="api-reference.html">API Reference</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Community</h4>
+                        <a href="https://github.com/fabriziosalmi/lws" target="_blank">GitHub</a>
+                        <a href="https://github.com/fabriziosalmi/lws/issues" target="_blank">Issues</a>
+                        <a href="contributing.html">Contributing</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Legal</h4>
+                        <a href="https://github.com/fabriziosalmi/lws/blob/main/LICENSE" target="_blank">MIT License</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 LWS. Released under the MIT License.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

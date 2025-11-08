@@ -1,14 +1,43 @@
 # LWS - Linux Web Services CLI
 
+<div align="center">
+
 **Version:** 1.1.0
+
+[![GitHub](https://img.shields.io/github/license/fabriziosalmi/lws)](https://github.com/fabriziosalmi/lws/blob/main/LICENSE)
+[![Python](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
+[![Documentation](https://img.shields.io/badge/docs-github%20pages-blue)](https://fabriziosalmi.github.io/lws/)
+
+[Features](#features) • [Installation](#installation) • [Documentation](https://fabriziosalmi.github.io/lws/) • [Contributing](https://fabriziosalmi.github.io/lws/pages/contributing.html)
+
+</div>
+
+---
+
+## 📖 Documentation
+
+**🌐 [Complete Documentation](https://fabriziosalmi.github.io/lws/)** is now available on GitHub Pages!
+
+- **[Getting Started](https://fabriziosalmi.github.io/lws/pages/getting-started.html)** - Installation and first steps
+- **[Architecture](https://fabriziosalmi.github.io/lws/pages/architecture.html)** - Modular design and structure
+- **[CLI Reference](https://fabriziosalmi.github.io/lws/pages/cli-reference.html)** - Complete command reference
+- **[API Reference](https://fabriziosalmi.github.io/lws/pages/api-reference.html)** - REST API endpoints
+- **[Configuration](https://fabriziosalmi.github.io/lws/pages/configuration.html)** - Advanced configuration
+- **[Contributing](https://fabriziosalmi.github.io/lws/pages/contributing.html)** - How to contribute
+
+---
+
+## Overview
 
 LWS is a command-line interface (CLI) tool designed to simplify the management of LXC containers on Proxmox VE hosts. It provides a convenient way to perform common tasks such as creating, starting, stopping, terminating, and managing LXC instances, as well as interacting with Proxmox hosts themselves.
 
-Recently, LWS has been expanded to include:
+**Recent Updates:**
 
-*   **A RESTful API:** Provides programmatic access to LWS functionality over HTTP.
-*   **A Simple Web UI:** Offers a basic graphical interface to interact with the API.
-*   **Swagger Documentation:** Interactive API documentation generated via Swagger UI.
+*   **✨ Modular Architecture:** Core functionality extracted into reusable modules
+*   **🔌 RESTful API:** Programmatic access to all LWS functionality over HTTP
+*   **🖥️ Web UI:** Simple graphical interface to interact with the API
+*   **📚 Swagger Documentation:** Interactive API documentation
+*   **📖 GitHub Pages:** Comprehensive documentation site
 
 [![asciicast](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O.svg)](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O)
 
