@@ -5,3 +5,8 @@ flask-swagger-ui>=5.11,<6.0.0
 flask>=3.0.2,<4.0.0
 flask-cors>=4.0.0,<5.0.0
 tqdm>=4.66.2,<5.0.0 # For progress bars in lws.py
+
+# Testing dependencies
+pytest>=7.4.0,<8.0.0
+pytest-cov>=4.1.0,<5.0.0
+pytest-mock>=3.11.0,<4.0.0
