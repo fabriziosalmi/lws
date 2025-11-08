@@ -23,307 +23,25 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tqdm import tqdm
 
-# Global version information
-__version__ = '1.1.0'
+# Import from lws_core modules
+from lws_core import (
+    __version__,
+    config,
+    load_config,
+    validate_config,
+    run_ssh_command,
+    run_proxmox_command,
+    execute_command,
+    is_service_active,
+    process_instance_command,
+    build_resize_command,
+    get_next_vmid,
+    is_container_locked,
+    mask_sensitive_info
+)
 
 
-# Input validation functions for security
-def validate_instance_id(instance_id):
-    """
-    Validate instance ID to prevent command injection.
-    
-    Parameters:
-    - instance_id: The instance ID to validate
-    
-    Returns:
-    - Boolean indicating if the instance ID is valid
-    """
-    if not isinstance(instance_id, (str, int)):
-        return False
-    instance_str = str(instance_id)
-    # Allow only numeric IDs (Proxmox container IDs are numeric)
-    return re.match(r'^[0-9]+$', instance_str) is not None
-
-
-def sanitize_hostname(hostname):
-    """
-    Sanitize hostname to prevent command injection.
-    
-    Parameters:
-    - hostname: The hostname to sanitize
-    
-    Returns:
-    - Sanitized hostname or None if invalid
-    """
-    if not isinstance(hostname, str):
-        return None
-    # Remove dangerous characters, allow only valid hostname chars
-    sanitized = re.sub(r'[^a-zA-Z0-9.-]', '', hostname)
-    return sanitized if len(sanitized) > 0 and len(sanitized) <= 255 else None
-
-
-def validate_command_args(args):
-    """
-    Validate command arguments to prevent injection attacks.
-    
-    Parameters:
-    - args: List of command arguments
-    
-    Returns:
-    - Boolean indicating if arguments are safe
-    """
-    if not isinstance(args, list):
-        return False
-    
-    dangerous_patterns = [
-        r'[;&|`$()]',  # Shell metacharacters
-        r'\.\./|\.\.\\',  # Directory traversal
-        r'eval\s+',  # Code evaluation
-        r'exec\s+',  # Code execution
-    ]
-    
-    # Check for dangerous rm commands
-    args_str = ' '.join(args)
-    if re.search(r'rm\s+.*-rf\s+/', args_str, re.IGNORECASE):
-        logging.warning(f"Dangerous rm -rf command detected: {args_str}")
-        return False
-    
-    for arg in args:
-        if not isinstance(arg, str):
-            return False
-        for pattern in dangerous_patterns:
-            if re.search(pattern, arg, re.IGNORECASE):
-                logging.warning(f"Dangerous pattern detected in argument: {arg}")
-                return False
-    
-    return True
-
-
-class JsonFormatter(logging.Formatter):
-    """Custom JSON formatter for logging."""
-
-    def format(self, record):
-        log_record = {
-            'timestamp': self.formatTime(record, self.datefmt),
-            'level': record.levelname,
-            'module': record.name,
-            'message': record.getMessage(),
-        }
-        if record.exc_info:
-            log_record['exception'] = self.formatException(record.exc_info)
-        return json.dumps(log_record)
-
-
-def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
-    """
-    Sets up the logging configuration.
-    
-    Parameters:
-    - log_level: The logging level (e.g., logging.DEBUG, logging.INFO).
-    - log_file: Optional file path to log in standard format.
-    - json_log_file: Optional file path to log in JSON format.
-    """
-    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    log_date_format = "%Y-%m-%d %H:%M:%S"
-
-    handlers = {
-        'console': {
-            'level': log_level,
-            'class': 'logging.StreamHandler',
-            'formatter': 'default',
-        }
-    }
-
-    if log_file:
-        handlers['file'] = {
-            'level': log_level,
-            'class': 'logging.FileHandler',
-            'formatter': 'default',
-            'filename': log_file,
-        }
-
-    if json_log_file:
-        handlers['json_file'] = {
-            'level': log_level,
-            'class': 'logging.FileHandler',
-            'formatter': 'json',
-            'filename': json_log_file,
-        }
-
-    logging_config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'default': {
-                'format': log_format,
-                'datefmt': log_date_format,
-            },
-            'json': {
-                '()': JsonFormatter,
-                'datefmt': log_date_format,
-            }
-        },
-        'handlers': handlers,
-        'root': {
-            'level': log_level,
-            'handlers': list(handlers.keys()),
-        },
-    }
-
-    logging.config.dictConfig(logging_config)
-    logging.debug("🔎 Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
-
-# Example usage:
-log_file_path = os.path.join(os.getcwd(), 'lws.log')  # Standard log file path
-json_log_file_path = os.path.join(os.getcwd(), 'lws.json.log')  # JSON log file path
-
-# Set up logging: standard logging to console and file, JSON logging to a separate file
-setup_logging(log_level=logging.ERROR, log_file=log_file_path, json_log_file=json_log_file_path)
-
-
-def is_service_active(service_name):
-    """
-    Check if a service is active using systemctl.
-    
-    Parameters:
-    - service_name: Name of the service to check
-    
-    Returns:
-    - Boolean indicating if the service is active
-    """
-    try:
-        result = subprocess.run(
-            ["systemctl", "is-active", service_name],
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
-            text=True
-        )
-        return result.stdout.strip() == "active"
-    except Exception as e:
-        logging.error(f"Error checking if service {service_name} is active: {str(e)}")
-        return False
-
-
-# Load and validate the configuration
-def load_config():
-    """
-    Load and validate the configuration from config.yaml.
-    
-    Returns:
-    - Validated configuration dictionary
-    
-    Raises:
-    - FileNotFoundError: If config.yaml is not found
-    - yaml.YAMLError: If config.yaml has invalid YAML syntax
-    - ValueError: If configuration is invalid
-    """
-    try:
-        config_path = os.path.join(os.getcwd(), 'config.yaml')
-        if not os.path.exists(config_path):
-            logging.error(f"❌ Configuration file not found at {config_path}")
-            raise FileNotFoundError(f"Configuration file not found at {config_path}")
-            
-        with open('config.yaml', 'r') as file:
-            config = yaml.safe_load(file)
-        validate_config(config)
-        return config
-    except FileNotFoundError:
-        logging.error("❌ Configuration file 'config.yaml' not found.")
-        raise
-    except yaml.YAMLError as e:
-        logging.error(f"❌ Error parsing configuration file: {e}")
-        raise
-    except Exception as e:
-        logging.error(f"❌ Unexpected error loading configuration: {str(e)}")
-        raise
-
-
-def validate_config(config):
-    """
-    Validate the configuration structure and content.
-    
-    Parameters:
-    - config: Configuration dictionary to validate
-    
-    Raises:
-    - ValueError: If configuration is invalid
-    """
-    if not isinstance(config, dict):
-        error_msg = "Configuration must be a dictionary"
-        logging.error(f"❌ {error_msg}")
-        raise ValueError(error_msg)
-        
-    required_keys = ['regions', 'instance_sizes']
-    for key in required_keys:
-        if key not in config:
-            error_msg = f"Missing required configuration key: {key}"
-            logging.error(f"❌ {error_msg}")
-            raise ValueError(error_msg)
-
-    if not isinstance(config['regions'], dict) or not config['regions']:
-        error_msg = "Invalid or empty 'regions' configuration."
-        logging.error(f"❌ {error_msg}")
-        raise ValueError(error_msg)
-
-    if not isinstance(config['instance_sizes'], dict) or not config['instance_sizes']:
-        error_msg = "Invalid or empty 'instance_sizes' configuration."
-        logging.error(f"❌ {error_msg}")
-        raise ValueError(error_msg)
-        
-    # Validate each region has az with proper host details
-    for region_name, region in config['regions'].items():
-        if 'availability_zones' not in region or not isinstance(region['availability_zones'], dict):
-            error_msg = f"Region '{region_name}' must have 'availability_zones' dictionary"
-            logging.error(f"❌ {error_msg}")
-            raise ValueError(error_msg)
-            
-        for az_name, az in region['availability_zones'].items():
-            required_az_keys = ['host', 'user', 'ssh_password']
-            for key in required_az_keys:
-                if key not in az:
-                    error_msg = f"Missing '{key}' for availability zone '{az_name}' in region '{region_name}'"
-                    logging.error(f"❌ {error_msg}")
-                    raise ValueError(error_msg)
-            
-            # Validate host format (basic hostname/IP validation)
-            host = az.get('host', '')
-            if not re.match(r'^[a-zA-Z0-9.-]+$', host) or len(host) > 255:
-                error_msg = f"Invalid host format for AZ '{az_name}': {host}"
-                logging.error(f"❌ {error_msg}")
-                raise ValueError(error_msg)
-            
-            # Validate user format (no dangerous characters)
-            user = az.get('user', '')
-            if not re.match(r'^[a-zA-Z0-9_.-]+$', user) or len(user) > 32:
-                error_msg = f"Invalid user format for AZ '{az_name}': {user}"
-                logging.error(f"❌ {error_msg}")
-                raise ValueError(error_msg)
-            
-            # Warn about password security
-            if az.get('ssh_password') and len(az['ssh_password']) < 8:
-                logging.warning(f"⚠️ Short password detected for AZ '{az_name}'. Consider using SSH keys instead.")
-
-    # Validate instance sizes
-    for size_name, size_config in config['instance_sizes'].items():
-        required_size_keys = ['memory', 'cpulimit', 'storage']
-        for key in required_size_keys:
-            if key not in size_config:
-                error_msg = f"Missing '{key}' for instance size '{size_name}'"
-                logging.error(f"❌ {error_msg}")
-                raise ValueError(error_msg)
-
-
-try:
-    config = load_config()
-except (FileNotFoundError, yaml.YAMLError, ValueError) as e:
-    click.secho(f"Configuration error: {str(e)}", fg='red')
-    config = {
-        'regions': {},
-        'instance_sizes': {},
-        'use_local_only': False,
-        'default_storage': 'local',
-        'default_network': 'vmbr0'
-    }
+# Configuration and logging are now handled by lws_core modules
 
 
 # lws
@@ -494,16 +212,9 @@ def run_proxmox_command(local_cmd, remote_cmd=None, use_local_only=False, host_d
 
 
 # Command alias decorator
+# Command alias decorator (kept local as it depends on the CLI group)
 def command_alias(*aliases):
-    """
-    Decorator that creates command aliases for Click commands.
-    
-    Parameters:
-    - aliases: List of command name aliases
-    
-    Returns:
-    - Decorator function
-    """
+    """Decorator that creates command aliases for Click commands."""
     def decorator(f):
         for alias in aliases:
             lws.command(alias)(f)
@@ -511,118 +222,10 @@ def command_alias(*aliases):
     return decorator
 
 
-# Generic function to process instance commands
-def process_instance_command(instance_ids, command_type, region, az, **kwargs):
-    """
-    Process commands for LXC instances.
-    
-    Parameters:
-    - instance_ids: List of instance IDs to process
-    - command_type: Type of command to execute
-    - region: Region where instances exist
-    - az: Availability zone where instances exist
-    - kwargs: Additional command arguments
-    """
-    if not instance_ids:
-        click.secho("❌ No instance IDs provided.", fg='red')
-        return
-        
-    try:
-        host_details = config['regions'][region]['availability_zones'][az]
-    except KeyError:
-        click.secho(f"❌ Invalid region '{region}' or availability zone '{az}'", fg='red')
-        return
-
-    command_map = {
-        'stop': lambda instance_id: (["pct", "shutdown", instance_id], ["pct", "shutdown", instance_id]),
-        'terminate': lambda instance_id: (["pct", "destroy", instance_id, "--purge"], ["pct", "destroy", instance_id, "--purge"]),
-        'describe': lambda instance_id: (["pct", "config", instance_id], ["pct", "config", instance_id]),
-        'resize': lambda instance_id: build_resize_command(instance_id, **kwargs),
-        'start': lambda instance_id: (["pct", "start", instance_id], ["pct", "start", instance_id]),
-        'reboot': lambda instance_id: (["pct", "reboot", instance_id], ["pct", "reboot", instance_id]),
-        'snapshot_create': lambda instance_id, snapshot_name: (
-            ["pct", "snapshot", instance_id, snapshot_name], 
-            ["pct", "snapshot", instance_id, snapshot_name]
-        ),
-        'snapshot_delete': lambda instance_id, snapshot_name: (
-            ["pct", "delsnapshot", instance_id, snapshot_name], 
-            ["pct", "delsnapshot", instance_id, snapshot_name]
-        ),
-        '_snapshots': lambda instance_id: (["pct", "snapshot", instance_id], ["pct", "snapshot", instance_id]),
-    }
-
-    if command_type not in command_map:
-        click.secho(f"❌ Unknown command type: {command_type}", fg='red')
-        return
-
-    with click.progressbar(instance_ids, label=f"Processing {command_type} command") as instance_ids_bar:
-        for instance_id in instance_ids_bar:
-            try:
-                if command_type in ['snapshot_create', 'snapshot_delete']:
-                    snapshot_name = kwargs.get('snapshot_name')
-                    if not snapshot_name:
-                        click.secho(f"❌ Snapshot name is required for {command_type}", fg='red')
-                        continue
-                    local_cmd, remote_cmd = command_map[command_type](instance_id, snapshot_name)
-                else:
-                    local_cmd, remote_cmd = command_map[command_type](instance_id)
-                
-                result = run_proxmox_command(local_cmd, remote_cmd, config.get('use_local_only', False), host_details)
-
-                if result.returncode == 0:
-                    if command_type == 'describe':
-                        click.secho(f"🔧 Instance {instance_id} configuration:\n{result.stdout}", fg='cyan')
-                    elif command_type == '_snapshots':
-                        click.secho(f"📜 Snapshots for instance {instance_id}:\n{result.stdout}", fg='cyan')
-                    else:
-                        click.secho(f"✅ Instance {instance_id} {command_type} executed successfully.", fg='green')
-                else:
-                    click.secho(f"❌ Failed to {command_type} instance {instance_id}: {result.stderr}", fg='red')
-            except Exception as e:
-                click.secho(f"❌ Error processing instance {instance_id}: {str(e)}", fg='red')
-                logging.error(f"Error processing instance {instance_id} with {command_type}: {str(e)}")
+# SSH and command execution functions are now in lws_core.ssh and lws_core.proxmox
 
 
-def build_resize_command(instance_id, memory=None, cpulimit=None, storage_size=None):
-    """
-    Build command for resizing an LXC container.
-    
-    Parameters:
-    - instance_id: ID of the instance to resize
-    - memory: New memory size in MB
-    - cpulimit: New CPU limit
-    - storage_size: New storage size
-    
-    Returns:
-    - Tuple of local and remote commands
-    """
-    resize_cmd = ["pct", "set", instance_id]
-    if memory:
-        resize_cmd.extend(["--memory", str(memory)])
-    if cpulimit:
-        resize_cmd.extend(["--cpulimit", str(cpulimit)])
-    if storage_size:
-        resize_cmd.extend(["--rootfs", f"{config.get('default_storage', 'local')}:{storage_size}"])
-    return (resize_cmd, resize_cmd)
-
-
-# Function to mask sensitive information
-def mask_sensitive_info(config):
-    """
-    Mask sensitive information in the configuration.
-    
-    Parameters:
-    - config: Configuration dictionary
-    
-    Returns:
-    - Configuration with sensitive information masked
-    """
-    if isinstance(config, dict):
-        return {k: ("***" if "password" in k.lower() or "secret" in k.lower() or "key" in k.lower() else mask_sensitive_info(v)) for k, v in config.items()}
-    elif isinstance(config, list):
-        return [mask_sensitive_info(i) for i in config]
-    else:
-        return config
+# Utility functions are now in lws_core.utils
 
 
 @lws.group()
@@ -1115,6 +718,7 @@ def is_container_locked(instance_id, host_details):
     else:
         logging.error(f"❌ Failed to check lock status for instance {instance_id}: {result.stderr}")
         return False  # Assume it's not locked if the command fails to avoid indefinite retries
+# VMID and container lock checking are now in lws_core.utils
 
 @lxc.command('run')
 @click.option('--image-id', required=True, help="ID of the container image template.")

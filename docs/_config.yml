@@ -1,0 +1,66 @@
+# GitHub Pages Configuration for LWS Documentation
+# https://github.com/fabriziosalmi/lws
+
+title: LWS - Linux Web Services
+description: AWS-like CLI tool for managing LXC containers on Proxmox VE
+baseurl: "/lws"
+url: "https://fabriziosalmi.github.io"
+
+# Theme
+theme: jekyll-theme-cayman
+remote_theme: pages-themes/cayman@v0.2.0
+
+# Plugins
+plugins:
+  - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Markdown settings
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+
+# Collections
+collections:
+  pages:
+    output: true
+    permalink: /:collection/:name
+
+# Defaults
+defaults:
+  - scope:
+      path: ""
+      type: "pages"
+    values:
+      layout: "default"
+
+# Navigation
+navigation:
+  - title: Getting Started
+    url: /pages/getting-started
+  - title: Architecture
+    url: /pages/architecture
+  - title: CLI Reference
+    url: /pages/cli-reference
+  - title: API Reference
+    url: /pages/api-reference
+  - title: Configuration
+    url: /pages/configuration
+  - title: Contributing
+    url: /pages/contributing
+
+# SEO
+author: Fabrizio Salmi
+twitter:
+  username: fabriziosalmi
+  card: summary_large_image
+
+# Google Analytics (optional - add your tracking ID)
+# google_analytics: UA-XXXXXXXXX-X
+
+# GitHub
+github:
+  repository_url: https://github.com/fabriziosalmi/lws
+  is_project_page: true
