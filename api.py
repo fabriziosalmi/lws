@@ -205,7 +205,8 @@ def run_lws_command(command_parts, data=None):
         return None, "Command execution timed out after 300 seconds.", 124 # Timeout return code
     except Exception as e:
         logging.exception(f"Error executing command: {e}")
-        return None, f"Internal error executing command: {str(e)}", 1
+        # Do not expose internal details to user
+        return None, "Internal error executing command.", 1
 
 def format_response(stdout, stderr, return_code):
     """Formats the command output into a JSON response."""
