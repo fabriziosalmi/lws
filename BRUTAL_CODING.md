@@ -179,11 +179,11 @@
 
 #### 14. Supply Chain: **2/5**
 * **Bad:**
-  * ❌ Dependencies NOT pinned in requirements.txt (uses ranges like `>=8.1.7,<9.0.0`)
+  * ⚠️ Dependencies use version ranges (e.g., `>=8.1.7,<9.0.0`) instead of exact pins for reproducible builds
   * ❌ No pip-audit or Dependabot in CI
   * ❌ No SBOMs (Software Bill of Materials)
   * ❌ No signature verification
-  * ❌ **NO CI/CD WORKFLOWS AT ALL** (.github/workflows/ doesn't exist)
+  * ❌ **NO CI/CD WORKFLOWS** (.github/workflows/ directory doesn't exist, only ISSUE_TEMPLATE/)
 * **Good:**
   * ✅ .gitignore properly excludes secrets
   * ✅ Uses well-known, reputable packages
@@ -195,7 +195,7 @@
   * ✅ Password masking in logs (`mask_sensitive_info`)
   * ✅ API key authentication implemented
 * **Bad:**
-  * ❌ **Plaintext passwords in config.yaml** (example file shows `password: password`)
+  * ❌ **Plaintext passwords in config.yaml** (default config contains `password: password` as placeholder)
   * ❌ No encryption at rest
   * ❌ No environment variable support
   * ❌ No integration with HashiCorp Vault, AWS Secrets Manager, etc.
@@ -300,20 +300,25 @@
 
 ### The "Vibe Ratio"
 
-**Breakdown of 7,387 Total LOC:**
+**Breakdown of 7,387 Total Python LOC:**
 
-| Category | LOC | % | Type |
-|----------|-----|---|------|
+| Category | LOC | % of Python Code | Type |
+|----------|-----|------------------|------|
 | Core Logic (lws.py, api.py, lws_core) | 4,824 | 65% | 💪 Substance |
 | Tests | 1,882 | 26% | ✅ Quality |
-| Documentation (README, docs) | 3,137 | 42%* | 📚 Fluff/Necessary |
+| Module Infrastructure | 681 | 9% | 🔧 Necessary |
 
-*Note: Documentation LOC counted separately (not part of 7,387 Python LOC)*
+**Additional Assets (not Python):**
+* Documentation (README, docs/*.md): 3,137 LOC (Markdown)
+* Config examples: config.yaml
 
-**Python Code Breakdown:**
+**Python Code Only (7,387 LOC):**
 * Core application code: 4,824 LOC (65%)
 * Test code: 1,882 LOC (26%)
 * Module infrastructure: 681 LOC (9%)
+
+**Documentation (separate from Python):**
+* Markdown docs: 3,137 LOC
 
 **🎯 Vibe Ratio: 35% non-core** (tests + infrastructure)
 
