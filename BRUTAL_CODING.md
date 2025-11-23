@@ -20,7 +20,7 @@
 * **Verdict:** Sensible architecture but needs better module separation.
 
 #### 2. Dependency Bloat: **4/5**
-* **Ratio:** ~7,387 LOC / 10 dependencies = ~738 LOC per dependency
+* **Ratio:** 7,387 LOC / 10 dependencies ≈ 738 LOC per dependency
 * **Dependencies:**
   * ✅ click (CLI framework) - essential
   * ✅ pyyaml (config) - essential
@@ -179,11 +179,11 @@
 
 #### 14. Supply Chain: **2/5**
 * **Bad:**
-  * ⚠️ Dependencies use version ranges (e.g., `>=8.1.7,<9.0.0`) instead of exact pins for reproducible builds
+  * ⚠️ Dependencies use version ranges (e.g., `>=8.1.7,<9.0.0`) - acceptable for apps to get security patches, but should consider exact pins + hash verification for production deployments
   * ❌ No pip-audit or Dependabot in CI
   * ❌ No SBOMs (Software Bill of Materials)
   * ❌ No signature verification
-  * ❌ **NO CI/CD WORKFLOWS** (.github/workflows/ directory doesn't exist, only ISSUE_TEMPLATE/)
+  * ❌ **NO GitHub Actions workflows** (.github/workflows/ directory doesn't exist, only ISSUE_TEMPLATE/ - note: other CI/CD solutions like GitLab CI or Jenkins could be used, but none are configured)
 * **Good:**
   * ✅ .gitignore properly excludes secrets
   * ✅ Uses well-known, reputable packages
@@ -241,7 +241,7 @@
 
 #### 18. CI/CD Maturity: **0/5**
 * **Devastating:**
-  * ❌ **ZERO CI/CD pipelines** (.github/workflows/ does not exist)
+  * ❌ **ZERO CI/CD pipelines** (no .github/workflows/, no .gitlab-ci.yml, no Jenkinsfile)
   * ❌ No automated testing on commits
   * ❌ No linters (black, ruff, mypy, pylint)
   * ❌ No pre-commit hooks
@@ -300,29 +300,30 @@
 
 ### The "Vibe Ratio"
 
-**Breakdown of 7,387 Total Python LOC:**
+**Breakdown of 7,387 Total Python LOC (measured with wc -l):**
 
 | Category | LOC | % of Python Code | Type |
 |----------|-----|------------------|------|
-| Core Logic (lws.py, api.py, lws_core) | 4,824 | 65% | 💪 Substance |
-| Tests | 1,882 | 26% | ✅ Quality |
-| Module Infrastructure | 681 | 9% | 🔧 Necessary |
+| Core Logic (lws.py + api.py) | 4,824 | 65.3% | 💪 Substance |
+| Tests | 1,882 | 25.5% | ✅ Quality |
+| lws_core modules | 673 | 9.1% | 🔧 Infrastructure |
+| lws_commands | 8 | 0.1% | 🔧 Infrastructure |
 
 **Additional Assets (not Python):**
 * Documentation (README, docs/*.md): 3,137 LOC (Markdown)
 * Config examples: config.yaml
 
-**Python Code Only (7,387 LOC):**
-* Core application code: 4,824 LOC (65%)
-* Test code: 1,882 LOC (26%)
-* Module infrastructure: 681 LOC (9%)
+**Python Code Only (verified totals):**
+* Core application code: 4,824 LOC (65.3%)
+* Infrastructure modules: 681 LOC (9.2%)
+* Test code: 1,882 LOC (25.5%)
 
 **Documentation (separate from Python):**
 * Markdown docs: 3,137 LOC
 
-**🎯 Vibe Ratio: 35% non-core** (tests + infrastructure)
+**🎯 Vibe Ratio: 34.7% non-core** (tests + infrastructure)
 
-**Verdict:** ✅ **Healthy ratio.** 65% is domain logic, 26% is tests (good!), only 9% is boilerplate. This is NOT a vibe project.
+**Verdict:** ✅ **Healthy ratio.** 65.3% is domain logic, 25.5% is tests (excellent!), only 9.2% is boilerplate. This is NOT a vibe project.
 
 ---
 
@@ -379,12 +380,14 @@
 * **Impact:** 5x latency reduction for repeated operations
 * **Action:**
   * Implement connection pool using `paramiko` (pure Python SSH)
+  * **Note:** This is a significant change - requires migration from sshpass/subprocess to paramiko library
   * Keep connections alive for 5 minutes (configurable)
   * Max connections per host: 5 (configurable)
   * Automatic reconnection on failure
   * Benchmark: <100ms for cached connections vs ~500ms cold
-* **Time:** 1 day
-* **Blockers:** Need to replace sshpass with paramiko
+  * **Migration consideration:** Ensure compatibility with existing SSH key/password auth methods
+* **Time:** 2 days (including testing)
+* **Blockers:** Need to refactor all SSH calls from subprocess to paramiko API
 
 #### 5. **[High - Security]: Add Rate Limiting & Backpressure** 🛡️
 * **Impact:** 80% DoS resistance
