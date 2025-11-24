@@ -1,0 +1,15 @@
+name: Quality Gate
+on: [push, pull_request]
+
+jobs:
+  vibe-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Run VibeGuard Auditor
+        uses: fabriziosalmi/vibeguard-auditor@v1
+        with:
+          # Optional: Set your own quality bar (Default: 800)
+          threshold: 850
