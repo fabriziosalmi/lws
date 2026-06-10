@@ -83,7 +83,9 @@ def setup_logging(log_level=logging.DEBUG, log_file=None, json_log_file=None):
     }
 
     logging.config.dictConfig(logging_config)
-    logging.debug("🔎 Logging to console, and additional JSON logging to file {}".format(json_log_file if json_log_file else "not configured"))
+    # Extract only the filename to avoid leaking the current working directory in logs
+    json_log_filename = os.path.basename(json_log_file) if json_log_file else "not configured"
+    logging.debug("🔎 Logging to console, and additional JSON logging to file %s", json_log_filename)
 
 
 # Initialize logging when module is imported
