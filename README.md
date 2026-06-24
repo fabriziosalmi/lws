@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Version:** 1.1.0
+**Version:** 1.4.1
 
 [![GitHub](https://img.shields.io/github/license/fabriziosalmi/lws)](https://github.com/fabriziosalmi/lws/blob/main/LICENSE)
 [![Python](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
