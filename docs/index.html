@@ -21,6 +21,13 @@
 
     <title>LWS - Linux Web Services | Proxmox Container Management</title>
 
+    <!--
+      Same policy as _layouts/default.html, which covers the pages/ collection.
+      This file has no front matter, so Jekyll copies it verbatim and the layout
+      never applies to it - the tag has to be repeated here.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'">
+
     <link rel="stylesheet" href="assets/css/style.css">
   <link rel="stylesheet" href="assets/css/fonts.css">
 </head>
@@ -308,6 +315,7 @@
                     <div class="footer-column">
                         <h4>Legal</h4>
                         <a href="https://github.com/fabriziosalmi/lws/blob/main/LICENSE" target="_blank">MIT License</a>
+                        <a href="https://fabriziosalmi.github.io/privacy">Privacy &amp; legal notice</a>
                     </div>
                 </div>
             </div>
