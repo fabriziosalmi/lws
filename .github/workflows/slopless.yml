@@ -1,0 +1,57 @@
+# Static analysis for AI-slop patterns: https://github.com/fabriziosalmi/slopless
+#
+# Replaces vibe-check, which is being retired. It reported zero errors here on
+# its first run, so this blocks on errors from the start rather than starting
+# advisory.
+# Warnings still only report. Findings go to the Security tab either way.
+name: slopless
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  analyse:
+    name: AI-slop static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned to a commit rather than @v1: a moving tag means trusting the
+      # upstream repository not to change under us.
+      - name: Run slopless
+        uses: fabriziosalmi/slopless@a056c42d7348f061279242d93c314a54e079d8d3 # v1.14.0
+        with:
+          patterns: "**/*.py *.md docs/**/*.md docs/**/*.html docs/assets/**/*.js docs/assets/**/*.css"
+          format: sarif
+          output: slopless.sarif
+
+      # A fork pull request gets a read-only token whatever `permissions:` says,
+      # so the upload would 403 and fail the job it promises not to fail.
+      - name: Upload findings to code scanning
+        id: upload
+        if: >-
+          always()
+          && hashFiles('slopless.sarif') != ''
+          && (github.event_name != 'pull_request'
+              || github.event.pull_request.head.repo.full_name == github.repository)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          sarif_file: slopless.sarif
+          category: slopless
+
+      # A tolerated failure is still a failure, and from the pull request page it
+      # looks like nothing happened. An annotation says so where it is read,
+      # without turning a code-scanning API hiccup into a red build: the findings
+      # are in the log above either way, and an error has already failed the job.
+      - name: Say so if the findings did not reach the Security tab
+        if: always() && steps.upload.outcome == 'failure'
+        run: echo "::warning title=slopless::The analysis ran and the upload to code scanning did not. Findings are in the job log; the Security tab is stale for this commit."

@@ -2,7 +2,7 @@ name: CI
 
 # Real CI for the pytest suite that ships with this repo (pytest.ini + tests/).
 # This runs the tests on every push to main and every pull request. It is separate
-# from and does not replace vibe-check.yml (the AI review workflow).
+# from and does not replace slopless.yml (the static analysis workflow).
 
 on:
   push:
