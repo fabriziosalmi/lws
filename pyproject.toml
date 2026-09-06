@@ -1,0 +1,56 @@
+# Packaging metadata for LWS.
+#
+# This file exists mainly for one line: `requires-python`. Until it was added,
+# nothing in the repository stated which Python versions are supported. The
+# README said "3.6 or higher" (untrue for years), the CI matrix said 3.9 to
+# 3.13, and the Dockerfile shipped 3.14. Every dependency bump reopened the
+# question, and the answer had to be reconstructed from three files that
+# disagreed.
+#
+# tests/test_python_support.py checks that this file, the CI matrix and the
+# Dockerfile still agree, so the three cannot drift apart again.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lws"
+version = "1.4.1"
+description = "Linux Web Services: a CLI and REST API for managing Proxmox VE hosts, VMs and LXC containers"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Fabrizio Salmi" }]
+keywords = ["proxmox", "lxc", "virtualization", "cli", "infrastructure"]
+
+# The floor is a policy, not a per-bump judgement: LWS supports the CPython
+# versions upstream still supports, and drops one as it reaches end of life.
+# Python 3.9 reached end of life in October 2025, and the ecosystem followed:
+# requests 2.33 and later and pytest 8.2 and later declare Requires-Python
+# >=3.10, so a 3.9 entry blocked updates rather than testing an old runtime.
+requires-python = ">=3.10"
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: System :: Systems Administration",
+]
+
+# Dependencies are deliberately NOT duplicated here. requirements.txt is the
+# single list, it is what the Dockerfile and CI install, and copying it into
+# this file would recreate the drift this file exists to remove. LWS is run
+# from a checkout (`python3 lws.py`, `python3 api.py`), not installed as a
+# distribution, so nothing needs the copy.
+
+[project.urls]
+Homepage = "https://github.com/fabriziosalmi/lws"
+Documentation = "https://fabriziosalmi.github.io/lws/"
+Issues = "https://github.com/fabriziosalmi/lws/issues"
