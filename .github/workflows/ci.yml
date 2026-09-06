@@ -24,9 +24,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # README advertises "Python 3.6 or higher"; Dockerfile targets 3.11.
-        # We test the currently-maintained CPython line that setup-python can provide.
-        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        # Floor is 3.10: Python 3.9 reached end of life in October 2025, and the
+        # dependencies this project pins have followed. requests 2.33 and later
+        # and pytest 8.2 and later both declare Requires-Python >=3.10, so a 3.9
+        # entry here does not test an old Python, it blocks every update.
+        # Ceiling is 3.14, which is what the Dockerfile ships: the version this
+        # project actually runs in production was not being tested at all.
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
 
     steps:
       - name: Checkout

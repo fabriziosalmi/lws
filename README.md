@@ -124,7 +124,7 @@ LWS is a command-line interface (CLI) tool designed to simplify the management o
 
 ### Prerequisites
 
-- Python 3.6 or higher
+- Python 3.10 or higher (the Docker image ships 3.14)
 - Proxmox Virtual Environment 6.x or higher
 - SSH access to Proxmox hosts
 - The following Python packages:
