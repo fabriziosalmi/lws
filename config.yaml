@@ -7,9 +7,14 @@ minimum_resources:
   memory_mb: 512
 
 # API configuration
-api_key: "my-secure-api-key"  # Replace with a strong, random API key
+# The API server runs lws, which executes pct and ssh as root on every host in
+# `regions` below. Treat this key as root credentials for the whole estate.
+# Generate one: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+# The server refuses to start while this is empty or still the placeholder.
+api_key: ""
 api:
-  host: "0.0.0.0"      # Listen on all interfaces
+  host: "127.0.0.1"    # Loopback. Use a private address or a reverse proxy that
+                       # authenticates before exposing this beyond the machine.
   port: 8080           # Default port for the API server
   debug: false         # Set to true for development only
   log_level: "INFO"    # Log level (DEBUG, INFO, WARNING, ERROR)
