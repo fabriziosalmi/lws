@@ -11,6 +11,7 @@ import subprocess
 import yaml
 import logging
 import sys
+import hmac
 import re
 from functools import wraps
 import shlex  # Import shlex for safe command splitting
@@ -54,8 +55,40 @@ allowed_origins = API_CONFIG.get('allowed_origins', '*') # Default to allow all 
 # Example: allowed_origins = ["http://localhost:8000", "null"]
 CORS(app, origins=allowed_origins) # Apply CORS settings
 
+# The API drives lws, which runs pct and ssh as root on every configured
+# Proxmox host. An unauthenticated instance is therefore a root-equivalent
+# control plane, so a missing or placeholder key is a refusal to start rather
+# than a warning: a warning scrolls past, and the previous behaviour left every
+# protected endpoint open when the key was absent.
+PLACEHOLDER_API_KEYS = {
+    "my-secure-api-key",
+    "your-secure-api-key",
+    "changeme",
+    "change-me",
+}
+
 if not API_KEY:
-    logging.warning("API key is not set in config.yaml. API will be insecure.")
+    logging.critical(
+        "api_key is not set in config.yaml. Refusing to start: without it every "
+        "endpoint would be unauthenticated, and they run pct and ssh as root on "
+        "your Proxmox hosts. Generate one with: "
+        "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
+    sys.exit(1)
+
+if API_KEY in PLACEHOLDER_API_KEYS:
+    logging.critical(
+        "api_key is still the placeholder shipped in this repository, so it is "
+        "public. Refusing to start. Generate one with: "
+        "python3 -c 'import secrets; print(secrets.token_urlsafe(32))'"
+    )
+    sys.exit(1)
+
+if len(API_KEY) < 32:
+    logging.warning(
+        "api_key is shorter than 32 characters. This key is the only thing "
+        "between the network and root on your Proxmox hosts."
+    )
 
 # Configure logging
 log_level_str = API_CONFIG.get('log_level', 'INFO').upper()
@@ -95,11 +128,12 @@ def sanitize_input(input_value, max_length=255):
 def require_api_key(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if API_KEY: # Only enforce if API_KEY is set
-            provided_key = request.headers.get('X-API-Key')
-            if not provided_key or provided_key != API_KEY:
-                logging.warning(f"Unauthorized access attempt from {request.remote_addr}")
-                abort(401, description="Unauthorized: Invalid or missing API key.")
+        # Enforced unconditionally: startup refuses to run without a real key,
+        # so there is no configuration in which this check should be skipped.
+        provided_key = request.headers.get('X-API-Key')
+        if not provided_key or not hmac.compare_digest(provided_key, API_KEY):
+            logging.warning(f"Unauthorized access attempt from {request.remote_addr}")
+            abort(401, description="Unauthorized: Invalid or missing API key.")
         return f(*args, **kwargs)
     return decorated_function
 
