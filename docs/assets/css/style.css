@@ -50,6 +50,7 @@ body {
     top: 0;
     width: 100%;
     background: rgba(255, 255, 255, 0.92);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--border);
     z-index: 1000;
@@ -543,8 +544,21 @@ body {
         flex-direction: column;
     }
 
+    .navbar .container {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 20px;
+    }
+
     .nav-links {
-        gap: 14px;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 6px 16px;
+    }
+
+    .nav-links a {
+        font-size: 0.88rem;
     }
 
     .footer-content {
