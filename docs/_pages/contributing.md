@@ -9,12 +9,12 @@ Thank you for your interest in contributing to LWS! This guide will help you get
 
 ## Ways to Contribute
 
-- 🐛 Report bugs
-- 💡 Suggest new features
-- 📝 Improve documentation
-- 🔧 Submit code patches
-- 🧪 Write tests
-- 🌍 Translate documentation
+- Report bugs
+- Suggest new features
+- Improve documentation
+- Submit code patches
+- Write tests
+- Translate documentation
 
 ## Getting Started
 
@@ -345,9 +345,9 @@ Brief description of changes
 
 ### Get Help
 
-- 💬 [Discussions](https://github.com/fabriziosalmi/lws/discussions) - Ask questions
-- 🐛 [Issues](https://github.com/fabriziosalmi/lws/issues) - Report bugs
-- 📧 Email maintainers for sensitive matters
+- [Discussions](https://github.com/fabriziosalmi/lws/discussions) - Ask questions
+- [Issues](https://github.com/fabriziosalmi/lws/issues) - Report bugs
+- Email maintainers for sensitive matters
 
 ## Recognition
 
@@ -362,6 +362,6 @@ By contributing, you agree that your contributions will be licensed under the MI
 
 ---
 
-Thank you for contributing to LWS! 🎉
+Thank you for contributing to LWS!
 
 [← Configuration](configuration.html) | [Back to Home →](../index.html)

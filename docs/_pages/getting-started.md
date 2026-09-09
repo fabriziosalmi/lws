@@ -145,10 +145,10 @@ curl -H "X-API-Key: your-api-key" \
 
 Now that you have LWS installed and running:
 
-- 📖 Read the [CLI Reference](cli-reference.html) for all available commands
-- 🏗️ Learn about the [Architecture](architecture.html)
-- 🔌 Explore the [API Reference](api-reference.html)
-- ⚙️ Check out [Advanced Configuration](configuration.html)
+- Read the [CLI Reference](cli-reference.html) for all available commands
+- Learn about the [Architecture](architecture.html)
+- Explore the [API Reference](api-reference.html)
+- Check out [Advanced Configuration](configuration.html)
 
 ## Troubleshooting
 
@@ -192,9 +192,9 @@ pveum acl list
 
 ## Getting Help
 
-- 📚 [Documentation](../index.html)
-- 🐛 [Report Issues](https://github.com/fabriziosalmi/lws/issues)
-- 💬 [Discussions](https://github.com/fabriziosalmi/lws/discussions)
+- [Documentation](../index.html)
+- [Report Issues](https://github.com/fabriziosalmi/lws/issues)
+- [Discussions](https://github.com/fabriziosalmi/lws/discussions)
 
 ---
 
