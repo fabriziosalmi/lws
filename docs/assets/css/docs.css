@@ -72,15 +72,13 @@
 }
 
 .markdown-body h1 {
-    font-size: 2.5rem;
-    font-weight: 900;
+    font-size: 2.1rem;
+    font-weight: 700;
     margin-bottom: 20px;
     padding-bottom: 15px;
-    border-bottom: 2px solid var(--border);
-    background: var(--gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    letter-spacing: -0.01em;
 }
 
 .markdown-body h2 {
@@ -169,7 +167,7 @@
 }
 
 .markdown-body th {
-    background: var(--gradient);
+    background: var(--bg-dark);
     color: white;
     padding: 12px;
     text-align: left;
@@ -201,10 +199,9 @@
 /* --- Horizontal Rule --- */
 .markdown-body hr {
     border: none;
-    height: 2px;
-    background: var(--gradient);
+    height: 1px;
+    background: var(--border);
     margin: 40px 0;
-    border-radius: 2px;
 }
 
 /* --- Images --- */
@@ -234,7 +231,7 @@
 }
 
 .markdown-body > p:last-child a:hover {
-    background: var(--gradient);
+    background: var(--primary);
     color: white;
     border-bottom-color: transparent;
 }
