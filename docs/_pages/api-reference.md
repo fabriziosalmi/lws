@@ -25,7 +25,10 @@ curl -H "X-API-Key: your-api-key" \
 Configure your API key in `config.yaml`:
 
 ```yaml
-api_key: "your-secure-api-key-here"
+# The server refuses to start if this is empty or one of a few recognized
+# placeholders. Generate a real one:
+# python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+api_key: "REPLACE_ME_WITH_32_PLUS_RANDOM_CHARACTERS"
 ```
 
 ## Response Format
@@ -38,6 +41,7 @@ All responses are in JSON format:
   "output": "command output here"
 }
 ```
+If the underlying command's stdout starts with `{` or `[` (e.g. commands run with a JSON output option), the API returns that parsed JSON directly instead of wrapping it in `"output"`.
 
 ### Error Response
 ```json
@@ -344,6 +348,8 @@ curl -X POST \
 #### POST `/lxc/instances/{instance_id}/app/deploy`
 
 Deploy Docker Compose app.
+
+> **Known issue:** this endpoint currently fails as shown below. The handler forwards the whole request body — including `action`, which it already consumed to build the command — to the underlying CLI call, so `lws.py` receives an unexpected `--action` flag on a command where `action` is a positional argument. Separately, the request body's `compose_file`/`auto_start` get turned into `--compose-file`/`--auto-start` (hyphens), while the actual CLI command only accepts `--compose_file`/`--auto_start` (underscores). Either issue alone breaks the call; this is a bug in `api.py`, not something you can work around from the request body.
 
 ```bash
 curl -X POST \

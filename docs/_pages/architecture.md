@@ -29,10 +29,11 @@ LWS is built with a modular architecture that separates concerns and makes the c
 
 ```
 lws/
-├── lws.py                      # Main CLI entry point
-├── api.py                      # REST API server (Flask)
+├── lws.py                      # Main CLI entry point (~3700 lines, 61 commands)
+├── api.py                      # REST API server (Flask), drives lws.py via subprocess
 ├── ui.html                     # Web UI interface
-├── config.yaml                 # Configuration file
+├── config.yaml.example         # Committed config template — cp to config.yaml and edit
+├── config.yaml                 # Your local config (gitignored, not in the repository)
 │
 ├── lws_core/                   # Core functionality modules
 │   ├── __init__.py            # Module initialization
@@ -42,22 +43,25 @@ lws/
 │   ├── proxmox.py             # Proxmox command wrappers
 │   └── utils.py               # Shared utility functions
 │
-├── lws_commands/              # CLI command groups (future)
-│   ├── __init__.py
-│   ├── conf_commands.py       # Configuration commands
-│   ├── lxc_commands.py        # LXC container commands
-│   ├── px_commands.py         # Proxmox host commands
-│   ├── app_commands.py        # Docker/app commands
-│   └── sec_commands.py        # Security commands
+├── lws_commands/               # Reserved for a future command-module split — see
+│   └── __init__.py            # "Future Enhancements" below. Currently just a stub;
+│                               # all 61 commands still live directly in lws.py.
 │
-├── tests/                     # Unit and integration tests
-│   └── __init__.py
+├── tests/                     # Unit and integration tests (lws_core only, see below)
+│   ├── conftest.py
+│   ├── test_config.py
+│   ├── test_proxmox.py
+│   ├── test_ssh.py
+│   ├── test_utils.py
+│   └── test_python_support.py
 │
 └── docs/                      # Documentation (GitHub Pages)
     ├── index.html
     ├── _config.yml
-    └── pages/
+    └── _pages/
 ```
+
+The test suite above covers `lws_core/` only (96% coverage of those five files); `lws.py` and `api.py`, which hold the actual command and endpoint logic, currently have no automated tests.
 
 ## Core Modules
 
@@ -92,7 +96,7 @@ instance_sizes:
 Manages SSH connections to Proxmox hosts with retry logic and timeout handling.
 
 **Features:**
-- Connection pooling
+- A fresh SSH connection per command (via `sshpass` + the system `ssh` binary — no connection reuse/pooling)
 - Automatic retry on failure (up to 2 retries)
 - 60-second command timeout
 - Password sanitization in logs

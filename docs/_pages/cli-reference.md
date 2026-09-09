@@ -257,19 +257,26 @@ lws lxc scale 100 --memory 4096 --cpulimit 4 --storage-size 64G
 
 ### `lxc exec`
 
-Execute commands inside containers.
+Execute a command inside one or more containers.
 
 ```bash
-lws lxc exec <instance_id> <command> [OPTIONS]
+lws lxc exec <instance_id>... <command> [OPTIONS]
+
+Arguments:
+  instance_id...  One or more instance IDs (space-separated, at least one required)
+  command         The command to run, as a single argument — quote it if it has spaces
 
 Options:
   --region TEXT   Region
   --az TEXT       Availability zone
 ```
 
-**Example:**
+**Examples:**
 ```bash
 lws lxc exec 100 "apt update && apt upgrade -y"
+
+# Same command across multiple containers
+lws lxc exec 100 101 102 "systemctl restart nginx"
 ```
 
 ### `lxc snapshot-add` / `snapshot-rm`
@@ -339,18 +346,25 @@ Options:
 
 ### `lxc backup-create` / `backup-restore`
 
-Backup and restore containers.
+Backup and restore containers. The two commands take different options — `--backup-file` only applies to restore, not create.
 
 ```bash
 # Create backup
 lws lxc backup-create <instance_id> [OPTIONS]
 
+Options:
+  --destination TEXT    Destination directory for the backup (default: /var/lib/vz/dump)
+  --download            Download the backup file to the local system
+  --compress-level INT  Compression level, 1-9 (default: 6)
+  --region TEXT         Region
+  --az TEXT             Availability zone
+
 # Restore from backup
-lws lxc backup-restore <instance_id> [OPTIONS]
+lws lxc backup-restore <instance_id> --backup-file <path> [OPTIONS]
 
 Options:
-  --backup-file TEXT  Backup file path
-  --download          Download backup locally
+  --backup-file TEXT  Path to the backup file to restore (required)
+  --force             Force restore without confirmation
   --region TEXT       Region
   --az TEXT           Availability zone
 ```
@@ -408,10 +422,12 @@ Options:
 Install Docker and Docker Compose in a container.
 
 ```bash
-lws app setup <instance_id> [OPTIONS]
+lws app setup <instance_id> [package_name] [OPTIONS]
+
+Arguments:
+  package_name         Package to install, positional, not a flag (default: docker)
 
 Options:
-  --package-name TEXT  Package to install (default: docker)
   --region TEXT        Region
   --az TEXT            Availability zone
 ```
@@ -443,8 +459,8 @@ lws app deploy <action> <instance_id> [OPTIONS]
 Actions: install, uninstall, start, stop, restart, status
 
 Options:
-  --compose-file TEXT  Docker Compose file path (required)
-  --auto-start         Start after install
+  --compose_file TEXT  Docker Compose file path (required — note the underscore, not a hyphen)
+  --auto_start         Start after install (also an underscore)
   --region TEXT        Region
   --az TEXT            Availability zone
 ```
@@ -452,8 +468,8 @@ Options:
 **Example:**
 ```bash
 lws app deploy install 100 \
-  --compose-file docker-compose.yml \
-  --auto-start
+  --compose_file docker-compose.yml \
+  --auto_start
 ```
 
 ### `app logs`
