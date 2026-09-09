@@ -1,7 +1,7 @@
 # Test Suite Summary
 
 ## Overview
-Comprehensive pytest test suite for the LWS (Lightweight Service) project has been successfully created and executed.
+Comprehensive pytest test suite for the LWS (Linux Web Services) project has been successfully created and executed.
 
 ## Test Results
 - **Total Tests**: 98
