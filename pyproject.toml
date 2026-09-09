@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lws"
-version = "1.4.1"
+version = "1.4.2"
 description = "Linux Web Services: a CLI and REST API for managing Proxmox VE hosts, VMs and LXC containers"
 readme = "README.md"
 license = { file = "LICENSE" }

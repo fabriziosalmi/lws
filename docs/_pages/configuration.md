@@ -340,8 +340,11 @@ Configure network bridges:
 
 ```yaml
 default_network: vmbr0  # Default bridge
+```
 
-# Or in container creation:
+Or set it per container at creation time:
+
+```bash
 lws lxc run --net0 "name=eth0,bridge=vmbr1,ip=192.168.1.100/24,gw=192.168.1.1"
 ```
 

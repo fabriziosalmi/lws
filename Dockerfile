@@ -8,6 +8,10 @@ WORKDIR /app
 
 RUN pip install -r requirements.txt
 
-RUN chmod +x lws.py && \
+RUN chmod +x lws.py
+
+RUN useradd --create-home --shell /usr/sbin/nologin lws && \
+    chown -R lws:lws /app
+USER lws
 
 CMD python3 api.py

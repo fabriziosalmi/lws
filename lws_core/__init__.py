@@ -5,7 +5,7 @@ This module contains core utilities for the LWS (Linux Web Services) CLI tool.
 It provides configuration management, logging, SSH execution, and Proxmox command utilities.
 """
 
-__version__ = '1.4.1'
+__version__ = '1.4.2'
 
 # Import logging first (no dependencies)
 from .logging_setup import setup_logging, JsonFormatter
