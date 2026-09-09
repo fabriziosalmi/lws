@@ -11,19 +11,19 @@ This directory contains the complete documentation for LWS, hosted on GitHub Pag
 ```
 docs/
 ├── index.html              # Landing page
-├── _config.yml            # Jekyll configuration
-├── .nojekyll              # Disable default Jekyll processing
-├── CNAME                  # Custom domain (optional)
+├── _config.yml             # Jekyll configuration (remote_theme: cayman)
+├── CNAME                   # Custom domain (currently commented out)
+│
+├── _layouts/
+│   └── default.html        # Shared page layout
 │
 ├── assets/
-│   ├── css/
-│   │   └── style.css      # Custom styles
-│   ├── js/
-│   │   └── main.js        # JavaScript for animations
-│   └── img/
-│       └── (images)
+│   ├── css/                # Custom + self-hosted font styles
+│   ├── fonts/               # Self-hosted Inter font files
+│   └── js/
+│       └── main.js         # JavaScript for animations
 │
-└── pages/
+└── _pages/                 # Jekyll collection (see `collections:` in _config.yml)
     ├── getting-started.md
     ├── architecture.md
     ├── cli-reference.md
@@ -99,7 +99,7 @@ Edit `docs/assets/css/style.css`:
 
 ### Update Content
 
-All documentation is in Markdown format in `docs/pages/`:
+All documentation is in Markdown format in `docs/_pages/`:
 - `getting-started.md` - Installation guide
 - `architecture.md` - Technical architecture
 - `cli-reference.md` - CLI commands
@@ -113,7 +113,7 @@ Simply edit these files and push to update the documentation.
 
 ### Preview Locally
 
-You can preview the documentation locally using Python's built-in server:
+Python's built-in server only serves `index.html` as static HTML — it does not run Jekyll, so it will not render the `docs/_pages/` collection, the `default.html` layout, or the remote `cayman` theme configured in `_config.yml`:
 
 ```bash
 cd docs
@@ -122,9 +122,9 @@ python3 -m http.server 8000
 
 Then open: `http://localhost:8000`
 
-### With Jekyll (Optional)
+### With Jekyll
 
-If you want to preview with Jekyll:
+The site actually served on GitHub Pages is built with Jekyll (see `_config.yml`: `remote_theme`, `collections`, `kramdown`), so to preview the full site — including the pages under `_pages/` — run it through Jekyll locally:
 
 ```bash
 # Install Jekyll
@@ -162,7 +162,7 @@ navigation:
 
 ### Add New Pages
 
-1. Create new Markdown file in `docs/pages/`
+1. Create new Markdown file in `docs/_pages/`
 2. Add front matter:
    ```yaml
    ---

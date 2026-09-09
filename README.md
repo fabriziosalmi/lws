@@ -5,7 +5,7 @@
 **Version:** 1.4.2
 
 [![GitHub](https://img.shields.io/github/license/fabriziosalmi/lws)](https://github.com/fabriziosalmi/lws/blob/main/LICENSE)
-[![Python](https://img.shields.io/badge/python-3.6+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Documentation](https://img.shields.io/badge/docs-github%20pages-blue)](https://fabriziosalmi.github.io/lws/)
 
 [Features](#features) • [Installation](#installation) • [Documentation](https://fabriziosalmi.github.io/lws/) • [Contributing](https://fabriziosalmi.github.io/lws/pages/contributing.html)

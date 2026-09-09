@@ -11,7 +11,7 @@ Welcome to LWS (Linux Web Services)! This guide will help you get up and running
 
 Before installing LWS, ensure you have:
 
-- **Python 3.6+** installed
+- **Python 3.10+** installed
 - **Proxmox VE 6.x or higher** running
 - **SSH access** to your Proxmox hosts
 - **sshpass** installed (`apt install sshpass` on Debian/Ubuntu)
