@@ -433,12 +433,12 @@ scaling:
 
 The API server provides HTTP access to LWS functions.
 
-1.  **Ensure `config.yaml` is configured**, especially `api_key`, `api.host`, and `api.port`.
+1.  **Set a real `api_key` in `config.yaml`.** The server refuses to start while it's empty or still the placeholder — generate one with `python3 -c 'import secrets; print(secrets.token_urlsafe(32))'`.
 2.  **Run the API server:**
     ```bash
     python3 api.py
     ```
-    The server will start, typically listening on `0.0.0.0:8080` (or as configured).
+    By default it listens on `127.0.0.1:8080` (loopback only). Change `api.host`/`api.port` in `config.yaml` if you need it reachable elsewhere — see the [Security Considerations](#security-considerations) below before binding to anything but loopback.
 
 3.  **Interact with the API:** Use tools like `curl`, Postman, or the provided Web UI. Remember to include the API key in the `X-API-Key` header for protected endpoints.
 
@@ -472,9 +472,9 @@ Interactive API documentation is available via Swagger UI.
 
 ### 🔒 **Critical Security Recommendations**
 
-- **Secure Storage of Credentials**: 
-  - **Never use plaintext passwords in production** - Use SSH key-based authentication instead
-  - If passwords are required, store them in environment variables or a secure key vault
+- **Secure Storage of Credentials**:
+  - LWS currently only supports password-based SSH authentication (via `sshpass`) — there is no SSH key-based auth, and no environment-variable or vault indirection for `ssh_password`. Both are read as plain values straight out of `config.yaml`
+  - Until that changes, treat `config.yaml` as a credentials file: keep it out of version control (it is `.gitignore`d — see `config.yaml.example` for the committed template) and don't reuse the passwords it holds elsewhere
   - Set restrictive file permissions on `config.yaml` (600 or 640)
   
 - **Network Security**:

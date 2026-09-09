@@ -33,9 +33,12 @@ minimum_resources:
   memory_mb: 512
 
 # API Configuration
-api_key: "your-secure-random-api-key"
+# Empty or the shipped placeholder: the server refuses to start. Generate one
+# with: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+api_key: ""
 api:
-  host: "0.0.0.0"
+  host: "127.0.0.1"  # Loopback by default. Use a private address or put a
+                      # reverse proxy in front that authenticates before this.
   port: 8080
   debug: false
   log_level: "INFO"
@@ -180,9 +183,9 @@ default_network: vmbr0     # Default network bridge
 ### API Configuration
 
 ```yaml
-api_key: "your-key-here"   # API authentication key
+api_key: ""                # Empty or the placeholder refuses to start the server
 api:
-  host: "0.0.0.0"          # Listen on all interfaces
+  host: "127.0.0.1"        # Loopback by default; change deliberately
   port: 8080               # API port
   debug: false             # Enable debug mode (development only!)
   log_level: "INFO"        # Logging level
@@ -289,7 +292,8 @@ python3 -c "import secrets; print(secrets.token_hex(32))"
 
 ### 2. SSH Password Management
 
-**Option 1: Environment Variables**
+LWS currently only supports password-based SSH authentication (via `sshpass`), and `ssh_password` is read as a literal value straight out of `config.yaml` — there is no `${VAR}`-style environment-variable interpolation and no SSH key-based auth. Both would require modifying LWS (`lws_core/ssh.py`) to add. Until then, the mitigation is restricting `config.yaml` itself:
+
 ```yaml
 regions:
   eu-south-1:
@@ -297,11 +301,8 @@ regions:
       az1:
         host: proxmox1.example.com
         user: root
-        ssh_password: ${PROXMOX_PASSWORD}
+        ssh_password: password   # a literal value read as-is; see file permissions below
 ```
-
-**Option 2: SSH Keys** (Recommended)
-Consider modifying LWS to use SSH keys instead of passwords.
 
 ### 3. File Permissions
 
@@ -311,7 +312,7 @@ chmod 600 config.yaml
 
 ### 4. Secrets Management
 
-For production, use a secrets management system:
+LWS has no built-in integration with any of these — `config.yaml` is read as plain YAML. If you use one, the pattern is to generate `config.yaml` from your vault externally (e.g. a wrapper script that fetches the secret and writes the file) before invoking `lws`/`api.py`, not a setting inside `config.yaml` itself:
 - HashiCorp Vault
 - AWS Secrets Manager
 - Azure Key Vault
