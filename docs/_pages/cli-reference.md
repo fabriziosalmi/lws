@@ -143,6 +143,156 @@ Options:
   --az TEXT       Availability zone
 ```
 
+### `px update`
+
+Run `apt-get update` on the machine running `lws` — **not** on any configured Proxmox host, and it takes no `--region`/`--az` (there's nothing to target). Despite the name and the `px` group, this always runs locally.
+
+```bash
+lws px update
+```
+
+### `px cluster-start` / `cluster-stop` / `cluster-restart`
+
+Start, stop, or restart the `pve-cluster` and `corosync` services on a Proxmox host.
+
+```bash
+lws px cluster-start [OPTIONS]
+lws px cluster-stop [OPTIONS]
+lws px cluster-restart [OPTIONS]
+
+Options:
+  --region TEXT   Region (default: eu-south-1)
+  --az TEXT       Availability zone (default: az1)
+```
+
+### `px backup-lxc`
+
+Back up a single LXC container via `vzdump`, run on the Proxmox host (not to be confused with `lxc backup-create`, which backs up through `pct`).
+
+```bash
+lws px backup-lxc <vmid> --storage <storage-target> [OPTIONS]
+
+Options:
+  --storage TEXT  The storage target where the backup will be stored (required)
+  --mode TEXT     Backup mode: snapshot, suspend, or stop (default: snapshot)
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `px backup`
+
+Back up Proxmox host configuration (`/etc/pve`) to a local `.tar.gz`.
+
+```bash
+lws px backup <backup_dir> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `px image-add` / `image-rm`
+
+Create a template image from an existing container, or delete one from the Proxmox template cache.
+
+```bash
+lws px image-add <instance_id> <template_name> [OPTIONS]
+lws px image-rm <template_name> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+`image-add` stops the source container before templating it.
+
+### `px security-groups`
+
+List all security groups and their rules defined in the cluster firewall (`/etc/pve/firewall/cluster.fw`).
+
+```bash
+lws px security-groups [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `px security-group-add` / `security-group-rm`
+
+Create or delete a security group in the cluster firewall.
+
+```bash
+lws px security-group-add <group_name> [OPTIONS]
+
+Options:
+  --description TEXT  Description of the security group
+  --region TEXT        Region
+  --az TEXT            Availability zone
+
+lws px security-group-rm <group_name> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `px security-group-rule-add` / `security-group-rule-rm`
+
+Add or remove a firewall rule within an existing security group.
+
+```bash
+lws px security-group-rule-add <group_name> --direction <IN|OUT> [OPTIONS]
+lws px security-group-rule-rm <group_name> --direction <IN|OUT> [OPTIONS]
+
+Options:
+  --direction TEXT       IN or OUT (required)
+  --action TEXT          ACCEPT, DROP, or REJECT (default: ACCEPT)
+  --protocol TEXT        e.g. tcp, udp, icmp (default: tcp)
+  --source-ip TEXT        Source IP or CIDR
+  --source-port TEXT      Source port or range (e.g. 22, 80:443)
+  --destination-ip TEXT   Destination IP or CIDR
+  --destination-port TEXT Destination port or range
+  --region TEXT           Region
+  --az TEXT               Availability zone
+```
+
+**Example:**
+```bash
+lws px security-group-rule-add web --direction IN --protocol tcp \
+  --destination-port 443
+```
+
+### `px security-group-attach` / `security-group-detach`
+
+Attach or detach a security group from a specific container's firewall config (`/etc/pve/firewall/<vmid>.fw`).
+
+```bash
+lws px security-group-attach <group_name> <vmid> [OPTIONS]
+lws px security-group-detach <group_name> <vmid> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `px exec`
+
+Execute an arbitrary command on a Proxmox host over SSH. Unlike `lxc exec`, the command is joined into a single string and handed to the remote shell — there is no confirmation flag.
+
+```bash
+lws px exec <command>... [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+**Example:**
+```bash
+lws px exec df -h /var/lib/vz
+```
+
 ## LXC Container Commands (`lxc`)
 
 ### `lxc run`
@@ -196,6 +346,42 @@ lws lxc show
 
 # Show specific containers
 lws lxc show 100 101 102
+```
+
+### `lxc show-info`
+
+Retrieve IP address(es), in-container hostname, DNS servers, and the container's Proxmox-side hostname.
+
+```bash
+lws lxc show-info <instance_id> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `lxc show-public-ip`
+
+Retrieve the public IP address(es) of a container.
+
+```bash
+lws lxc show-public-ip <instance_id> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `lxc show-storage`
+
+Show storage usage inside a container (`df -h`).
+
+```bash
+lws lxc show-storage <instance_id> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
 ```
 
 ### `lxc start` / `stop` / `reboot`
@@ -253,6 +439,61 @@ Options:
 **Example:**
 ```bash
 lws lxc scale 100 --memory 4096 --cpulimit 4 --storage-size 64G
+```
+
+### `lxc scale-check`
+
+Read a container's and its host's current resource usage against the thresholds in `config.yaml`'s `scaling` block and suggest whether to scale. Read-only — it only recommends, it never changes anything.
+
+```bash
+lws lxc scale-check <instance_id> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+### `lxc volume-attach` / `volume-detach`
+
+Attach or detach a storage volume (`pct set --mp0=...`).
+
+```bash
+lws lxc volume-attach <instance_id> <volume_name> <volume_size> --mount-point <path> [OPTIONS]
+
+Options:
+  --mount-point TEXT  Mount point inside the container, e.g. /mnt/data (required)
+  --region TEXT       Region
+  --az TEXT           Availability zone
+
+lws lxc volume-detach <instance_id> <volume_name> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+`volume-detach` always removes the container's `mp0` mount point — the `volume_name` argument is accepted but not used to pick which mount to remove.
+
+### `lxc service`
+
+Run a `systemctl` action against a service inside one or more containers.
+
+```bash
+lws lxc service <action> <service_name> <instance_ids...> [OPTIONS]
+
+Arguments:
+  action        One of: status, start, stop, restart, reload, enable
+  service_name  The systemd unit name
+  instance_ids  One or more instance IDs
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
+**Example:**
+```bash
+lws lxc service restart nginx 100 101
 ```
 
 ### `lxc exec`
@@ -388,6 +629,18 @@ Options:
 lws lxc resources 100 --interval 5 --count 10
 ```
 
+### `lxc status`
+
+A one-shot snapshot (load average, memory, disk, swap) for one or more containers — unlike `lxc resources`, this doesn't poll on an interval, and it takes multiple instance IDs.
+
+```bash
+lws lxc status <instance_ids...> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
+```
+
 ### `lxc health-check`
 
 Perform health check on a container.
@@ -399,6 +652,24 @@ Options:
   --fix           Attempt to fix issues automatically
   --region TEXT   Region
   --az TEXT       Availability zone
+```
+
+### `lxc net`
+
+Check whether a TCP or UDP port is open on a container, first from inside it, then (if that fails) from the Proxmox host to the container's IP.
+
+```bash
+lws lxc net <instance_id> <tcp|udp> <port> [OPTIONS]
+
+Options:
+  --timeout INTEGER  Timeout in seconds for the check (default: 5)
+  --region TEXT       Region
+  --az TEXT           Availability zone
+```
+
+**Example:**
+```bash
+lws lxc net 100 tcp 443
 ```
 
 ### `lxc report`
@@ -470,6 +741,18 @@ Options:
 lws app deploy install 100 \
   --compose_file docker-compose.yml \
   --auto_start
+```
+
+### `app update`
+
+Upload a new Compose file to a container and re-deploy. Unlike `app deploy`, `compose_file` here is a positional argument, not an option.
+
+```bash
+lws app update <instance_id> <compose_file> [OPTIONS]
+
+Options:
+  --region TEXT   Region
+  --az TEXT       Availability zone
 ```
 
 ### `app logs`
