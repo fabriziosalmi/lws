@@ -11,7 +11,7 @@
 # Dockerfile still agree, so the three cannot drift apart again.
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
