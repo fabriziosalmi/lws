@@ -27,7 +27,7 @@ jobs:
       # Pinned to a commit rather than @v1: a moving tag means trusting the
       # upstream repository not to change under us.
       - name: Run slopless
-        uses: fabriziosalmi/slopless@a056c42d7348f061279242d93c314a54e079d8d3 # v1.14.0
+        uses: fabriziosalmi/slopless@41eadbd210208c2440f9708c1fdadd0cd90260f8 # v1.17.1
         with:
           patterns: "**/*.py *.md docs/**/*.md docs/**/*.html docs/assets/**/*.js docs/assets/**/*.css"
           format: sarif
@@ -43,7 +43,7 @@ jobs:
           && (github.event_name != 'pull_request'
               || github.event.pull_request.head.repo.full_name == github.repository)
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           sarif_file: slopless.sarif
           category: slopless
