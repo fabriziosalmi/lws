@@ -572,7 +572,6 @@ def px_create_backup(vmid, storage, mode, region, az):
 @click.option('--storage-size', default=None, help="Override storage size for the container (e.g., 16G).")
 @click.option('--onboot', default=config.get('default_onboot', True), help="Start the container on boot.")
 @click.option('--lock', default=None, help="Set lock for the container. By default, no lock is set.")
-@click.option('--init', default=False, is_flag=True, help="Run initialization script after container creation.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
 @click.option('--max-retries', default=5, help="Maximum number of retries to start the container.")
@@ -583,7 +582,7 @@ def px_create_backup(vmid, storage, mode, region, az):
 @click.option('--gateway', default=None, help="Set the gateway for the container's network.")
 @click.option('--dns', default=None, help="Set DNS servers for the container (comma-separated).")
 @click.option('--dhcp', is_flag=True, default=False, help="Enable DHCP for the container.")
-def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay, password, ip, netmask, gateway, dns, dhcp):
+def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, region, az, max_retries, retry_delay, password, ip, netmask, gateway, dns, dhcp):
     """🛠️ Create and start LXC containers with optional network configuration, root password, gateway, and DNS settings."""
     start_vmid = config.get('start_vmid', 10000)
     instance_config = config['instance_sizes'][size]
@@ -656,16 +655,6 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
                     )
                     if start_result.returncode == 0:
                         click.secho(f"🚀 Instance {instance_id} started.", fg='green')
-                        
-                        # Run an initialization script if the --init flag is set
-                        if init:
-                            init_cmd = ["pct", "exec", str(instance_id), "--", "/path/to/init-script.sh"]
-                            init_result = run_proxmox_command(init_cmd, init_cmd, config['use_local_only'], host_details)
-                            if init_result.returncode == 0:
-                                click.secho(f"🔧 Initialization script executed successfully on {instance_id}.", fg='green')
-                            else:
-                                click.secho(f"❌ Failed to execute initialization script on {instance_id}: {init_result.stderr}", fg='red')
-
                         break
                     else:
                         click.secho(f"❌ Failed to start instance {instance_id}: {start_result.stderr}", fg='red')
