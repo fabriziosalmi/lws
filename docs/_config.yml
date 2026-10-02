@@ -2,7 +2,7 @@
 # https://github.com/fabriziosalmi/lws
 
 title: LWS - Linux Web Services
-description: AWS-like CLI tool for managing LXC containers on Proxmox VE
+description: A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH
 baseurl: "/lws"
 url: "https://fabriziosalmi.github.io"
 

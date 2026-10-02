@@ -17,6 +17,8 @@ lws [OPTIONS] COMMAND [ARGS]...
 - `--version` - Show version and exit
 - `-h, --help` - Show help message
 
+Every command below that takes `--region`/`--az` also accepts `--location`/`--node` as aliases for the same two options - this is not repeated per command in this reference.
+
 ## Configuration Commands (`conf`)
 
 ### `conf show`
@@ -303,18 +305,28 @@ Create and start LXC containers.
 lws lxc run [OPTIONS]
 
 Options:
-  --image-id TEXT      Container image template (required)
-  --count INTEGER      Number of instances (default: 1)
-  --size TEXT          Instance size (default: small)
-  --hostname TEXT      Hostname for container
-  --region TEXT        Region (default: eu-south-1)
-  --az TEXT            Availability zone (default: az1)
-  --password TEXT      Root password
-  --ip TEXT            Fixed IP address
-  --netmask TEXT       Network mask (default: 24)
-  --gateway TEXT       Network gateway
-  --dns TEXT           DNS servers (comma-separated)
-  --dhcp               Enable DHCP
+  --image-id TEXT        Container image template (required)
+  --count INTEGER        Number of instances (default: 1)
+  --size TEXT            Instance size, one of the keys under instance_sizes
+                         in config.yaml (default: small)
+  --hostname TEXT        Hostname for container
+  --net0 TEXT            Network config string, Proxmox pct syntax
+                         (default: name=eth0,bridge=<default_network>)
+  --storage-size TEXT    Override storage size (e.g. 16G)
+  --onboot TEXT          Start the container on boot
+                         (default: default_onboot in config.yaml, or True)
+  --lock TEXT            Set a Proxmox lock on the container (default: none)
+  --region TEXT          Region (default: eu-south-1)
+  --az TEXT              Availability zone (default: az1)
+  --max-retries INTEGER  Retries waiting for the container to start
+                         (default: 5)
+  --retry-delay INTEGER  Seconds between start retries (default: 5)
+  --password TEXT        Root password
+  --ip TEXT              Fixed IP address
+  --netmask TEXT         Network mask (default: 24)
+  --gateway TEXT         Network gateway
+  --dns TEXT             DNS servers (comma-separated)
+  --dhcp                 Enable DHCP
 ```
 
 **Example:**
@@ -428,13 +440,18 @@ Resize container resources.
 lws lxc scale <instance_ids...> [OPTIONS]
 
 Options:
-  --memory INTEGER        New memory in MB
-  --cpulimit INTEGER      New CPU limit
-  --cpucores INTEGER      New CPU cores
-  --storage-size TEXT     New storage size (e.g., 32G)
-  --region TEXT           Region
-  --az TEXT               Availability zone
+  --memory TEXT             New memory in MB
+  --cpulimit TEXT           New CPU limit
+  --cpucores TEXT           New number of CPU cores
+  --storage-size TEXT       New root storage size (e.g., 16G)
+  --net-limit TEXT          Network bandwidth limit (e.g., 10mbit)
+  --disk-read-limit TEXT    Disk read limit (e.g., 50mb)
+  --disk-write-limit TEXT   Disk write limit (e.g., 30mb)
+  --region TEXT             Region
+  --az TEXT                 Availability zone
 ```
+
+`--memory`/`--cpulimit`/`--cpucores` are plain strings, not validated as numeric by Click (their Click default is `None`, which gives no inferred type) - an invalid value here is rejected by `pct set` on the remote host, not by this command itself.
 
 **Example:**
 ```bash
@@ -461,7 +478,11 @@ Attach or detach a storage volume (`pct set --mp0=...`).
 lws lxc volume-attach <instance_id> <volume_name> <volume_size> --mount-point <path> [OPTIONS]
 
 Options:
-  --mount-point TEXT  Mount point inside the container, e.g. /mnt/data (required)
+  --mount-point TEXT  Mount point inside the container, e.g. /mnt/data.
+                      Not a true Click-required option (Click default is
+                      None) - the command checks for it itself and prints
+                      an error if it's missing, rather than failing at
+                      argument-parsing time.
   --region TEXT       Region
   --az TEXT           Availability zone
 
@@ -550,8 +571,14 @@ List all snapshots for a container.
 lws lxc snapshots <instance_id> [OPTIONS]
 
 Options:
-  --region TEXT   Region
-  --az TEXT       Availability zone
+  --region TEXT           Region
+  --az TEXT               Availability zone
+  --use-local-only TEXT   Takes a string value, not a bare flag, despite
+                          the name (e.g. --use-local-only true). Passed
+                          straight through as a Python truthiness check,
+                          so --use-local-only false is also truthy (any
+                          non-empty string is) - omit the option entirely
+                          to get the default (SSH/remote) behavior.
 ```
 
 ### `lxc clone`
@@ -562,9 +589,19 @@ Clone a container.
 lws lxc clone <source_id> <target_id> [OPTIONS]
 
 Options:
-  --full          Full clone (vs linked)
-  --region TEXT   Region
-  --az TEXT       Availability zone
+  --region TEXT              Region
+  --az TEXT                  Availability zone
+  --target-host TEXT         Target Proxmox host for the clone, validated
+                             as a hostname
+  --description TEXT         Description for the new container
+  --hostname TEXT            Hostname for the new container, validated
+                             as a hostname
+  --storage TEXT             Target storage for a full clone
+  --full                     Full clone (vs linked)
+  --pool TEXT                Add the new container to the specified pool
+  --bwlimit TEXT             I/O bandwidth limit in KiB/s, digits only
+  --start / --no-start       Start the cloned container after creation
+                             (default: --start)
 ```
 
 **Example:**
@@ -763,8 +800,9 @@ Fetch Docker logs from a container.
 lws app logs <instance_id> <container_name> [OPTIONS]
 
 Options:
-  --follow        Follow log output
-  --lines INTEGER Number of lines
+  --follow        Stream logs in real time
+  --tail TEXT     Number of lines to show from the end of the logs, as
+                  passed to `docker logs --tail` (default: all)
   --region TEXT   Region
   --az TEXT       Availability zone
 ```

@@ -3,27 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="LWS - Linux Web Services. AWS-like CLI tool for managing LXC containers on Proxmox VE.">
-    <meta name="keywords" content="LXC, Proxmox, CLI, Linux, Containers, Cloud, Infrastructure">
+    <meta name="description" content="LWS: a CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
+    <meta name="keywords" content="LXC, Proxmox, CLI, Linux, Containers, Infrastructure">
     <meta name="author" content="Fabrizio Salmi">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://fabriziosalmi.github.io/lws/">
     <meta property="og:title" content="LWS - Linux Web Services">
-    <meta property="og:description" content="AWS-like CLI tool for managing LXC containers on Proxmox VE">
+    <meta property="og:description" content="A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://fabriziosalmi.github.io/lws/">
     <meta property="twitter:title" content="LWS - Linux Web Services">
-    <meta property="twitter:description" content="AWS-like CLI tool for managing LXC containers on Proxmox VE">
+    <meta property="twitter:description" content="A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
 
     <title>LWS - Linux Web Services | Proxmox Container Management</title>
 
     <link rel="canonical" href="https://fabriziosalmi.github.io/lws/">
     <meta name="robots" content="max-image-preview:large">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐧</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233454d1'/><text x='50' y='69' font-size='56' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>L</text></svg>">
 
     <!--
       Same policy as _layouts/default.html, which covers the pages/ collection.
@@ -40,7 +40,7 @@
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
       "name": "LWS - Linux Web Services",
-      "description": "AWS-like CLI tool and REST API for managing LXC containers on Proxmox VE.",
+      "description": "A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Linux",
       "url": "https://fabriziosalmi.github.io/lws/",
@@ -58,7 +58,7 @@
     <nav class="navbar">
         <div class="container">
             <div class="nav-brand">
-                <span class="logo">🐧 LWS</span>
+                <span class="logo">LWS</span>
             </div>
             <div class="nav-links">
                 <a href="#features">Features</a>
@@ -78,10 +78,8 @@
                     <span class="subtitle">Unified CLI for Proxmox + LXC + Docker</span>
                 </h1>
                 <p class="hero-description">
-                    <strong>One CLI to rule them all:</strong> Manage Proxmox hosts, deploy LXC containers,
-                    and run Docker applications - all from a single unified interface.
-                    <br>
-                    <em>Install anything on your Proxmox infrastructure with simple commands.</em>
+                    Manage Proxmox hosts, LXC containers, and Docker applications running inside them,
+                    from one CLI, over SSH or a REST API.
                 </p>
                 <div class="hero-buttons">
                     <a href="#quickstart" class="btn btn-primary">Get Started</a>
@@ -97,16 +95,16 @@
         </div>
     </section>
 
-    <!-- Unified Platform Section -->
+    <!-- Workflow Section -->
     <section class="unified-platform">
         <div class="container">
-            <h2 class="section-title">The Unified Platform</h2>
-            <p class="section-subtitle">From Bare Metal to Running Applications in 3 Simple Steps</p>
+            <h2 class="section-title">Workflow</h2>
+            <p class="section-subtitle">Proxmox host, to LXC container, to a Docker application inside it</p>
 
             <div class="platform-workflow">
                 <div class="workflow-step">
                     <h3>1. Proxmox</h3>
-                    <p>Manage your Proxmox hosts</p>
+                    <p>List and inspect Proxmox hosts</p>
                     <div class="code-snippet">
                         <code>lws px list</code>
                     </div>
@@ -116,7 +114,7 @@
 
                 <div class="workflow-step">
                     <h3>2. LXC</h3>
-                    <p>Deploy containers instantly</p>
+                    <p>Create a container</p>
                     <div class="code-snippet">
                         <code>lws lxc run --size medium</code>
                     </div>
@@ -126,7 +124,7 @@
 
                 <div class="workflow-step">
                     <h3>3. Docker</h3>
-                    <p>Run any application</p>
+                    <p>Deploy a Compose application into it</p>
                     <div class="code-snippet">
                         <code>lws app deploy install</code>
                     </div>
@@ -134,17 +132,15 @@
             </div>
 
             <div class="platform-example">
-                <h3>Complete Example: Deploy WordPress in 60 Seconds</h3>
-                <pre><code><span class="code-comment"># 1. Create LXC container</span>
-<span class="code-command">lws lxc run</span> --image-id ubuntu-22.04 --size lws-web --hostname wordpress-1
+                <h3>Example: create a container and deploy a Compose application</h3>
+                <pre><code><span class="code-comment"># 1. Create an LXC container (prints the assigned instance ID)</span>
+<span class="code-command">lws lxc run</span> --image-id ubuntu-22.04 --size lws-web --hostname web-1
 
-<span class="code-comment"># 2. Install Docker in the container</span>
+<span class="code-comment"># 2. Install Docker in it (replace 100 with the ID from step 1)</span>
 <span class="code-command">lws app setup</span> 100
 
-<span class="code-comment"># 3. Deploy WordPress with Docker Compose</span>
-<span class="code-command">lws app deploy install</span> 100 --compose-file wordpress-compose.yml
-
-<span class="code-comment"># Done! Your WordPress is running</span></code></pre>
+<span class="code-comment"># 3. Deploy an existing docker-compose.yml into it</span>
+<span class="code-command">lws app deploy install</span> 100 --compose-file ./docker-compose.yml</code></pre>
             </div>
         </div>
     </section>
@@ -152,28 +148,27 @@
     <!-- Features Section -->
     <section id="features" class="features">
         <div class="container">
-            <h2 class="section-title">Powerful Features</h2>
-            <p class="section-subtitle">Everything you need to manage your Proxmox infrastructure</p>
+            <h2 class="section-title">Features</h2>
 
             <div class="features-grid">
                 <div class="feature-card">
-                    <h3>Built-in Retries</h3>
+                    <h3>Retries and Timeouts</h3>
                     <p>SSH command execution with automatic retry and timeout handling</p>
                 </div>
 
                 <div class="feature-card">
-                    <h3>Secure by Default</h3>
-                    <p>Built-in security groups, firewall rules, and credential masking</p>
+                    <h3>Security Groups and Firewall Rules</h3>
+                    <p>Manage Proxmox firewall security groups and per-container rules from the CLI</p>
                 </div>
 
                 <div class="feature-card">
-                    <h3>Multi-Region</h3>
-                    <p>Manage containers across multiple Proxmox hosts and availability zones</p>
+                    <h3>Multiple Hosts</h3>
+                    <p>Target containers across multiple Proxmox hosts, grouped into regions and availability zones in config.yaml</p>
                 </div>
 
                 <div class="feature-card">
                     <h3>Resource Monitoring</h3>
-                    <p>Real-time CPU, memory, and disk monitoring with scaling recommendations</p>
+                    <p>CPU, memory, and disk monitoring, and scaling recommendations via <code>lxc scale-check</code></p>
                 </div>
 
                 <div class="feature-card">
@@ -182,18 +177,18 @@
                 </div>
 
                 <div class="feature-card">
-                    <h3>Auto-Scaling</h3>
-                    <p>Intelligent resource scaling based on usage patterns and thresholds</p>
+                    <h3>Scaling Commands</h3>
+                    <p><code>lxc scale-check</code> recommends CPU/memory/storage changes against configured thresholds; <code>lxc scale</code> applies them - both run on demand, not as a background process</p>
                 </div>
 
                 <div class="feature-card">
-                    <h3>Backup & Restore</h3>
-                    <p>Snapshot management and full container backup/restore capabilities</p>
+                    <h3>Backup and Restore</h3>
+                    <p>Snapshot management and container backup/restore</p>
                 </div>
 
                 <div class="feature-card">
                     <h3>REST API</h3>
-                    <p>Full-featured REST API with Swagger documentation and Web UI</p>
+                    <p>A REST API covering most CLI commands, with Swagger documentation and a Web UI</p>
                 </div>
             </div>
         </div>
@@ -275,7 +270,7 @@
         <div class="container">
             <div class="footer-content">
                 <div class="footer-brand">
-                    <span class="logo">🐧 LWS</span>
+                    <span class="logo">LWS</span>
                     <p>Linux Web Services</p>
                 </div>
                 <div class="footer-links">
@@ -299,7 +294,7 @@
                 </div>
             </div>
             <div class="footer-bottom">
-                <p>&copy; 2024 LWS. Released under the MIT License.</p>
+                <p>LWS. Released under the MIT License.</p>
             </div>
         </div>
     </footer>
