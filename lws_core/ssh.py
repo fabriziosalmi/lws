@@ -5,6 +5,7 @@ This module provides SSH command execution utilities with retry logic,
 timeout handling, and password sanitization for secure logging.
 """
 
+import os
 import time
 import logging
 import subprocess
@@ -34,9 +35,17 @@ def run_ssh_command(host, user, ssh_password, command):
     max_retries = 2
     retry_count = 0
 
+    # The password goes through the SSHPASS env var (sshpass -e), not -p, so
+    # it never shows up in `ps`/`/proc/<pid>/cmdline` to other local users.
+    ssh_env = {**os.environ, "SSHPASS": ssh_password}
+
+    # StrictHostKeyChecking=accept-new trusts a host's key on first contact
+    # (needed since these hosts are rarely pre-seeded into known_hosts) but,
+    # unlike the previous "no", still rejects a KNOWN host whose key changes
+    # later, which is the actual MITM case this setting exists to catch.
     ssh_cmd = [
-        "sshpass", "-p", ssh_password, "ssh",
-        "-o", "StrictHostKeyChecking=no",
+        "sshpass", "-e", "ssh",
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", f"ConnectTimeout={connection_timeout}",
         "-o", "ServerAliveInterval=5",
         f"{user}@{host}"
@@ -44,8 +53,8 @@ def run_ssh_command(host, user, ssh_password, command):
 
     # Construct a sanitized command for logging (hides the password)
     sanitized_ssh_cmd = [
-        "sshpass", "-p", "****", "ssh",
-        "-o", "StrictHostKeyChecking=no",
+        "sshpass", "-e", "ssh",
+        "-o", "StrictHostKeyChecking=accept-new",
         "-o", f"ConnectTimeout={connection_timeout}",
         "-o", "ServerAliveInterval=5",
         f"{user}@{host}"
@@ -60,7 +69,7 @@ def run_ssh_command(host, user, ssh_password, command):
                 logging.debug(f"🔎 Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
 
             # Execute the command
-            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
+            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60, env=ssh_env)
 
             # Check if the command succeeded
             if result.returncode == 0:
