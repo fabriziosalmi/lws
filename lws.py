@@ -628,7 +628,16 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
         if dns:
             create_cmd.extend(["--nameserver", dns])
 
-        create_result = run_proxmox_command(create_cmd, create_cmd, config['use_local_only'], host_details)
+        # create_cmd runs unmodified when local (no shell involved - quoting
+        # would corrupt the values, not protect them). When remote, OpenSSH
+        # joins every argv element after user@host into one string for the
+        # remote shell, so free-text values here (hostname, password, dns,
+        # net0, ...) are a command-injection vector despite never passing
+        # through a local shell themselves - shlex.quote on this remote-only
+        # copy closes that without constraining what a valid value can
+        # contain (it's a no-op for any value that doesn't need quoting).
+        remote_create_cmd = [shlex.quote(str(part)) for part in create_cmd]
+        create_result = run_proxmox_command(create_cmd, remote_create_cmd, config['use_local_only'], host_details)
 
         if create_result.returncode == 0:
             click.secho(f"✅ Instance {instance_id} created successfully.", fg='green')
