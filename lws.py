@@ -32,6 +32,7 @@ from lws_core import (
     load_config,
     validate_config,
     run_ssh_command,
+    run_scp_command,
     run_proxmox_command,
     execute_command,
     process_instance_command,
@@ -90,6 +91,10 @@ _VMID_RE = re.compile(r'^[0-9]{1,10}$')
 _TEMPLATE_NAME_RE = re.compile(r'^[A-Za-z0-9_.-]{1,255}$')
 _PROTOCOL_RE = re.compile(r'^[A-Za-z0-9]{1,16}$')
 _PORT_RE = re.compile(r'^[0-9]{1,5}(:[0-9]{1,5})?$')
+_HOSTNAME_RE = re.compile(r'^[A-Za-z0-9.-]{1,253}$')
+_SAFE_PATH_RE = re.compile(r'^[A-Za-z0-9_./-]{1,512}$')
+_SERVICE_NAME_RE = re.compile(r'^[A-Za-z0-9_@.:-]{1,128}$')
+_SAFE_FREETEXT_RE = re.compile(r'^[A-Za-z0-9 ._,:/-]{0,255}$')
 
 
 def _validate_pattern(pattern, label):
@@ -287,15 +292,9 @@ def reboot_proxmox(region, az, confirm):
     user = host_details['user']
     ssh_password = host_details['ssh_password']
 
-    # Construct the ssh command to reboot the Proxmox host
-    ssh_cmd = [
-        "sshpass", "-p", ssh_password, "ssh",
-        f"{user}@{host}", "reboot"
-    ]
-
     try:
         # Execute the SSH command to reboot the Proxmox host
-        result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = run_ssh_command(host, user, ssh_password, ["reboot"])
 
         if result.returncode == 0:
             click.secho(f"✅ Proxmox host {host} rebooted successfully.", fg='green')
@@ -312,10 +311,10 @@ def reboot_proxmox(region, az, confirm):
 @px.command('upload')
 #@command_alias('upload-template')
 @click.argument('local_path')
-@click.argument('remote_template_name', required=False)
+@click.argument('remote_template_name', required=False, callback=_validate_pattern(_TEMPLATE_NAME_RE, "remote template name"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--storage-path', default='/var/lib/vz/template/cache', help="Remote path to upload the template. Defaults to Proxmox template directory.")
+@click.option('--storage-path', default='/var/lib/vz/template/cache', callback=_validate_pattern(_SAFE_PATH_RE, "storage path"), help="Remote path to upload the template. Defaults to Proxmox template directory.")
 def upload_template(local_path, remote_template_name, region, az, storage_path):
     """💽 Upload template to Proxmox host.
     
@@ -333,16 +332,11 @@ def upload_template(local_path, remote_template_name, region, az, storage_path):
     user = host_details['user']
     ssh_password = host_details['ssh_password']
 
-    # Construct the scp command to copy the file to the remote Proxmox server
-    scp_cmd = [
-        "sshpass", "-p", ssh_password, "scp",
-        local_path,
-        f"{user}@{host}:{storage_path}/{remote_template_name}"
-    ]
-
     try:
-        # Execute the SCP command to upload the template
-        result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # Execute the SCP command to upload the template. No timeout: template
+        # files can be multiple GB, and a fixed timeout meant for short remote
+        # commands would abort a slow but otherwise healthy transfer.
+        result = run_scp_command(ssh_password, local_path, f"{user}@{host}:{storage_path}/{remote_template_name}")
 
         if result.returncode == 0:
             click.secho(f"✅ Template '{remote_template_name}' uploaded successfully to {storage_path} on {host}.", fg='green')
@@ -537,7 +531,7 @@ def px_restart_cluster_services(region, az):
 
 @px.command('backup-lxc')
 @click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
-@click.option('--storage', required=True, help="The storage target where the backup will be stored.")
+@click.option('--storage', required=True, callback=_validate_pattern(_SAFE_NAME_RE, "storage"), help="The storage target where the backup will be stored.")
 @click.option('--mode', default='snapshot', type=click.Choice(['snapshot', 'suspend', 'stop']), help="Backup mode: snapshot, suspend, or stop.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -994,7 +988,7 @@ def monitor_instances(instance_ids, region, az):
 
 @lxc.command('service')
 @click.argument('action', type=click.Choice(['status', 'start', 'stop', 'restart', 'reload', 'enable']))
-@click.argument('service_name')
+@click.argument('service_name', callback=_validate_pattern(_SERVICE_NAME_RE, "service name"))
 @click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1021,7 +1015,7 @@ def service(action, service_name, instance_ids, region, az):
 
 @lxc.command('migrate')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.option('--target-host', required=True, help="Target Proxmox host where the LXC container will be migrated.")
+@click.option('--target-host', required=True, callback=_validate_pattern(_HOSTNAME_RE, "target host"), help="Target Proxmox host where the LXC container will be migrated.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def lxc_migrate(instance_id, target_host, region, az):
@@ -1570,8 +1564,7 @@ def compose(action, instance_id, compose_file, region, az, auto_start):
     # Use timestamp to ensure uniqueness and avoid collisions
     timestamp = int(time.time())
     remote_host_path = f"/var/tmp/lws-{app_name}-{timestamp}-docker-compose.yml"
-    scp_cmd = ["scp", compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}"]
-    result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = run_scp_command(host_details['ssh_password'], compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}")
     if result.returncode != 0:
         click.secho(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}", fg='red')
         return
@@ -1579,8 +1572,7 @@ def compose(action, instance_id, compose_file, region, az, auto_start):
     click.secho(f"✅ Docker Compose file uploaded to Proxmox host at {remote_host_path}.", fg='green')
 
     # Transfer the file to the LXC container using pct push
-    pct_push_cmd = ["sshpass", "-p", host_details['ssh_password'], "ssh", f"{host_details['user']}@{host_details['host']}", "pct", "push", instance_id, remote_host_path, remote_host_path]
-    result = subprocess.run(pct_push_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], ["pct", "push", instance_id, remote_host_path, remote_host_path])
     if result.returncode != 0:
         click.secho(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}", fg='red')
         return
@@ -1756,8 +1748,7 @@ def compose_update(instance_id, compose_file, region, az):
     timestamp = int(time.time())
     compose_basename = os.path.basename(compose_file)
     remote_host_path = f"/var/tmp/lws-{timestamp}-{compose_basename}"
-    scp_cmd = ["scp", compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}"]
-    result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = run_scp_command(host_details['ssh_password'], compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}")
     if result.returncode != 0:
         click.secho(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}", fg='red')
         logging.error(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}")
@@ -1767,8 +1758,7 @@ def compose_update(instance_id, compose_file, region, az):
     logging.info(f"✅ Docker Compose file uploaded to Proxmox host: {remote_host_path}")
 
     # Transfer the file to the LXC container using pct push
-    pct_push_cmd = ["sshpass", "-p", host_details['ssh_password'], "ssh", f"{host_details['user']}@{host_details['host']}", "pct", "push", instance_id, remote_host_path, remote_host_path]
-    result = subprocess.run(pct_push_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], ["pct", "push", instance_id, remote_host_path, remote_host_path])
     if result.returncode != 0:
         click.secho(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}", fg='red')
         logging.error(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}")
@@ -1892,17 +1882,17 @@ def remove(instance_ids, region, az, purge):
 
 
 @lxc.command('clone')
-@click.argument('source_instance_id')
-@click.argument('target_instance_id')
+@click.argument('source_instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.argument('target_instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--target-host', default=None, help="Target Proxmox host for the clone.")
-@click.option('--description', default=None, help="Description for the new container.")
-@click.option('--hostname', default=None, help="Hostname for the new container.")
-@click.option('--storage', default=None, help="Target storage for full clone.")
+@click.option('--target-host', default=None, callback=_validate_pattern(_HOSTNAME_RE, "target host"), help="Target Proxmox host for the clone.")
+@click.option('--description', default=None, callback=_validate_pattern(_SAFE_FREETEXT_RE, "description"), help="Description for the new container.")
+@click.option('--hostname', default=None, callback=_validate_pattern(_HOSTNAME_RE, "hostname"), help="Hostname for the new container.")
+@click.option('--storage', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "storage"), help="Target storage for full clone.")
 @click.option('--full', is_flag=True, help="Create a full copy of all disks.")
-@click.option('--pool', default=None, help="Add the new container to the specified pool.")
-@click.option('--bwlimit', default=None, help="Override I/O bandwidth limit (in KiB/s).")
+@click.option('--pool', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "pool"), help="Add the new container to the specified pool.")
+@click.option('--bwlimit', default=None, callback=_validate_pattern(_VMID_RE, "bwlimit"), help="Override I/O bandwidth limit (in KiB/s).")
 @click.option('--start/--no-start', default=True, help="Start the cloned container after creation. Default is true.")
 def clone(source_instance_id, target_instance_id, region, az, target_host, description, hostname, storage, full, pool, bwlimit, start):
     """🔄 Clone an LXC container locally or remote."""
@@ -2323,20 +2313,16 @@ def exec_proxmox_command(command, region, az):
     
     host_details = config['regions'][region]['availability_zones'][az]
 
-    # Join the command arguments into a single command string
+    # Join the command arguments into a single command string. This command's
+    # entire purpose is to run whatever shell command the caller asks for on
+    # the Proxmox host - there is no injection boundary to enforce here, the
+    # arbitrary-command execution is the feature.
     command_str = " ".join(command)
-
-    # Build the SSH command to execute the arbitrary command on the Proxmox host
-    ssh_command = ["sshpass", "-p", host_details['ssh_password'], "ssh", f"{host_details['user']}@{host_details['host']}", command_str]
-
-    # Log the command being executed (sanitized)
-    sanitized_ssh_command = ["sshpass", "-p", "****", "ssh", f"{host_details['user']}@{host_details['host']}", command_str]
-    logging.debug(f"Executing SSH command on Proxmox host: {' '.join(sanitized_ssh_command)}")
 
     try:
         # Execute the command on the Proxmox host
-        result = subprocess.run(ssh_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        
+        result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], [command_str])
+
         if result.returncode == 0:
             logging.info(f"Command executed successfully on Proxmox host {host_details['host']}:\n{result.stdout.strip()}")
             click.secho(f"✅ Command executed successfully on Proxmox host {host_details['host']}.\nOutput:\n{result.stdout.strip()}", fg='green')
@@ -2535,7 +2521,7 @@ def scale_check_get_lxc_resources(instance_id, host_details):
 
 
 @px.command('backup')
-@click.argument('backup_dir')
+@click.argument('backup_dir', callback=_validate_pattern(_SAFE_PATH_RE, "backup directory"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Defaults to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Defaults to az1")
 def px_backup_hosts(backup_dir, region, az):
@@ -2608,7 +2594,7 @@ def sec():
     pass
 
 @sec.command('discovery')
-@click.argument('lxc_id', required=False)
+@click.argument('lxc_id', required=False, callback=_validate_pattern(_VMID_RE, "lxc id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def sec_discovery(lxc_id, region, az):
@@ -2931,8 +2917,7 @@ def restore_container(instance_id, backup_file, region, az, force):
         timestamp = int(time.time())
         remote_backup_path = f"/var/tmp/lws-backup-{instance_id}-{timestamp}.tar.gz"
         
-        scp_cmd = ["scp", backup_file, f"{host_details['user']}@{host_details['host']}:{remote_backup_path}"]
-        scp_result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        scp_result = run_scp_command(host_details['ssh_password'], backup_file, f"{host_details['user']}@{host_details['host']}:{remote_backup_path}")
         
         if scp_result.returncode != 0:
             click.secho(f"❌ Failed to upload backup file: {scp_result.stderr}", fg='red')
@@ -3045,8 +3030,7 @@ def create_container_backup(instance_id, destination, region, az, download, comp
         click.secho(f"📥 Downloading backup file to current directory...", fg='yellow')
         local_path = os.path.basename(backup_path)
         
-        scp_cmd = ["scp", f"{host_details['user']}@{host_details['host']}:{backup_path}", local_path]
-        scp_result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        scp_result = run_scp_command(host_details['ssh_password'], f"{host_details['user']}@{host_details['host']}:{backup_path}", local_path)
         
         if scp_result.returncode == 0:
             click.secho(f"✅ Backup downloaded successfully to {os.path.abspath(local_path)}", fg='green')

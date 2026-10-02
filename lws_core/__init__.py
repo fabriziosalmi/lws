@@ -11,7 +11,7 @@ __version__ = '1.4.3'
 from .logging_setup import setup_logging, JsonFormatter
 
 # Import SSH (only depends on standard libs)
-from .ssh import run_ssh_command
+from .ssh import run_ssh_command, run_scp_command
 
 # Import config (depends on nothing from lws_core)
 from .config import config, load_config, validate_config, mask_sensitive_info, _ensure_config_loaded
@@ -41,6 +41,7 @@ __all__ = [
     'setup_logging',
     'JsonFormatter',
     'run_ssh_command',
+    'run_scp_command',
     'execute_command',
     'run_proxmox_command',
     'is_service_active',

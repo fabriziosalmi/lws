@@ -13,7 +13,7 @@ import pytest
 import subprocess
 import time
 from unittest.mock import patch, Mock, MagicMock, call
-from lws_core.ssh import run_ssh_command
+from lws_core.ssh import run_ssh_command, run_scp_command
 
 
 class TestRunSSHCommand:
@@ -340,6 +340,113 @@ class TestRunSSHCommand:
         
         with patch('subprocess.run', return_value=mock_result):
             result = run_ssh_command(host, user, password, command)
-            
+
             assert result.stdout == "Standard output"
             assert result.stderr == "Warning message"
+
+
+class TestRunScpCommand:
+    """Tests for the run_scp_command function."""
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_successful_upload(self, mock_sshpass_installed):
+        """Test a successful scp invocation and argv/env shape."""
+        password = "test_password"
+
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = ""
+        mock_result.stderr = ""
+
+        with patch('subprocess.run', return_value=mock_result) as mock_run:
+            result = run_scp_command(password, "/local/file.tar.gz", "root@proxmox1.example.com:/remote/file.tar.gz")
+
+            assert result.returncode == 0
+            call_args = mock_run.call_args[0][0]
+            assert call_args[:3] == ["sshpass", "-e", "scp"]
+            assert "/local/file.tar.gz" in call_args
+            assert "root@proxmox1.example.com:/remote/file.tar.gz" in call_args
+            assert "StrictHostKeyChecking=accept-new" in ' '.join(call_args)
+
+            # Password must never appear in argv, only via the SSHPASS env var.
+            assert password not in call_args
+            assert mock_run.call_args.kwargs["env"]["SSHPASS"] == password
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_no_default_timeout(self, mock_sshpass_installed):
+        """Unlike run_ssh_command, no timeout should be imposed unless given explicitly."""
+        mock_result = Mock()
+        mock_result.returncode = 0
+
+        with patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_scp_command("pw", "/local/file", "root@host:/remote/file")
+            assert mock_run.call_args.kwargs["timeout"] is None
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_explicit_timeout_is_passed_through(self, mock_sshpass_installed):
+        mock_result = Mock()
+        mock_result.returncode = 0
+
+        with patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_scp_command("pw", "/local/file", "root@host:/remote/file", timeout=30)
+            assert mock_run.call_args.kwargs["timeout"] == 30
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_timeout_expired_returns_124(self, mock_sshpass_installed):
+        """A timed-out transfer should report returncode 124, not raise."""
+        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(cmd=[], timeout=30)):
+            result = run_scp_command("pw", "/local/file", "root@host:/remote/file", timeout=30)
+
+            assert result.returncode == 124
+            assert "timed out" in result.stderr.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_failed_transfer_returns_nonzero(self, mock_sshpass_installed):
+        mock_result = Mock()
+        mock_result.returncode = 1
+        mock_result.stdout = ""
+        mock_result.stderr = "No such file or directory"
+
+        with patch('subprocess.run', return_value=mock_result):
+            result = run_scp_command("pw", "/local/missing", "root@host:/remote/file")
+
+            assert result.returncode == 1
+            assert "No such file" in result.stderr
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_sshpass_not_installed_raises(self, mock_sshpass_not_installed):
+        with pytest.raises(RuntimeError) as exc_info:
+            run_scp_command("pw", "/local/file", "root@host:/remote/file")
+
+        assert "sshpass" in str(exc_info.value).lower()
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_unexpected_exception_returns_error_result(self, mock_sshpass_installed):
+        with patch('subprocess.run', side_effect=OSError("disk full")):
+            result = run_scp_command("pw", "/local/file", "root@host:/remote/file")
+
+            assert result.returncode == 1
+            assert "disk full" in result.stderr
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_download_direction_args_preserved_in_order(self, mock_sshpass_installed):
+        """Download: remote source first, local destination second - scp's own
+        argument order, which run_scp_command must not reorder."""
+        mock_result = Mock()
+        mock_result.returncode = 0
+
+        with patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_scp_command("pw", "root@host:/remote/backup.tar.gz", "backup.tar.gz")
+
+            call_args = mock_run.call_args[0][0]
+            remote_idx = call_args.index("root@host:/remote/backup.tar.gz")
+            local_idx = call_args.index("backup.tar.gz")
+            assert remote_idx < local_idx
