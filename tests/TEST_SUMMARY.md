@@ -1,13 +1,20 @@
 # Test Suite Summary
 
 ## Overview
-Comprehensive pytest test suite for the LWS (Linux Web Services) project has been successfully created and executed.
+Pytest test suite for the `lws_core/` package (config, SSH, Proxmox and
+utility helpers used by the LWS CLI), plus a small, targeted `test_api.py`
+for `api.py`'s request-validation logic. **Scope**: `lws_core/` is
+comprehensively covered (96%); `lws.py` (the CLI, ~3,700 lines) has no
+automated tests at all, and `api.py` (the REST API, ~1,200 lines) has
+tests only for its input-validation and routing logic (22 tests), not its
+~60 other endpoints - see [architecture docs](../docs/_pages/architecture.md).
 
 ## Test Results
-- **Total Tests**: 98
-- **Passed**: 98 (100%)
+- **Total Tests**: 125 (103 for `lws_core/`, 22 for `api.py`)
+- **Passed**: 125 (100%)
 - **Failed**: 0
-- **Coverage**: 96%
+- **Coverage**: 96% of `lws_core/`; not measured for `api.py`/`lws.py`
+  (`pytest.ini` only instruments `lws_core/` - see `--cov=lws_core` below)
 
 ## Test Structure
 
@@ -28,9 +35,10 @@ Tests for `lws_core/config.py`:
 
 **Coverage**: 97%
 
-#### 2. `tests/test_ssh.py` (15 tests)
+#### 2. `tests/test_ssh.py` (14 tests)
 Tests for `lws_core/ssh.py`:
-- SSH command execution with password authentication
+- SSH command execution with password authentication (passed via the
+  `SSHPASS` env var, never argv)
 - Retry logic for failed connections
 - Timeout handling
 - Password sanitization in logs
@@ -38,11 +46,12 @@ Tests for `lws_core/ssh.py`:
 
 **Coverage**: 98%
 
-#### 3. `tests/test_utils.py` (32 tests)
+#### 3. `tests/test_utils.py` (33 tests)
 Tests for `lws_core/utils.py`:
 - Service status checking
 - Command aliases
-- Instance command processing
+- Instance command processing (a failure now exits the process with a
+  non-zero code instead of returning normally)
 - Resize command building
 - VMID generation
 - Container lock checking
@@ -57,6 +66,24 @@ Tests for `lws_core/proxmox.py`:
 - Validation of command parameters
 
 **Coverage**: 100%
+
+#### 5. `tests/test_python_support.py` (5 tests)
+Guards against the README/CI/Dockerfile Python-version floor drifting out
+of sync with `pyproject.toml` (and with the interpreter actually running
+the tests).
+
+#### 6. `tests/test_api.py` (22 tests)
+Tests for `api.py` - not comprehensive (the ~60 endpoints have no tests of
+their own), but covers the request-handling logic directly:
+- `validate_instance_id` / `validate_instance_ids_list`
+- `run_lws_command`'s `consumed_keys` (a value sent positionally in
+  `cmd_parts` must not also be re-sent as a `--flag` option)
+- the global `before_request` guard rejecting non-numeric `<instance_id>`
+  path segments
+- the `app_remove` route (previously crashed every request with a
+  `TypeError` - its view function took a positional arg the route never
+  supplied)
+- API key authentication
 
 ## Key Features
 

@@ -730,8 +730,8 @@ lws app deploy <action> <instance_id> [OPTIONS]
 Actions: install, uninstall, start, stop, restart, status
 
 Options:
-  --compose_file TEXT  Docker Compose file path (required — note the underscore, not a hyphen)
-  --auto_start         Start after install (also an underscore)
+  --compose-file TEXT  Docker Compose file path (required)
+  --auto-start         Start after install
   --region TEXT        Region
   --az TEXT            Availability zone
 ```
@@ -739,8 +739,8 @@ Options:
 **Example:**
 ```bash
 lws app deploy install 100 \
-  --compose_file docker-compose.yml \
-  --auto_start
+  --compose-file docker-compose.yml \
+  --auto-start
 ```
 
 ### `app update`

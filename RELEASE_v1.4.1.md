@@ -1,7 +1,9 @@
 # Release v1.4.1 - Testing & Modularization
 
 ## 🎯 Overview
-This release focuses on improving code quality, testing infrastructure, and project organization. LWS now includes a comprehensive test suite with 96% code coverage and a properly modularized codebase.
+This release focuses on improving code quality, testing infrastructure, and project organization. It introduces the `lws_core/` package: a small, 96%-covered module of config/SSH/Proxmox/utility helpers extracted as a first step toward modularizing the codebase.
+
+**Scope note (added after the fact, see [architecture docs](docs/_pages/architecture.md)):** the coverage and "modularized" claims below describe `lws_core/` only (~500 lines). `lws.py` (the CLI, ~3,700 lines) and `api.py` (the REST API, ~1,200 lines) hold the actual command and endpoint logic and currently have no automated tests of their own.
 
 ## ✨ New Features
 
@@ -33,13 +35,16 @@ This release focuses on improving code quality, testing infrastructure, and proj
 ## 🔧 Improvements
 
 ### Code Modularization
-- **Properly modularized codebase** with clear separation of concerns:
+- **First step toward a modularized codebase**: config/SSH/Proxmox/utility
+  helpers extracted into `lws_core/`, with clear separation of concerns:
   - `lws_core/config.py` - Configuration management
   - `lws_core/ssh.py` - SSH operations
   - `lws_core/utils.py` - Utility functions
   - `lws_core/proxmox.py` - Proxmox API interactions
   - `lws_core/logging_setup.py` - Logging configuration
-  - `lws_commands/` - Command modules
+- `lws_commands/` was scaffolded as a placeholder for splitting the ~61
+  CLI commands out of `lws.py` into per-group files, but that split was
+  never done - the directory is still an empty stub.
 
 ### Enhanced `.gitignore`
 - Added comprehensive Python development patterns
@@ -109,12 +114,12 @@ pytest -m ssh  # SSH tests only
 pytest -m unit # Unit tests only
 ```
 
-## 📊 Code Quality Metrics
+## 📊 Code Quality Metrics (for `lws_core/` only - see scope note above)
 
 - **Total Tests**: 98
 - **Pass Rate**: 100%
 - **Code Coverage**: 96%
-- **Modules**: Fully modularized
+- **Modules**: `lws_core/` only; `lws.py` and `api.py` are still monolithic and untested
 - **Documentation**: Comprehensive
 
 ## 🔍 What's Tested

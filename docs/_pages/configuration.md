@@ -187,10 +187,15 @@ api_key: ""                # Empty or the placeholder refuses to start the serve
 api:
   host: "127.0.0.1"        # Loopback by default; change deliberately
   port: 8080               # API port
-  debug: false             # Enable debug mode (development only!)
+  debug: false             # Enable debug mode (development only!) - also switches
+                            # the server from the production WSGI server (waitress)
+                            # to Flask's own dev server, so leave this false unless
+                            # you're actively debugging
   log_level: "INFO"        # Logging level
-  allowed_origins:         # CORS allowed origins
-    - "http://localhost:8080"
+  allowed_origins:         # CORS allowed origins. Omitting this key denies all
+    - "http://localhost:8080"  # cross-origin browser access by default (curl/scripts
+                            # aren't subject to CORS either way) - list origins
+                            # explicitly to allow browser-based access to them
 ```
 
 **Security Note:** Never commit your actual API key to version control!
