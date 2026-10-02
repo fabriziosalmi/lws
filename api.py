@@ -1187,9 +1187,9 @@ if __name__ == '__main__':
     debug = API_CONFIG.get('debug', False)
     logging.info(f"Starting server on {host}:{port} (Debug: {debug})")
     if debug:
-        # Werkzeug's dev server + interactive debugger, deliberately opted
-        # into via config.yaml - never the default path.
-        app.run(host=host, port=port, debug=True)
+        # Never enable Werkzeug interactive debugger in runtime code.
+        # Keep this branch for local convenience without debug features.
+        app.run(host=host, port=port, debug=False, use_reloader=False)
     else:
         # app.run() is Werkzeug's development server and warns against
         # production use on every startup; waitress is a production-grade
