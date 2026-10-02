@@ -47,13 +47,14 @@ lws/
 │   └── __init__.py            # "Future Enhancements" below. Currently just a stub;
 │                               # all 61 commands still live directly in lws.py.
 │
-├── tests/                     # Unit and integration tests (lws_core only, see below)
+├── tests/                     # Unit and integration tests (see coverage note below)
 │   ├── conftest.py
 │   ├── test_config.py
 │   ├── test_proxmox.py
 │   ├── test_ssh.py
 │   ├── test_utils.py
-│   └── test_python_support.py
+│   ├── test_python_support.py
+│   └── test_api.py            # Targeted tests for api.py's validation/routing logic
 │
 └── docs/                      # Documentation (GitHub Pages)
     ├── index.html
@@ -61,7 +62,7 @@ lws/
     └── _pages/
 ```
 
-The test suite above covers `lws_core/` only (96% coverage of those five files); `lws.py` and `api.py`, which hold the actual command and endpoint logic, currently have no automated tests.
+`lws_core/` is comprehensively covered (96%). `lws.py` (the CLI, ~3,700 lines) has no automated tests at all. `api.py` (the REST API, ~1,200 lines) has tests only for its input-validation and routing logic (`test_api.py`, 22 tests) — its ~60 endpoint handlers themselves have no tests of their own.
 
 ## Core Modules
 
@@ -97,6 +98,8 @@ Manages SSH connections to Proxmox hosts with retry logic and timeout handling.
 
 **Features:**
 - A fresh SSH connection per command (via `sshpass` + the system `ssh` binary — no connection reuse/pooling)
+- `StrictHostKeyChecking=accept-new`: trusts a host's key on first contact (these hosts are rarely pre-seeded into `known_hosts`), but rejects a later, changed key for a previously-known host — the actual MITM case this setting exists to catch
+- The SSH password is passed via the `SSHPASS` environment variable (`sshpass -e`), not as a `-p` argument, so it never appears in `ps`/`/proc/<pid>/cmdline` to other local users
 - Automatic retry on failure (up to 2 retries)
 - 60-second command timeout
 - Password sanitization in logs
@@ -227,11 +230,15 @@ LWS organizes commands into logical groups:
 - Comprehensive error messages
 - Retry logic for transient failures
 - Graceful degradation
+- Non-zero process exit codes on failure (a failed operation no longer looks like a success to a caller checking the exit code — including `api.py`, which keys the HTTP status off it)
 
 ### 4. Security
 - Credential masking in logs
-- API key authentication
-- SSH password never exposed in logs
+- API key authentication (timing-safe comparison; refuses to start with an empty or placeholder key)
+- SSH password passed via the `SSHPASS` environment variable, never in a log message, argv, or process list
+- SSH host key verification (`StrictHostKeyChecking=accept-new`): trust-on-first-use, but a changed key for an already-known host is rejected
+- Allow-listed input validation on values that get interpolated into remote shell/`sed`/`grep` commands (security group names, container IDs, firewall rule fields) rather than escaping after the fact
+- CORS denies all cross-origin browser access by default; origins must be listed explicitly to allow them
 
 ### 5. Extensibility
 - Easy to add new commands

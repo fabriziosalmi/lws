@@ -52,7 +52,7 @@ If the underlying command's stdout starts with `{` or `[` (e.g. commands run wit
 }
 ```
 
-> **Known limitation affecting several endpoints below (marked ⚠️):** `run_lws_command` builds the underlying CLI call by appending every key still present in the request body as a `--key value` flag (`api.py:200-215`), even for keys the route handler already consumed to build a positional argument. When the corresponding `lws.py` command takes that value as a positional argument rather than an option — which is true for most of the endpoints marked below — the extra flag doesn't exist and the underlying CLI call fails with a Click "no such option" error. This is a bug in `api.py`, not something you can work around from the request body itself.
+> **Note:** `run_lws_command` builds the underlying CLI call from two sources: a handler-built positional `cmd_parts` list, and whatever is left in the request body/query string after the handler pops out the keys it already placed positionally (via `consumed_keys`). Earlier versions didn't pop those keys, so several endpoints below sent the same value twice — once positionally, once as a nonexistent `--key value` flag — and failed with a Click "no such option" error. That's fixed; it's noted on the endpoints below only where it's useful to know a field is positional rather than an option.
 
 ## API Endpoints
 
@@ -96,7 +96,7 @@ curl -X POST \
 
 #### POST `/conf/backup`
 
-Back up the current configuration to a file. Unlike most POST handlers, this one builds `--timestamp`/`--compress` flags manually instead of forwarding the whole body, so it isn't affected by the known limitation below.
+Back up the current configuration to a file. Unlike most POST handlers, this one builds `--timestamp`/`--compress` flags manually instead of forwarding the whole body.
 
 ```bash
 curl -X POST \
@@ -184,9 +184,9 @@ curl -X POST \
   http://localhost:8080/api/v1/px/cluster/start
 ```
 
-#### POST `/px/backup-lxc` ⚠️
+#### POST `/px/backup-lxc`
 
-Back up a single LXC container via `vzdump` on the Proxmox host. Affected by the known limitation above: `vmid` is positional in `px backup-lxc` and gets duplicated.
+Back up a single LXC container via `vzdump` on the Proxmox host. `vmid` is positional in `px backup-lxc`; the rest of the body (`storage`, `mode`, ...) is forwarded as options.
 
 ```bash
 curl -X POST \
@@ -196,9 +196,9 @@ curl -X POST \
   http://localhost:8080/api/v1/px/backup-lxc
 ```
 
-#### POST `/px/backup` ⚠️
+#### POST `/px/backup`
 
-Back up Proxmox host configuration (`/etc/pve`) to a local `.tar.gz`. Affected by the known limitation above: `backup_dir` is positional and gets duplicated.
+Back up Proxmox host configuration (`/etc/pve`) to a local `.tar.gz`. `backup_dir` is positional.
 
 ```bash
 curl -X POST \
@@ -208,9 +208,9 @@ curl -X POST \
   http://localhost:8080/api/v1/px/backup
 ```
 
-#### POST `/px/image` ⚠️
+#### POST `/px/image`
 
-Create a template image from an LXC container. Affected by the known limitation above: `instance_id` and `template_name` are both positional and get duplicated.
+Create a template image from an LXC container. `instance_id` and `template_name` are both positional.
 
 ```bash
 curl -X POST \
@@ -222,7 +222,7 @@ curl -X POST \
 
 #### DELETE `/px/image/{template_name}`
 
-Delete a template image from the Proxmox template cache. `template_name` comes from the URL, so it isn't affected by the known limitation.
+Delete a template image from the Proxmox template cache. `template_name` comes from the URL.
 
 ```bash
 curl -X DELETE -H "X-API-Key: your-key" \
@@ -238,9 +238,9 @@ curl -H "X-API-Key: your-key" \
   "http://localhost:8080/api/v1/px/security-groups?region=eu-south-1&az=az1"
 ```
 
-#### POST `/px/security-groups` ⚠️
+#### POST `/px/security-groups`
 
-Create a security group. Affected by the known limitation above: `group_name` is positional and gets duplicated.
+Create a security group. `group_name` is positional.
 
 ```bash
 curl -X POST \
@@ -252,7 +252,7 @@ curl -X POST \
 
 #### DELETE `/px/security-groups/{group_name}`
 
-Delete a security group. `group_name` comes from the URL, so it isn't affected by the known limitation.
+Delete a security group. `group_name` comes from the URL.
 
 ```bash
 curl -X DELETE -H "X-API-Key: your-key" \
@@ -261,7 +261,7 @@ curl -X DELETE -H "X-API-Key: your-key" \
 
 #### POST `/px/security-groups/{group_name}/rules` / DELETE `.../rules`
 
-Add or remove a firewall rule within an existing security group. `group_name` comes from the URL; the rule fields (`direction`, `action`, `protocol`, `source_ip`, `source_port`, `destination_ip`, `destination_port`) are all real options on `px security-group-rule-add`/`rule-rm`, so this pair isn't affected by the known limitation.
+Add or remove a firewall rule within an existing security group. `group_name` comes from the URL; the rule fields (`direction`, `action`, `protocol`, `source_ip`, `source_port`, `destination_ip`, `destination_port`) are all real options on `px security-group-rule-add`/`rule-rm`. `protocol`, the IP/CIDR fields, and the port fields are validated server-side (allow-listed characters, or parsed as an IP/CIDR) before being used.
 
 ```bash
 curl -X POST \
@@ -271,9 +271,9 @@ curl -X POST \
   http://localhost:8080/api/v1/px/security-groups/web/rules
 ```
 
-#### POST `/px/security-groups/attach` / `/px/security-groups/detach` ⚠️
+#### POST `/px/security-groups/attach` / `/px/security-groups/detach`
 
-Attach or detach a security group from a container's firewall config. Affected by the known limitation above: `group_name` and `vmid` are both positional and get duplicated.
+Attach or detach a security group from a container's firewall config. `group_name` and `vmid` are both positional; both are validated server-side (`group_name` against an allow-listed charset, `vmid` as numeric).
 
 ```bash
 curl -X POST \
@@ -283,9 +283,9 @@ curl -X POST \
   http://localhost:8080/api/v1/px/security-groups/attach
 ```
 
-#### POST `/px/upload` ⚠️
+#### POST `/px/upload`
 
-Upload an LXC template to a Proxmox host. Affected by the known limitation above: `local_path` and `remote_template_name` are both positional and get duplicated.
+Upload an LXC template to a Proxmox host. `local_path` and `remote_template_name` are both positional.
 
 ```bash
 curl -X POST \
@@ -297,7 +297,7 @@ curl -X POST \
 
 #### POST `/px/exec`
 
-Execute an arbitrary command on a Proxmox host over SSH. The handler filters the request body down to `region`/`az` before forwarding it, so — unlike most of the endpoints above — it isn't affected by the known limitation.
+Execute an arbitrary command on a Proxmox host over SSH. The handler filters the request body down to `region`/`az` before forwarding it.
 
 ```bash
 curl -X POST \
@@ -364,9 +364,9 @@ curl -H "X-API-Key: your-key" \
   http://localhost:8080/api/v1/lxc/instances/100
 ```
 
-#### POST `/lxc/instances/start` ⚠️
+#### POST `/lxc/instances/start`
 
-Start containers. Affected by the known limitation above: `instance_ids` stays in the request body and gets appended a second time as `--instance-ids "['100', ...]"` — a stringified Python list, not a real flag `lxc start` accepts.
+Start containers. `instance_ids` is a list of positional arguments; every element must be numeric (Proxmox container IDs always are) or the request is rejected with 400.
 
 ```bash
 curl -X POST \
@@ -380,9 +380,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/start
 ```
 
-#### POST `/lxc/instances/stop` ⚠️
+#### POST `/lxc/instances/stop`
 
-Stop containers. Affected by the same `instance_ids` duplication described above.
+Stop containers. Same `instance_ids` handling as `/lxc/instances/start` above.
 
 ```bash
 curl -X POST \
@@ -396,9 +396,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/stop
 ```
 
-#### POST `/lxc/instances/terminate` ⚠️
+#### POST `/lxc/instances/terminate`
 
-Terminate (destroy) containers. Affected by the same `instance_ids` duplication described above.
+Terminate (destroy) containers. Same `instance_ids` handling as `/lxc/instances/start` above.
 
 ```bash
 curl -X POST \
@@ -412,9 +412,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/terminate
 ```
 
-#### POST `/lxc/instances/reboot` ⚠️
+#### POST `/lxc/instances/reboot`
 
-Reboot running containers. Affected by the same `instance_ids` duplication described above.
+Reboot running containers. Same `instance_ids` handling as `/lxc/instances/start` above.
 
 ```bash
 curl -X POST \
@@ -424,9 +424,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/reboot
 ```
 
-#### POST `/lxc/instances/status` ⚠️
+#### POST `/lxc/instances/status`
 
-A one-shot resource snapshot (load average, memory, disk, swap) for one or more containers. Affected by the same `instance_ids` duplication described above.
+A one-shot resource snapshot (load average, memory, disk, swap) for one or more containers. Same `instance_ids` handling as `/lxc/instances/start` above.
 
 ```bash
 curl -X POST \
@@ -436,9 +436,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/status
 ```
 
-#### POST `/lxc/instances/scale` ⚠️
+#### POST `/lxc/instances/scale`
 
-Scale container resources. Affected by the same `instance_ids` duplication described above (the `memory`/`cpulimit`/`storage_size` options themselves are unaffected — they're real options, not positional).
+Scale container resources. Same `instance_ids` handling as `/lxc/instances/start` above; `memory`/`cpulimit`/`storage_size` are real options, not positional.
 
 ```bash
 curl -X POST \
@@ -455,9 +455,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/scale
 ```
 
-#### POST `/lxc/instances/clone` ⚠️
+#### POST `/lxc/instances/clone`
 
-Clone an LXC container. Affected by the known limitation above: `source_instance_id` and `target_instance_id` are both positional in `lxc clone` and get duplicated.
+Clone an LXC container. `source_instance_id` and `target_instance_id` are both positional in `lxc clone`.
 
 ```bash
 curl -X POST \
@@ -483,9 +483,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/exec
 ```
 
-#### POST `/lxc/instances/{instance_id}/snapshots` ⚠️
+#### POST `/lxc/instances/{instance_id}/snapshots`
 
-Create a snapshot. Affected by the known limitation above: `snapshot_name` is a positional argument in `lxc snapshot-add`, so it gets sent twice (once correctly, once as a nonexistent `--snapshot-name` flag) and the call fails.
+Create a snapshot. `snapshot_name` is a positional argument in `lxc snapshot-add`.
 
 ```bash
 curl -X POST \
@@ -518,9 +518,9 @@ curl -H "X-API-Key: your-key" \
   "http://localhost:8080/api/v1/lxc/instances/100/snapshots?region=eu-south-1&az=az1"
 ```
 
-#### POST `/lxc/instances/{instance_id}/volumes/attach` ⚠️
+#### POST `/lxc/instances/{instance_id}/volumes/attach`
 
-Attach a storage volume. Affected by the known limitation above: `volume_name` and `volume_size` are both positional in `lxc volume-attach` and get duplicated.
+Attach a storage volume. `volume_name` and `volume_size` are both positional in `lxc volume-attach`; `mount_point` is a real option.
 
 ```bash
 curl -X POST \
@@ -530,9 +530,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/volumes/attach
 ```
 
-#### POST `/lxc/instances/{instance_id}/volumes/detach` ⚠️
+#### POST `/lxc/instances/{instance_id}/volumes/detach`
 
-Detach a storage volume — this always removes the container's `mp0` mount, regardless of `volume_name`. Affected by the known limitation above: `volume_name` is positional and gets duplicated.
+Detach a storage volume — this always removes the container's `mp0` mount, regardless of `volume_name`. `volume_name` is positional in `lxc volume-detach`.
 
 ```bash
 curl -X POST \
@@ -542,9 +542,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/volumes/detach
 ```
 
-#### POST `/lxc/instances/{instance_id}/service` ⚠️
+#### POST `/lxc/instances/{instance_id}/service`
 
-Run a `systemctl` action against a service inside a container. Affected by the known limitation above: `action` and `service_name` are both positional in `lxc service` and get duplicated.
+Run a `systemctl` action against a service inside a container. `action` and `service_name` are both positional in `lxc service`.
 
 ```bash
 curl -X POST \
@@ -556,7 +556,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/migrate`
 
-Migrate a container to another Proxmox host. `target_host` is a real option (not positional), so this one isn't affected by the known limitation.
+Migrate a container to another Proxmox host. `target_host` is a real option, not positional.
 
 ```bash
 curl -X POST \
@@ -584,9 +584,9 @@ curl -H "X-API-Key: your-key" \
   http://localhost:8080/api/v1/lxc/instances/100/scale-check
 ```
 
-#### GET `/lxc/instances/{instance_id}/net-check` ⚠️
+#### GET `/lxc/instances/{instance_id}/net-check`
 
-Check whether a TCP/UDP port is open on a container. Affected by the known limitation above: `protocol` and `port` are both positional in `lxc net` and get duplicated as query params turned back into flags.
+Check whether a TCP/UDP port is open on a container. `protocol` and `port` are both positional in `lxc net`.
 
 ```bash
 curl -H "X-API-Key: your-key" \
@@ -622,7 +622,7 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/lxc/instances/{instance_id}/restore`
 
-Restore a container from a backup file. `backup_file` is a real option (not positional), so this one isn't affected by the known limitation.
+Restore a container from a backup file. `backup_file` is a real option, not positional.
 
 ```bash
 curl -X POST \
@@ -634,7 +634,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/backup`
 
-Create a backup of a container. All fields (`destination`, `download`, `compress_level`) are real options, so this one isn't affected by the known limitation. An empty body is fine — it uses `lxc backup-create`'s defaults.
+Create a backup of a container. All fields (`destination`, `download`, `compress_level`) are real options. An empty body is fine — it uses `lxc backup-create`'s defaults.
 
 ```bash
 curl -X POST \
@@ -664,9 +664,9 @@ curl -H "X-API-Key: your-key" \
 
 ### Docker/App Endpoints
 
-#### POST `/lxc/instances/{instance_id}/app/setup` ⚠️
+#### POST `/lxc/instances/{instance_id}/app/setup`
 
-Install Docker in a container. Affected by the known limitation above: `package_name` is positional in `app setup` and gets duplicated.
+Install Docker in a container. `package_name` is positional in `app setup`.
 
 ```bash
 curl -X POST \
@@ -696,9 +696,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/app/run
 ```
 
-#### POST `/lxc/instances/{instance_id}/app/deploy` ⚠️
+#### POST `/lxc/instances/{instance_id}/app/deploy`
 
-Deploy Docker Compose app. Affected by the known limitation above (`action` is positional and gets duplicated) **and** a second, separate issue: the request body's `compose_file`/`auto_start` get turned into `--compose-file`/`--auto-start` (hyphens), while the actual CLI command only accepts `--compose_file`/`--auto_start` (underscores). Either issue alone breaks the call.
+Deploy Docker Compose app. `action` is positional in `app deploy`; `compose_file`/`auto_start` are sent as `--compose-file`/`--auto-start` options (the CLI command's flags were renamed from underscores to hyphens to match the rest of the CLI and this generic option-forwarding).
 
 ```bash
 curl -X POST \
@@ -714,9 +714,9 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/app/deploy
 ```
 
-#### POST `/lxc/instances/{instance_id}/app/update` ⚠️
+#### POST `/lxc/instances/{instance_id}/app/update`
 
-Update a Compose app by re-deploying a new Compose file. **This endpoint cannot currently work**: `compose_file` is a required positional argument on `app update`, but the handler never adds it to the command at all — it only ever ends up as a `--compose_file`/`--compose-file` flag, which doesn't exist as an option on this command either. The call fails regardless of what you send.
+Update a Compose app by re-deploying a new Compose file. `compose_file` is a required positional argument on `app update`.
 
 ```bash
 curl -X POST \
@@ -744,9 +744,9 @@ curl -H "X-API-Key: your-key" \
   http://localhost:8080/api/v1/lxc/instances/100/app/containers
 ```
 
-#### POST `/lxc/instances/app/remove` ⚠️
+#### POST `/lxc/instances/app/remove`
 
-Uninstall Docker and Compose from one or more containers. **This endpoint always returns a 500**: the view function is declared as `app_remove(instance_ids)`, but its route has no `<instance_ids>` path segment, so Flask calls it with no arguments and Python raises `TypeError: app_remove() missing 1 required positional argument`. This is unrelated to the request body shown below — no request would succeed against this endpoint as currently written.
+Uninstall Docker and Compose from one or more containers. `instance_ids` is a list of positional arguments; every element must be numeric or the request is rejected with 400.
 
 ```bash
 curl -X POST \
@@ -760,7 +760,7 @@ curl -X POST \
 
 #### GET `/sec/discovery`
 
-Discover reachable hosts. Called with no query parameters, this works fine (`sec discovery`'s `lxc_id` argument is optional). ⚠️ Called *with* `?lxc_id=...` as shown below, it hits the known limitation above — `lxc_id` is positional and gets duplicated as a nonexistent `--lxc-id` flag, so the call fails.
+Discover reachable hosts. `sec discovery`'s `lxc_id` argument is optional and, when present, positional — as in the example below with `?lxc_id=...`.
 
 ```bash
 curl -H "X-API-Key: your-key" \
@@ -818,7 +818,7 @@ Currently, there are no rate limits. For production use, consider implementing r
 
 ## CORS Configuration
 
-Configure allowed origins in `config.yaml`:
+Configure allowed origins in `config.yaml`. Omitting `allowed_origins` denies all cross-origin browser access by default — this only affects browser-based JS; `curl`/scripts/server-to-server callers are never subject to CORS:
 
 ```yaml
 api:
@@ -826,6 +826,10 @@ api:
     - "http://localhost:8080"
     - "https://yourdomain.com"
 ```
+
+## Production Deployment
+
+`api.py` uses [waitress](https://pypi.org/project/waitress/), a production WSGI server, whenever `api.debug` is `false` (the default). Setting `api.debug: true` switches to Flask's own development server (with the interactive debugger) and should only be used locally.
 
 ## Example: Complete Workflow
 

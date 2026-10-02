@@ -38,6 +38,7 @@ LWS is a command-line interface (CLI) tool designed to simplify the management o
 *   **🖥️ Web UI:** Simple graphical interface to interact with the API
 *   **📚 Swagger Documentation:** Interactive API documentation
 *   **📖 GitHub Pages:** Comprehensive documentation site
+*   **🔒 Security & reliability hardening:** allow-listed input validation on remote-command arguments, SSH host key verification and env-var password passing, non-zero exit codes on failure, a production WSGI server for the API, and a fixed Docker image build — see [Security Considerations](#security-considerations)
 
 [![asciicast](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O.svg)](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O)
 
@@ -344,7 +345,7 @@ lws app run 100 -d -p 80:80 nginx
 
 #### Deploy with Docker Compose
 ```bash
-lws app deploy install 100 --compose_file docker-compose.yml --auto_start
+lws app deploy install 100 --compose-file docker-compose.yml --auto-start
 ```
 
 #### Update Docker Compose Application
@@ -495,22 +496,22 @@ Interactive API documentation is available via Swagger UI.
   - Enable container logging and monitoring
   
 - **Input Validation**:
-  - LWS now includes enhanced input validation to prevent command injection
-  - Instance IDs are validated to contain only numeric characters
-  - Hostnames and usernames are sanitized to remove dangerous characters
+  - Container/instance IDs are validated as numeric everywhere they're accepted (CLI arguments and the REST API)
+  - Security group names, template names, firewall protocol/port fields, and source/destination IP/CIDR values are validated against an allow-list (or parsed as a real IP/CIDR) before being used to build any remote command — this closes the command-injection surface in the firewall/security-group commands rather than attempting to escape it after the fact
+  - `host`/`user`/`ssh_password` come from `config.yaml`, which you control, and aren't user-supplied CLI input — see **Secure Storage of Credentials** above for how to protect that file instead
   
 - **File Security**:
-  - Temporary files are now created securely using system temp directories
-  - File cleanup operations are safer and more targeted
+  - Temporary files are created using system temp directories
   - HTTP requests include timeouts to prevent indefinite blocking
 
-### 🛡️ **Security Features Added**
-- ✅ Input validation and sanitization for all user inputs
-- ✅ Secure temporary file handling 
-- ✅ Enhanced error handling with specific exception types
-- ✅ Command injection prevention in subprocess calls
-- ✅ HTTP request timeouts to prevent indefinite blocking
-- ✅ Configuration validation with security checks
+### 🛡️ **Security Features**
+- ✅ Allow-listed validation of values that reach a remote shell/`sed`/`grep` command, instead of escaping them after construction
+- ✅ API key compared with `hmac.compare_digest` (timing-safe); the server refuses to start with an empty or placeholder key
+- ✅ SSH password passed via the `SSHPASS` environment variable, never in argv/`ps`/logs
+- ✅ SSH host key verification (`StrictHostKeyChecking=accept-new`): a changed key for an already-known host is rejected
+- ✅ CORS denies all cross-origin browser access by default; origins must be listed explicitly
+- ✅ `api.py` runs behind a production WSGI server (waitress) unless `debug: true` is explicitly set
+- ✅ Failed commands exit with a non-zero process exit code instead of looking like a success
 
 ## Best Practices
 

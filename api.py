@@ -50,9 +50,13 @@ API_CONFIG = config.get('api', {})
 LWS_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'lws.py') # Path to lws.py
 
 # --- CORS Configuration ---
-allowed_origins = API_CONFIG.get('allowed_origins', '*') # Default to allow all if not specified
-# If allowing specific origins, consider adding 'null' for file:// access during development
-# Example: allowed_origins = ["http://localhost:8000", "null"]
+# Default to no cross-origin access when unset. This only affects
+# browser-based JS making cross-origin requests; curl/scripts/server-to-server
+# callers (the normal way to use this API) are never subject to CORS, so
+# this default costs nothing for the common case while not silently opening
+# a root-equivalent API to any website until an operator opts in.
+# To allow specific origins: allowed_origins: ["http://localhost:8000", "null"]
+allowed_origins = API_CONFIG.get('allowed_origins', [])
 CORS(app, origins=allowed_origins) # Apply CORS settings
 
 # The API drives lws, which runs pct and ssh as root on every configured
@@ -115,13 +119,25 @@ def validate_instance_id(instance_id):
     return re.match(r'^[0-9]+$', instance_str) is not None
 
 
-def sanitize_input(input_value, max_length=255):
-    """Sanitize input to prevent injection attacks."""
-    if not isinstance(input_value, str):
-        return None
-    # Remove dangerous characters
-    sanitized = re.sub(r'[;&|`$(){}[\]<>]', '', input_value)
-    return sanitized[:max_length] if len(sanitized) <= max_length else None
+def validate_instance_ids_list(instance_ids):
+    """Validate a bulk 'instance_ids' JSON body field: every element numeric."""
+    return isinstance(instance_ids, list) and len(instance_ids) > 0 and all(
+        validate_instance_id(i) for i in instance_ids
+    )
+
+
+@app.before_request
+def reject_non_numeric_instance_ids():
+    """Reject any request whose <instance_id> path segment isn't numeric.
+
+    Proxmox container IDs are always numeric; every one of these values ends
+    up in a command line sent to lws.py (and, for some commands, embedded in
+    a remote shell string over SSH), so rejecting anything else here closes
+    off a whole class of bad/malicious path input before it reaches that code.
+    """
+    instance_id = (request.view_args or {}).get('instance_id')
+    if instance_id is not None and not validate_instance_id(instance_id):
+        abort(400, description=f"Invalid instance_id: must be numeric, got {instance_id!r}.")
 
 
 # --- Authentication ---
@@ -163,7 +179,7 @@ def handle_generic_exception(e):
 
 
 # --- Helper Function to Run lws.py Commands ---
-def run_lws_command(command_parts, data=None):
+def run_lws_command(command_parts, data=None, consumed_keys=None):
     """
     Executes an lws.py command using subprocess with input validation.
 
@@ -171,6 +187,11 @@ def run_lws_command(command_parts, data=None):
         command_parts (list): A list containing the command and its subcommands/arguments
                               (e.g., ['lxc', 'run', '--image-id', 'ubuntu-22.04']).
         data (dict, optional): Data from the request body (for POST/PUT).
+        consumed_keys (iterable, optional): Keys already placed into
+            `command_parts` as positional arguments by the caller. Without
+            this, the same value gets sent twice: once positionally and once
+            again as a `--key value` option, because `data` is merged into
+            `options` unconditionally below.
 
     Returns:
         tuple: (output, error, return_code)
@@ -203,6 +224,11 @@ def run_lws_command(command_parts, data=None):
         options.update(request.args.to_dict())
     if data:
         options.update(data)
+
+    # Drop values the caller already placed positionally in command_parts,
+    # otherwise they get sent a second time below as a --key value option.
+    for key in (consumed_keys or ()):
+        options.pop(key, None)
 
     # Append options as command line arguments
     for key, value in options.items():
@@ -508,10 +534,13 @@ def px_upload_template():
          return jsonify({"error": "Missing 'local_path' in request body"}), 400
 
     cmd_parts = ['px', 'upload', data['local_path']]
-    if 'remote_template_name' in data: cmd_parts.append(data['remote_template_name'])
-    
+    consumed = ['local_path']
+    if 'remote_template_name' in data:
+        cmd_parts.append(data['remote_template_name'])
+        consumed.append('remote_template_name')
+
     # Pass other options via run_lws_command's data handling
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=consumed)
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/status', methods=['GET'])
@@ -576,7 +605,7 @@ def px_backup_lxc():
          return jsonify({"error": "Missing 'vmid' or 'storage' in request body"}), 400
     
     cmd_parts = ['px', 'backup-lxc', data['vmid']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data) # Pass remaining options
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['vmid']) # Pass remaining options
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/image', methods=['POST'])
@@ -588,7 +617,7 @@ def px_image_add():
          return jsonify({"error": "Missing 'instance_id' or 'template_name' in request body"}), 400
 
     cmd_parts = ['px', 'image-add', data['instance_id'], data['template_name']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_id', 'template_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/image/<template_name>', methods=['DELETE'])
@@ -609,7 +638,7 @@ def px_security_group_add():
          return jsonify({"error": "Missing 'group_name' in request body"}), 400
     
     cmd_parts = ['px', 'security-group-add', data['group_name']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['group_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/security-groups/<group_name>', methods=['DELETE'])
@@ -656,7 +685,7 @@ def px_security_group_attach():
          return jsonify({"error": "Missing 'group_name' or 'vmid' in request body"}), 400
 
     cmd_parts = ['px', 'security-group-attach', data['group_name'], data['vmid']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['group_name', 'vmid'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/security-groups/detach', methods=['POST'])
@@ -668,7 +697,7 @@ def px_security_group_detach():
          return jsonify({"error": "Missing 'group_name' or 'vmid' in request body"}), 400
 
     cmd_parts = ['px', 'security-group-detach', data['group_name'], data['vmid']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['group_name', 'vmid'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/templates', methods=['GET'])
@@ -721,7 +750,7 @@ def px_backup_host_config():
          return jsonify({"error": "Missing 'backup_dir' in request body"}), 400
 
     cmd_parts = ['px', 'backup', data['backup_dir']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['backup_dir'])
     return format_response(stdout, stderr, rc)
 
 
@@ -743,11 +772,11 @@ def lxc_run_instance():
 def lxc_stop_instances():
     """Stop running LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['lxc', 'stop'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/terminate', methods=['POST']) # Using POST for multiple IDs
@@ -755,11 +784,11 @@ def lxc_stop_instances():
 def lxc_terminate_instances():
     """Terminate (destroy) LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['lxc', 'terminate'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances', methods=['GET'])
@@ -783,13 +812,13 @@ def lxc_describe_instance(instance_id):
 def lxc_scale_instances():
     """Scale resources for LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
     if not any(k in data for k in ['memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit', 'disk_read_limit', 'disk_write_limit']):
         return jsonify({"error": "Missing scaling parameters (memory, cpulimit, etc.)"}), 400
 
     cmd_parts = ['lxc', 'scale'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/snapshots', methods=['POST'])
@@ -801,7 +830,7 @@ def lxc_snapshot_add(instance_id):
          return jsonify({"error": "Missing 'snapshot_name' in request body"}), 400
 
     cmd_parts = ['lxc', 'snapshot-add', instance_id, data['snapshot_name']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['snapshot_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/snapshots/<snapshot_name>', methods=['DELETE'])
@@ -826,11 +855,11 @@ def lxc_list_snapshots(instance_id):
 def lxc_start_instances():
     """Start stopped LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['lxc', 'start'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/reboot', methods=['POST'])
@@ -838,11 +867,11 @@ def lxc_start_instances():
 def lxc_reboot_instances():
     """Reboot running LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['lxc', 'reboot'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/volumes/attach', methods=['POST'])
@@ -854,7 +883,7 @@ def lxc_volume_attach(instance_id):
          return jsonify({"error": "Missing 'volume_name', 'volume_size', or 'mount_point' in request body"}), 400
 
     cmd_parts = ['lxc', 'volume-attach', instance_id, data['volume_name'], data['volume_size']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['volume_name', 'volume_size'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/volumes/detach', methods=['POST'])
@@ -866,7 +895,7 @@ def lxc_volume_detach(instance_id):
          return jsonify({"error": "Missing 'volume_name' in request body"}), 400
 
     cmd_parts = ['lxc', 'volume-detach', instance_id, data['volume_name']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['volume_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/status', methods=['POST']) # POST for multiple IDs
@@ -874,11 +903,11 @@ def lxc_volume_detach(instance_id):
 def lxc_monitor_instances():
     """Monitor resources of LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['lxc', 'status'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/service', methods=['POST'])
@@ -894,7 +923,7 @@ def lxc_service(instance_id):
         return jsonify({"error": f"Invalid action. Must be one of: {valid_actions}"}), 400
 
     cmd_parts = ['lxc', 'service', data['action'], data['service_name'], instance_id]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['action', 'service_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/migrate', methods=['POST'])
@@ -934,7 +963,7 @@ def lxc_clone():
          return jsonify({"error": "Missing 'source_instance_id' or 'target_instance_id' in request body"}), 400
 
     cmd_parts = ['lxc', 'clone', data['source_instance_id'], data['target_instance_id']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['source_instance_id', 'target_instance_id'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/exec', methods=['POST'])
@@ -972,7 +1001,7 @@ def lxc_net_check(instance_id):
         return jsonify({"error": "Missing 'protocol' or 'port' query parameters"}), 400
 
     cmd_parts = ['lxc', 'net', instance_id, args['protocol'], args['port']]
-    stdout, stderr, rc = run_lws_command(cmd_parts, args)
+    stdout, stderr, rc = run_lws_command(cmd_parts, args, consumed_keys=['protocol', 'port'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/info', methods=['GET'])
@@ -1046,7 +1075,7 @@ def app_setup(instance_id):
     data = request.get_json() or {}
     package_name = data.get('package_name', 'docker') # Default from lws.py
     cmd_parts = ['app', 'setup', instance_id, package_name]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['package_name'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/app/run', methods=['POST'])
@@ -1085,7 +1114,7 @@ def app_deploy_compose(instance_id):
         return jsonify({"error": f"Invalid action. Must be one of: {valid_actions}"}), 400
 
     cmd_parts = ['app', 'deploy', data['action'], instance_id]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['action'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/app/update', methods=['POST'])
@@ -1096,8 +1125,8 @@ def app_update_compose(instance_id):
     if not data or 'compose_file' not in data:
          return jsonify({"error": "Missing 'compose_file' in request body"}), 400
 
-    cmd_parts = ['app', 'update', instance_id]
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    cmd_parts = ['app', 'update', instance_id, data['compose_file']]
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['compose_file'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/app/logs/<container_name_or_id>', methods=['GET'])
@@ -1118,14 +1147,14 @@ def app_list_containers(instance_id):
 
 @app.route('/api/v1/lxc/instances/app/remove', methods=['POST']) # POST for multiple IDs
 @require_api_key
-def app_remove(instance_ids):
+def app_remove():
     """Uninstall Docker and Compose from LXC containers."""
     data = request.get_json()
-    if not data or 'instance_ids' not in data or not isinstance(data['instance_ids'], list):
-         return jsonify({"error": "Missing 'instance_ids' (list) in request body"}), 400
+    if not data or not validate_instance_ids_list(data.get('instance_ids')):
+         return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
 
     cmd_parts = ['app', 'remove'] + data['instance_ids']
-    stdout, stderr, rc = run_lws_command(cmd_parts, data)
+    stdout, stderr, rc = run_lws_command(cmd_parts, data, consumed_keys=['instance_ids'])
     return format_response(stdout, stderr, rc)
 
 
@@ -1138,8 +1167,8 @@ def sec_discovery():
     cmd_parts = ['sec', 'discovery']
     if 'lxc_id' in args:
         cmd_parts.append(args['lxc_id']) # lxc_id is positional if present
-        
-    stdout, stderr, rc = run_lws_command(cmd_parts, args)
+
+    stdout, stderr, rc = run_lws_command(cmd_parts, args, consumed_keys=['lxc_id'])
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/sec/scan', methods=['GET'])
@@ -1156,5 +1185,14 @@ if __name__ == '__main__':
     host = API_CONFIG.get('host', '127.0.0.1')
     port = API_CONFIG.get('port', 8080)
     debug = API_CONFIG.get('debug', False)
-    logging.info(f"Starting Flask server on {host}:{port} (Debug: {debug})")
-    app.run(host=host, port=port, debug=debug)
+    logging.info(f"Starting server on {host}:{port} (Debug: {debug})")
+    if debug:
+        # Never enable Werkzeug interactive debugger in runtime code.
+        # Keep this branch for local convenience without debug features.
+        app.run(host=host, port=port, debug=False, use_reloader=False)
+    else:
+        # app.run() is Werkzeug's development server and warns against
+        # production use on every startup; waitress is a production-grade
+        # WSGI server with the same simple "serve this WSGI app" API.
+        from waitress import serve
+        serve(app, host=host, port=port)

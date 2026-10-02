@@ -7,6 +7,7 @@ including service checks, VMID generation, and instance command processing.
 
 import logging
 import subprocess
+import sys
 import click
 from .config import config
 from .proxmox import run_proxmox_command
@@ -68,13 +69,13 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
     """
     if not instance_ids:
         click.secho("❌ No instance IDs provided.", fg='red')
-        return
+        sys.exit(1)
 
     try:
         host_details = config['regions'][region]['availability_zones'][az]
     except KeyError:
         click.secho(f"❌ Invalid region '{region}' or availability zone '{az}'", fg='red')
-        return
+        sys.exit(1)
 
     command_map = {
         'stop': lambda instance_id: (["pct", "shutdown", instance_id], ["pct", "shutdown", instance_id]),
@@ -96,8 +97,9 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
 
     if command_type not in command_map:
         click.secho(f"❌ Unknown command type: {command_type}", fg='red')
-        return
+        sys.exit(1)
 
+    had_failure = False
     with click.progressbar(instance_ids, label=f"Processing {command_type} command") as instance_ids_bar:
         for instance_id in instance_ids_bar:
             try:
@@ -105,6 +107,7 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
                     snapshot_name = kwargs.get('snapshot_name')
                     if not snapshot_name:
                         click.secho(f"❌ Snapshot name is required for {command_type}", fg='red')
+                        had_failure = True
                         continue
                     local_cmd, remote_cmd = command_map[command_type](instance_id, snapshot_name)
                 else:
@@ -121,9 +124,18 @@ def process_instance_command(instance_ids, command_type, region, az, **kwargs):
                         click.secho(f"✅ Instance {instance_id} {command_type} executed successfully.", fg='green')
                 else:
                     click.secho(f"❌ Failed to {command_type} instance {instance_id}: {result.stderr}", fg='red')
+                    had_failure = True
             except Exception as e:
                 click.secho(f"❌ Error processing instance {instance_id}: {str(e)}", fg='red')
                 logging.error(f"Error processing instance {instance_id} with {command_type}: {str(e)}")
+                had_failure = True
+
+    # Callers (the Click command functions in lws.py) don't inspect a return
+    # value, so without this every bulk operation exits 0 even when every
+    # single instance failed - api.py relies on this process exit code to
+    # decide the HTTP status it returns.
+    if had_failure:
+        sys.exit(1)
 
 
 def build_resize_command(instance_id, memory=None, cpulimit=None, storage_size=None, **kwargs):

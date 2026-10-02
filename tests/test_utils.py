@@ -451,13 +451,18 @@ class TestProcessInstanceCommand:
         """Test processing command with no instance IDs."""
         with patch('lws_core.utils.config', sample_config):
             with patch('click.secho') as mock_echo:
-                process_instance_command(
-                    instance_ids=[],
-                    command_type='stop',
-                    region='eu-south-1',
-                    az='az1'
-                )
-                
+                # No instance IDs is a hard failure: the process must exit
+                # non-zero rather than silently return, otherwise callers
+                # (including api.py, which keys off the exit code) see success.
+                with pytest.raises(SystemExit) as exc_info:
+                    process_instance_command(
+                        instance_ids=[],
+                        command_type='stop',
+                        region='eu-south-1',
+                        az='az1'
+                    )
+                assert exc_info.value.code == 1
+
                 # Should show error
                 assert any('no instance' in str(call).lower() for call in mock_echo.call_args_list)
 
@@ -466,13 +471,15 @@ class TestProcessInstanceCommand:
         """Test processing command with invalid region."""
         with patch('lws_core.utils.config', sample_config):
             with patch('click.secho') as mock_echo:
-                process_instance_command(
-                    instance_ids=['10001'],
-                    command_type='stop',
-                    region='invalid-region',
-                    az='az1'
-                )
-                
+                with pytest.raises(SystemExit) as exc_info:
+                    process_instance_command(
+                        instance_ids=['10001'],
+                        command_type='stop',
+                        region='invalid-region',
+                        az='az1'
+                    )
+                assert exc_info.value.code == 1
+
                 # Should show error
                 assert any('invalid' in str(call).lower() for call in mock_echo.call_args_list)
 
@@ -481,13 +488,15 @@ class TestProcessInstanceCommand:
         """Test processing command with invalid availability zone."""
         with patch('lws_core.utils.config', sample_config):
             with patch('click.secho') as mock_echo:
-                process_instance_command(
-                    instance_ids=['10001'],
-                    command_type='stop',
-                    region='eu-south-1',
-                    az='invalid-az'
-                )
-                
+                with pytest.raises(SystemExit) as exc_info:
+                    process_instance_command(
+                        instance_ids=['10001'],
+                        command_type='stop',
+                        region='eu-south-1',
+                        az='invalid-az'
+                    )
+                assert exc_info.value.code == 1
+
                 # Should show error
                 assert any('invalid' in str(call).lower() for call in mock_echo.call_args_list)
 
@@ -496,13 +505,15 @@ class TestProcessInstanceCommand:
         """Test processing unknown command type."""
         with patch('lws_core.utils.config', sample_config):
             with patch('click.secho') as mock_echo:
-                process_instance_command(
-                    instance_ids=['10001'],
-                    command_type='unknown_command',
-                    region='eu-south-1',
-                    az='az1'
-                )
-                
+                with pytest.raises(SystemExit) as exc_info:
+                    process_instance_command(
+                        instance_ids=['10001'],
+                        command_type='unknown_command',
+                        region='eu-south-1',
+                        az='az1'
+                    )
+                assert exc_info.value.code == 1
+
                 # Should show error
                 assert any('unknown' in str(call).lower() for call in mock_echo.call_args_list)
 
@@ -513,17 +524,22 @@ class TestProcessInstanceCommand:
         mock_result.returncode = 1
         mock_result.stdout = ""
         mock_result.stderr = "Command failed"
-        
+
         with patch('lws_core.utils.config', sample_config):
             with patch('lws_core.utils.run_proxmox_command', return_value=mock_result):
                 with patch('click.secho') as mock_echo:
-                    process_instance_command(
-                        instance_ids=['10001'],
-                        command_type='stop',
-                        region='eu-south-1',
-                        az='az1'
-                    )
-                    
+                    # A failed instance must make the whole process exit
+                    # non-zero - previously this returned normally (exit 0)
+                    # even though every instance failed.
+                    with pytest.raises(SystemExit) as exc_info:
+                        process_instance_command(
+                            instance_ids=['10001'],
+                            command_type='stop',
+                            region='eu-south-1',
+                            az='az1'
+                        )
+                    assert exc_info.value.code == 1
+
                     # Should show failure
                     assert any('failed' in str(call).lower() for call in mock_echo.call_args_list)
 

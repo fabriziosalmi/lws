@@ -19,6 +19,8 @@ import click
 import socket
 import tempfile
 import re
+import ipaddress
+import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import sys
 from tqdm import tqdm
@@ -32,7 +34,6 @@ from lws_core import (
     run_ssh_command,
     run_proxmox_command,
     execute_command,
-    is_service_active,
     process_instance_command,
     build_resize_command,
     get_next_vmid,
@@ -52,166 +53,6 @@ def lws():
     pass
 
 
-def run_ssh_command(host, user, ssh_password, command):
-    """
-    Runs an SSH command on a remote host, with error handling and logging.
-    
-    Parameters:
-    - host: Remote host to connect to
-    - user: SSH username
-    - ssh_password: SSH password
-    - command: List containing the command and its arguments
-    
-    Returns:
-    - subprocess.CompletedProcess object with stdout and stderr
-    """
-    if not shutil.which('sshpass'):
-        error_msg = "sshpass command not found. Please install it with 'apt install sshpass' or equivalent."
-        logging.error(f"❌ {error_msg}")
-        raise RuntimeError(error_msg)
-        
-    # Add connection timeout and retry mechanism
-    connection_timeout = "15"  # 15 seconds timeout
-    max_retries = 2
-    retry_count = 0
-    
-    ssh_cmd = [
-        "sshpass", "-p", ssh_password, "ssh", 
-        "-o", "StrictHostKeyChecking=no", 
-        "-o", f"ConnectTimeout={connection_timeout}",
-        "-o", "ServerAliveInterval=5",
-        f"{user}@{host}"
-    ] + command
-    
-    # Construct a sanitized command for logging (hides the password)
-    sanitized_ssh_cmd = [
-        "sshpass", "-p", "****", "ssh", 
-        "-o", "StrictHostKeyChecking=no", 
-        "-o", f"ConnectTimeout={connection_timeout}",
-        "-o", "ServerAliveInterval=5",
-        f"{user}@{host}"
-    ] + command
-
-    while retry_count <= max_retries:
-        try:
-            # Log the sanitized command instead of the real command with the password
-            if retry_count > 0:
-                logging.debug(f"🔁 Retry {retry_count}/{max_retries}: Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
-            else:
-                logging.debug(f"🔎 Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
-            
-            # Execute the command
-            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60)
-            
-            # Check if the command succeeded
-            if result.returncode == 0:
-                logging.debug(f"🔎 SSH command executed successfully: {' '.join(sanitized_ssh_cmd)}")
-                logging.debug(f"🔎 Command output: {result.stdout}")
-                return result
-            
-            # If we reached here, there was an error
-            logging.debug(f"❌ SSH command failed with return code {result.returncode}: {' '.join(sanitized_ssh_cmd)}")
-            logging.debug(f"❌ Error output: {result.stderr}")
-            
-            # Check for specific SSH errors that would benefit from retry
-            if "Connection refused" in result.stderr or "Connection timed out" in result.stderr:
-                retry_count += 1
-                if retry_count <= max_retries:
-                    logging.debug(f"🔄 Retrying SSH connection to {host} after connection issue ({retry_count}/{max_retries})")
-                    time.sleep(2)  # Wait 2 seconds before retry
-                    continue
-            
-            # For other errors, don't retry - just return the error
-            return result
-            
-        except subprocess.TimeoutExpired:
-            logging.error(f"❌ SSH command timed out after 60 seconds: {' '.join(sanitized_ssh_cmd)}")
-            retry_count += 1
-            if retry_count <= max_retries:
-                logging.debug(f"🔄 Retrying SSH command after timeout ({retry_count}/{max_retries})")
-                time.sleep(2)
-                continue
-            # Create a dummy result for the timeout
-            error_result = subprocess.CompletedProcess(
-                args=sanitized_ssh_cmd,
-                returncode=124,  # Common timeout exit code
-                stdout="",
-                stderr="Error: SSH command timed out after 60 seconds"
-            )
-            return error_result
-        except Exception as e:
-            logging.error(f"❌ An unexpected error occurred while running SSH command: {str(e)}")
-            # Create a dummy result with the error info
-            error_result = subprocess.CompletedProcess(
-                args=sanitized_ssh_cmd,
-                returncode=1,
-                stdout="",
-                stderr=f"Error: {str(e)}"
-            )
-            return error_result
-
-
-def execute_command(cmd, use_local_only, host_details=None):
-    """
-    Executes a command locally or via SSH based on the configuration.
-    
-    Parameters:
-    - cmd: Command list to execute
-    - use_local_only: Whether to execute locally only
-    - host_details: SSH connection details for remote execution
-    
-    Returns:
-    - subprocess.CompletedProcess object with command output
-    """
-    if not cmd:
-        raise ValueError("Command cannot be empty")
-        
-    if use_local_only:
-        logging.debug(f"🔎 Executing local command: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            result.check_returncode()
-            logging.debug(f"🔎 Local command output: {result.stdout}")
-            return result
-        except subprocess.CalledProcessError as e:
-            logging.error(f"❌ Local command failed: {e}")
-            return e
-        except Exception as e:
-            logging.error(f"❌ Unexpected error executing local command: {str(e)}")
-            error_result = subprocess.CompletedProcess(
-                args=cmd,
-                returncode=1,
-                stdout="",
-                stderr=f"Error: {str(e)}"
-            )
-            return error_result
-    else:
-        if not host_details:
-            raise ValueError("Host details are required for remote command execution")
-        logging.debug(f"🔎 Executing remote command: {' '.join(cmd)} on {host_details['host']}")
-        return run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], cmd)
-
-
-def run_proxmox_command(local_cmd, remote_cmd=None, use_local_only=False, host_details=None):
-    """
-    Executes a Proxmox command either locally or remotely.
-    
-    Parameters:
-    - local_cmd: Command to execute locally
-    - remote_cmd: Command to execute remotely (if use_local_only is False)
-    - use_local_only: Whether to execute locally only
-    - host_details: SSH connection details for remote execution
-    
-    Returns:
-    - subprocess.CompletedProcess object with command output
-    """
-    cmd = local_cmd if use_local_only else remote_cmd
-    if cmd is None:
-        raise ValueError("Command cannot be None.")
-    return execute_command(cmd, use_local_only, host_details)
-
-
-# Command alias decorator
 # Command alias decorator (kept local as it depends on the CLI group)
 def command_alias(*aliases):
     """Decorator that creates command aliases for Click commands."""
@@ -223,6 +64,54 @@ def command_alias(*aliases):
 
 
 # SSH and command execution functions are now in lws_core.ssh and lws_core.proxmox
+
+
+# --- Input validators ---
+# Several commands below interpolate user-supplied values into shell strings
+# (sed/grep/echo) that are executed on the remote Proxmox host or inside an
+# LXC container via SSH. Passing those values through `shlex.quote` is not
+# enough on its own because the strings also embed sed/grep pattern syntax
+# (not just shell syntax), so a quoted-but-still-regex-special value could
+# still break the intended command. Validating against a strict allow-list
+# before the value is ever interpolated removes the injection vector instead
+# of trying to escape it across two nested languages.
+#
+# This also covers a second, more structural injection vector: OpenSSH
+# itself re-joins every argument given after `user@host` into a single
+# string and hands it to the remote shell, even when this codebase builds a
+# "safe" argv list like ["pct", "shutdown", instance_id] for run_ssh_command.
+# So a value containing shell metacharacters is exploitable remotely even
+# though subprocess.run(..., shell=False) makes it safe locally. instance_id
+# is by far the most common untrusted value flowing into these commands
+# (Proxmox container IDs are always numeric), so validating it here at every
+# Click argument closes that vector for the large majority of call sites.
+_SAFE_NAME_RE = re.compile(r'^[A-Za-z0-9_-]{1,64}$')
+_VMID_RE = re.compile(r'^[0-9]{1,10}$')
+_TEMPLATE_NAME_RE = re.compile(r'^[A-Za-z0-9_.-]{1,255}$')
+_PROTOCOL_RE = re.compile(r'^[A-Za-z0-9]{1,16}$')
+_PORT_RE = re.compile(r'^[0-9]{1,5}(:[0-9]{1,5})?$')
+
+
+def _validate_pattern(pattern, label):
+    def callback(ctx, param, value):
+        if value is None:
+            return value
+        values = value if isinstance(value, (tuple, list)) else (value,)
+        for v in values:
+            if not pattern.match(str(v)):
+                raise click.BadParameter(f"invalid {label}: {v!r}")
+        return value
+    return callback
+
+
+def _validate_ip_or_cidr(ctx, param, value):
+    if value is None:
+        return value
+    try:
+        ipaddress.ip_network(value, strict=False)
+    except ValueError:
+        raise click.BadParameter(f"invalid IP/CIDR: {value!r}")
+    return value
 
 
 # Utility functions are now in lws_core.utils
@@ -244,6 +133,7 @@ def show_conf():
         click.secho(yaml.dump(masked_config, default_flow_style=False), fg='cyan')
     except Exception as e:
         click.secho(f"❌ Error loading configuration: {str(e)}", fg='red')
+        sys.exit(1)
 
 
 @conf.command('validate')
@@ -257,6 +147,7 @@ def validate_configuration_command():
     except ValueError as e:
         click.secho(f"❌ Configuration validation failed: {str(e)}", fg='red')
         logging.error(f"❌ Configuration validation failed: {str(e)}")
+        sys.exit(1)
 
 
 @conf.command('backup')
@@ -288,6 +179,7 @@ def backup_config(destination_path, timestamp, compress):
     except Exception as e:
         click.secho(f"❌ Error backing up configuration: {str(e)}", fg='red')
         logging.error(f"❌ Error backing up configuration: {str(e)}")
+        sys.exit(1)
 
 
 @lws.group()
@@ -409,9 +301,11 @@ def reboot_proxmox(region, az, confirm):
             click.secho(f"✅ Proxmox host {host} rebooted successfully.", fg='green')
         else:
             click.secho(f"❌ Failed to reboot Proxmox host {host}: {result.stderr}", fg='red')
+            sys.exit(1)
 
     except Exception as e:
         click.secho(f"❌ An error occurred: {str(e)}", fg='red')
+        sys.exit(1)
 
 
 
@@ -454,9 +348,11 @@ def upload_template(local_path, remote_template_name, region, az, storage_path):
             click.secho(f"✅ Template '{remote_template_name}' uploaded successfully to {storage_path} on {host}.", fg='green')
         else:
             click.secho(f"❌ Failed to upload template: {result.stderr}", fg='red')
+            sys.exit(1)
 
     except Exception as e:
         click.secho(f"❌ An error occurred: {str(e)}", fg='red')
+        sys.exit(1)
 
 
 @px.command('status')
@@ -541,6 +437,7 @@ def px_list_clusters(region, az):
         click.secho(f"📋 Clusters:\n{result.stdout}", fg='cyan')
     else:
         click.secho(f"❌ Failed to list clusters: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 @px.command('update')
@@ -553,6 +450,7 @@ def px_update_hosts():
         click.secho("✅ All hosts updated successfully.", fg='green')
     else:
         click.secho(f"❌ Failed to update hosts: {result.stderr}", fg='red')
+        sys.exit(1)
 
 @px.command('cluster-start')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
@@ -579,6 +477,7 @@ def px_start_cluster_services(region, az):
         click.secho("✅ Cluster services started successfully.", fg='green')
     else:
         click.secho(f"❌ Failed to start cluster services on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('cluster-stop')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
@@ -605,6 +504,7 @@ def px_stop_cluster_services(region, az):
         click.secho("✅ Cluster services stopped successfully.", fg='green')
     else:
         click.secho(f"❌ Failed to stop cluster services on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('cluster-restart')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
@@ -631,11 +531,12 @@ def px_restart_cluster_services(region, az):
         click.secho("✅ Cluster services restarted successfully.", fg='green')
     else:
         click.secho(f"❌ Failed to restart cluster services on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 
 @px.command('backup-lxc')
-@click.argument('vmid')
+@click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
 @click.option('--storage', required=True, help="The storage target where the backup will be stored.")
 @click.option('--mode', default='snapshot', type=click.Choice(['snapshot', 'suspend', 'stop']), help="Backup mode: snapshot, suspend, or stop.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
@@ -661,64 +562,12 @@ def px_create_backup(vmid, storage, mode, region, az):
         click.secho(f"✅ Backup of instance {vmid} successfully created and stored on {storage}.", fg='green')
     else:
         click.secho(f"❌ Failed to create backup of instance {vmid}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 # lxc
 
-# Function to get the next available VMID
-def get_next_vmid(start_vmid=10000, use_local_only=False, host_details=None):
-    """
-    Generate the next available VMID by finding the highest existing VMID and incrementing it.
-
-    Parameters:
-    - start_vmid: The starting VMID to use if no containers exist.
-    - use_local_only: Boolean to determine if the command should be run locally or remotely.
-    - host_details: Dictionary containing the host, user, and ssh_password for remote execution.
-
-    Returns:
-    - The next available VMID as an integer.
-    """
-    # Command to list the existing containers and their VMIDs
-    list_cmd = ["pct", "list"]
-
-    # Execute the command either locally or remotely
-    result = run_proxmox_command(list_cmd, list_cmd, use_local_only, host_details)
-
-    if result and result.returncode == 0:
-        existing_vmids = []
-        lines = result.stdout.splitlines()
-        for line in lines:
-            # Skip the header line and extract VMID from each line
-            if line.startswith("VMID"):
-                continue
-            vmid = int(line.split()[0])
-            existing_vmids.append(vmid)
-        
-        # Find the next available VMID
-        if existing_vmids:
-            next_vmid = max(existing_vmids) + 1
-        else:
-            next_vmid = start_vmid
-
-        return next_vmid
-    else:
-        logging.error("❌ Failed to retrieve existing VMIDs. Defaulting to start_vmid.")
-        return start_vmid
-
-
 # Command to run LXC instances
-
-def is_container_locked(instance_id, host_details):
-    """Checks if the container is locked by using the pct config command."""
-    check_lock_cmd = ["pct", "config", str(instance_id)]
-    result = run_proxmox_command(check_lock_cmd, check_lock_cmd, config['use_local_only'], host_details)
-    
-    if result.returncode == 0:
-        return 'lock' in result.stdout
-    else:
-        logging.error(f"❌ Failed to check lock status for instance {instance_id}: {result.stderr}")
-        return False  # Assume it's not locked if the command fails to avoid indefinite retries
-# VMID and container lock checking are now in lws_core.utils
 
 @lxc.command('run')
 @click.option('--image-id', required=True, help="ID of the container image template.")
@@ -826,7 +675,7 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
 
 
 @lxc.command('stop')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def stop_instances(instance_ids, region, az):
@@ -834,7 +683,7 @@ def stop_instances(instance_ids, region, az):
     process_instance_command(instance_ids, 'stop', region, az)
 
 @lxc.command('terminate')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def terminate_instances(instance_ids, region, az):
@@ -842,7 +691,7 @@ def terminate_instances(instance_ids, region, az):
     process_instance_command(instance_ids, 'terminate', region, az)
 
 @lxc.command('show')
-@click.argument('instance_ids', nargs=-1, required=False)
+@click.argument('instance_ids', nargs=-1, required=False, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def describe_instances(instance_ids, region, az):
@@ -857,9 +706,10 @@ def describe_instances(instance_ids, region, az):
             click.secho(f"📋 Instances:\n{list_result.stdout}", fg='cyan')
         else:
             click.secho(f"❌ Failed to list instances: {list_result.stderr}", fg='red')
+            sys.exit(1)
 
 @lxc.command('scale')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--memory', default=None, help="New memory size in MB.")
 @click.option('--cpulimit', default=None, help="New CPU limit.")
 @click.option('--cpucores', default=None, help="New number of CPU cores.")
@@ -914,7 +764,7 @@ def scale_instances(instance_ids, memory, cpulimit, cpucores, storage_size, net_
             click.secho(f"❌ Failed to scale instance '{instance_id}': {result.stderr.strip()}", fg='red')
 
 @lxc.command('snapshot-add')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('snapshot_name')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -923,7 +773,7 @@ def create_snapshot(instance_id, snapshot_name, region, az):
     process_instance_command([instance_id], 'snapshot_create', region, az, snapshot_name=snapshot_name)
 
 @lxc.command('snapshot-rm')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('snapshot_name')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -932,7 +782,7 @@ def delete_snapshot(instance_id, snapshot_name, region, az):
     process_instance_command([instance_id], 'snapshot_delete', region, az, snapshot_name=snapshot_name)
 
 @lxc.command('snapshots')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Defaults to eu-south-1.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Defaults to az1.")
 @click.option('--use-local-only', is_flag=False, help="Execute the command locally instead of via SSH.")
@@ -956,7 +806,7 @@ def snapshots(instance_id, region, az, use_local_only):
         click.echo(f"Failed to list snapshots for LXC container {instance_id}.")
 
 @lxc.command('start')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def start_instances(instance_ids, region, az):
@@ -964,7 +814,7 @@ def start_instances(instance_ids, region, az):
     process_instance_command(instance_ids, 'start', region, az)
 
 @lxc.command('reboot')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def reboot_instances(instance_ids, region, az):
@@ -972,7 +822,7 @@ def reboot_instances(instance_ids, region, az):
     process_instance_command(instance_ids, 'reboot', region, az)
 
 @px.command('image-add')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('template_name')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -997,11 +847,13 @@ def create_image(instance_id, template_name, region, az):
             click.secho(f"✅ Template '{template_name}' created successfully from instance {instance_id}.", fg='green')
         else:
             click.secho(f"❌ Failed to create template: {create_template_result.stderr}", fg='red')
+            sys.exit(1)
     else:
         click.secho(f"❌ Failed to stop instance {instance_id}: {stop_result.stderr}", fg='red')
+        sys.exit(1)
 
 @px.command('image-rm')
-@click.argument('template_name')
+@click.argument('template_name', callback=_validate_pattern(_TEMPLATE_NAME_RE, "template name"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def delete_image(template_name, region, az):
@@ -1019,10 +871,11 @@ def delete_image(template_name, region, az):
         click.secho(f"✅ Template '{template_name}' successfully deleted from host {host_details['host']}.", fg='green')
     else:
         click.secho(f"❌ Failed to delete template '{template_name}' on host {host_details['host']}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 @lxc.command('volume-attach')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('volume_name')
 @click.argument('volume_size')
 @click.option('--mount-point', default=None, help="The mount point for the volume inside the container (e.g., /mnt/data).")
@@ -1052,9 +905,10 @@ def attach_volume(instance_id, volume_name, volume_size, mount_point, region, az
         click.secho(f"✅ Volume '{volume_name}' of size '{volume_size}' successfully attached to instance '{instance_id}' at mount point '{mount_point}'.", fg='green')
     else:
         click.secho(f"❌ Failed to attach volume '{volume_name}' to instance '{instance_id}': {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @lxc.command('volume-detach')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('volume_name')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1078,9 +932,10 @@ def detach_volume(instance_id, volume_name, region, az):
         click.secho(f"✅ Volume '{volume_name}' successfully detached from instance '{instance_id}'.", fg='green')
     else:
         click.secho(f"❌ Failed to detach volume '{volume_name}' from instance '{instance_id}': {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @lxc.command('status')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def monitor_instances(instance_ids, region, az):
@@ -1140,7 +995,7 @@ def monitor_instances(instance_ids, region, az):
 @lxc.command('service')
 @click.argument('action', type=click.Choice(['status', 'start', 'stop', 'restart', 'reload', 'enable']))
 @click.argument('service_name')
-@click.argument('instance_ids', nargs=-1)
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def service(action, service_name, instance_ids, region, az):
@@ -1165,7 +1020,7 @@ def service(action, service_name, instance_ids, region, az):
 
 
 @lxc.command('migrate')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--target-host', required=True, help="Target Proxmox host where the LXC container will be migrated.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1190,31 +1045,11 @@ def lxc_migrate(instance_id, target_host, region, az):
         click.secho(f"✅ Instance {instance_id} successfully migrated to {target_host}.", fg='green')
     else:
         click.secho(f"❌ Failed to migrate instance {instance_id} to {target_host}: {result.stderr.strip()}", fg='red')
-
-
-def is_clustered():
-    """
-    Determine if the Proxmox setup is clustered by checking for cluster configuration files
-    and the status of corosync and pve-cluster services.
-    """
-    # Check if corosync.conf exists
-    corosync_conf_path = '/etc/pve/corosync.conf'
-    if not os.path.exists(corosync_conf_path):
-        return False
-    
-    # Check if corosync service is active
-    if not is_service_active('corosync'):
-        return False
-    
-    # Check if pve-cluster service is active
-    if not is_service_active('pve-cluster'):
-        return False
-
-    return True
+        sys.exit(1)
 
 
 @px.command('security-group-add')
-@click.argument('group_name')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.option('--description', default='', help="Description of the security group.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1242,9 +1077,10 @@ def create_security_group_cluster(group_name, description, region, az):
         click.secho(f"✅ Security group '{group_name}' successfully added to cluster.fw on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to add security group on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('security-group-rm')
-@click.argument('group_name')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def remove_security_group_cluster(group_name, region, az):
@@ -1272,19 +1108,21 @@ def remove_security_group_cluster(group_name, region, az):
             click.secho(f"✅ Security group '{group_name}' successfully removed from cluster.fw on host {host}.", fg='green')
         else:
             click.secho(f"❌ Security group '{group_name}' was not fully removed from cluster.fw on host {host}.", fg='red')
+            sys.exit(1)
     else:
         click.secho(f"❌ Failed to remove security group on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 @px.command('security-group-rule-add')
-@click.argument('group_name')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
 @click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
-@click.option('--protocol', default='tcp', help="Protocol (e.g., tcp, udp, icmp).")
-@click.option('--source-ip', default=None, help="Source IP or CIDR for ingress rules.")
-@click.option('--source-port', default=None, help="Source port number or range (e.g., 22, 80:443).")
-@click.option('--destination-ip', default=None, help="Destination IP or CIDR for egress rules.")
-@click.option('--destination-port', default=None, help="Destination port number or range (e.g., 22, 80:443).")
+@click.option('--protocol', default='tcp', callback=_validate_pattern(_PROTOCOL_RE, "protocol"), help="Protocol (e.g., tcp, udp, icmp).")
+@click.option('--source-ip', default=None, callback=_validate_ip_or_cidr, help="Source IP or CIDR for ingress rules.")
+@click.option('--source-port', default=None, callback=_validate_pattern(_PORT_RE, "source port"), help="Source port number or range (e.g., 22, 80:443).")
+@click.option('--destination-ip', default=None, callback=_validate_ip_or_cidr, help="Destination IP or CIDR for egress rules.")
+@click.option('--destination-port', default=None, callback=_validate_pattern(_PORT_RE, "destination port"), help="Destination port number or range (e.g., 22, 80:443).")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def add_rule_to_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
@@ -1319,16 +1157,17 @@ def add_rule_to_group(group_name, direction, action, protocol, source_ip, source
         click.secho(f"✅ Rule '{rule}' successfully added to group '{group_name}' in cluster.fw on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to add rule to group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('security-group-rule-rm')
-@click.argument('group_name')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
 @click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
-@click.option('--protocol', default='tcp', help="Protocol (e.g., tcp, udp, icmp).")
-@click.option('--source-ip', default=None, help="Source IP or CIDR for ingress rules.")
-@click.option('--source-port', default=None, help="Source port number or range (e.g., 22, 80:443).")
-@click.option('--destination-ip', default=None, help="Destination IP or CIDR for egress rules.")
-@click.option('--destination-port', default=None, help="Destination port number or range (e.g., 22, 80:443).")
+@click.option('--protocol', default='tcp', callback=_validate_pattern(_PROTOCOL_RE, "protocol"), help="Protocol (e.g., tcp, udp, icmp).")
+@click.option('--source-ip', default=None, callback=_validate_ip_or_cidr, help="Source IP or CIDR for ingress rules.")
+@click.option('--source-port', default=None, callback=_validate_pattern(_PORT_RE, "source port"), help="Source port number or range (e.g., 22, 80:443).")
+@click.option('--destination-ip', default=None, callback=_validate_ip_or_cidr, help="Destination IP or CIDR for egress rules.")
+@click.option('--destination-port', default=None, callback=_validate_pattern(_PORT_RE, "destination port"), help="Destination port number or range (e.g., 22, 80:443).")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def remove_rule_from_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
@@ -1363,10 +1202,11 @@ def remove_rule_from_group(group_name, direction, action, protocol, source_ip, s
         click.secho(f"✅ Rule '{rule}' successfully removed from group '{group_name}' in cluster.fw on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to remove rule from group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('security-group-attach')
-@click.argument('group_name')
-@click.argument('vmid')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
+@click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def attach_security_group_to_lxc(group_name, vmid, region, az):
@@ -1402,10 +1242,11 @@ def attach_security_group_to_lxc(group_name, vmid, region, az):
         click.secho(f"✅ Security group '{group_name}' successfully attached to LXC '{vmid}' on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to attach security group to LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @px.command('security-group-detach')
-@click.argument('group_name')
-@click.argument('vmid')
+@click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
+@click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def detach_security_group_from_lxc(group_name, vmid, region, az):
@@ -1437,9 +1278,10 @@ def detach_security_group_from_lxc(group_name, vmid, region, az):
         click.secho(f"✅ Security group '{group_name}' successfully detached from LXC '{vmid}' on host {host}.", fg='green')
     else:
         click.secho(f"❌ Failed to detach security group '{group_name}' from LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 @lxc.command('show-storage')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def lxc_list_storage(instance_id, region, az):
@@ -1467,8 +1309,10 @@ def lxc_list_storage(instance_id, region, az):
                 click.secho(f"  {line}", fg='cyan')
         else:
             click.secho(f"❌ No storage information found for instance {instance_id}.", fg='red')
+            sys.exit(1)
     else:
         click.secho(f"❌ Failed to retrieve storage details for instance {instance_id}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 
@@ -1546,7 +1390,7 @@ def app():
     pass
 
 @app.command('setup')
-@click.argument('instance_id')  # Accept a single instance ID
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))  # Accept a single instance ID
 @click.argument('package_name', default='docker')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
@@ -1608,7 +1452,7 @@ def install_docker(instance_id, package_name, region, az):
 
 
 @app.command('run')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('docker_command', nargs=-1, type=click.UNPROCESSED)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1680,16 +1524,17 @@ def run_docker(instance_id, docker_command, region, az):
         click.secho(f"✅ Docker command executed successfully on instance {instance_id}:\n{run_result.stdout.strip()}", fg='green')
     else:
         click.secho(f"❌ Failed to execute Docker command on instance {instance_id}: {run_result.stderr.strip()}", fg='red')
+        sys.exit(1)
 
 
 ### compose
 @app.command('deploy')
 @click.argument('action', type=click.Choice(['install', 'uninstall', 'start', 'stop', 'restart', 'status']))
-@click.argument('instance_id')  # Instance ID is now a positional argument
-@click.option('--compose_file', required=True, help="Local path or remote URL to the Docker Compose YAML file.")
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))  # Instance ID is now a positional argument
+@click.option('--compose-file', required=True, help="Local path or remote URL to the Docker Compose YAML file.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--auto_start', is_flag=True, help="Enable auto-start for the application.")
+@click.option('--auto-start', is_flag=True, help="Enable auto-start for the application.")
 def compose(action, instance_id, compose_file, region, az, auto_start):
     """🚀 Manage apps with Compose on LXC containers."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -1794,8 +1639,16 @@ def extract_app_name_from_compose(compose_file):
             if 'services' in compose_content:
                 service_names = list(compose_content['services'].keys())
                 if service_names:
-                    # Use the first service name as the app_name
-                    return service_names[0]
+                    # Use the first service name as the app_name. This value
+                    # later gets embedded in remote file paths and a shell
+                    # string sent over SSH (setup_auto_start), so it must be
+                    # restricted to a safe charset before it leaves this
+                    # function rather than escaped at each call site.
+                    app_name = service_names[0]
+                    if not _SAFE_NAME_RE.match(app_name):
+                        logging.error(f"❌ Unsafe service name in Docker Compose file: {app_name!r}")
+                        return None
+                    return app_name
     except Exception as e:
         logging.error(f"❌ Failed to parse Docker Compose file: {str(e)}")
     return None
@@ -1884,7 +1737,7 @@ WantedBy=multi-user.target
     subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "start", service_name])
 
 @app.command('update')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('compose_file', required=True)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1951,7 +1804,7 @@ def compose_update(instance_id, compose_file, region, az):
 
 
 @app.command('logs')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('container_name_or_id')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -1982,7 +1835,7 @@ def logs(instance_id, container_name_or_id, region, az, tail, follow):
 
 
 @app.command('list')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def containers(instance_id, region, az):
@@ -2005,7 +1858,7 @@ def containers(instance_id, region, az):
 
 
 @app.command('remove')
-@click.argument('instance_ids', nargs=-1)  # Accept multiple instance IDs
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))  # Accept multiple instance IDs
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 @click.option('--purge', is_flag=True, help="Remove all Docker images, containers, volumes, and networks.")
@@ -2111,7 +1964,7 @@ def clone(source_instance_id, target_instance_id, region, az, target_host, descr
 
 
 @lxc.command('exec')
-@click.argument('instance_ids', nargs=-1, required=True)
+@click.argument('instance_ids', nargs=-1, required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('command', nargs=1, required=True)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
@@ -2124,15 +1977,23 @@ def exec_in_container(instance_ids, command, region, az):
 
     host_details = config['regions'][region]['availability_zones'][az]
 
-    # Convert the single command argument into a list of arguments
-    command_list = command.split()
+    # Convert the single command argument into a list of arguments.
+    # shlex.split (not str.split) so a quoted argument containing spaces
+    # (e.g. exec 101 'echo "a b"') is kept as one token instead of being
+    # broken apart on every whitespace.
+    try:
+        command_list = shlex.split(command)
+    except ValueError as e:
+        click.secho(f"❌ Could not parse command: {e}", fg='red')
+        sys.exit(1)
 
+    had_failure = False
     for instance_id in instance_ids:
         exec_cmd = ["pct", "exec", str(instance_id), "--"] + command_list
 
         logging.info(f"Executing command in instance {instance_id}: {command}")
         click.secho(f"🔧 Executing command in instance {instance_id}: {command}", fg='cyan')
-        
+
         exec_result = run_proxmox_command(exec_cmd, exec_cmd, config['use_local_only'], host_details)
 
         if exec_result.returncode == 0:
@@ -2143,9 +2004,13 @@ def exec_in_container(instance_ids, command, region, az):
         else:
             logging.error(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}")
             click.secho(f"❌ Failed to execute command in instance {instance_id}: {exec_result.stderr}", fg='red')
+            had_failure = True
+
+    if had_failure:
+        sys.exit(1)
 
 @lxc.command('net')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.argument('protocol', type=click.Choice(['tcp', 'udp']), required=True)
 @click.argument('port', type=int, required=True)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
@@ -2261,10 +2126,12 @@ def list_templates(region, az):
             click.secho(result.stdout, fg='white')
         else:
             click.secho(f"❌ Failed to list templates: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
     
     except Exception as e:
         click.secho(f"❌ An error occurred while listing templates: {str(e)}", fg='red')
         logging.error(f"❌ An error occurred while listing templates: {str(e)}")
+        sys.exit(1)
 
 @px.command('security-groups')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
@@ -2308,14 +2175,16 @@ def list_security_groups(region, az):
                         
         else:
             click.secho(f"❌ Failed to list security groups: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
     
     except Exception as e:
         click.secho(f"❌ An error occurred while listing security groups: {str(e)}", fg='red')
         logging.error(f"❌ An error occurred while listing security groups: {str(e)}")
+        sys.exit(1)
 
 
 @lxc.command('show-info')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 def get_lxc_info(instance_id, region, az):
@@ -2407,9 +2276,10 @@ def get_lxc_info(instance_id, region, az):
     except Exception as e:
         click.secho(f"❌ An error occurred while retrieving information: {str(e)}", fg='red')
         logging.error(f"❌ An error occurred while retrieving LXC information: {str(e)}")
+        sys.exit(1)
 
 @lxc.command('show-public-ip')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 def get_lxc_public_ip(instance_id, region, az):
@@ -2437,10 +2307,12 @@ def get_lxc_public_ip(instance_id, region, az):
                 click.secho(f"⚠️ No public IP address found for instance {instance_id}.", fg='yellow')
         else:
             click.secho(f"❌ Failed to retrieve public IP address: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
     
     except Exception as e:
         click.secho(f"❌ An error occurred while retrieving the public IP address: {str(e)}", fg='red')
         logging.error(f"❌ An error occurred while retrieving the public IP address for LXC {instance_id}: {str(e)}")
+        sys.exit(1)
 
 @px.command('exec')
 @click.argument('command', nargs=-1, required=True)
@@ -2471,10 +2343,12 @@ def exec_proxmox_command(command, region, az):
         else:
             logging.error(f"Command failed on Proxmox host {host_details['host']} with return code {result.returncode}:\n{result.stderr.strip()}")
             click.secho(f"❌ Command failed on Proxmox host {host_details['host']}.\nError:\n{result.stderr.strip()}", fg='red')
+            sys.exit(1)
 
     except Exception as e:
         logging.error(f"An error occurred while executing command on Proxmox host {host_details['host']}: {str(e)}")
         click.secho(f"❌ An error occurred while executing the command: {str(e)}", fg='red')
+        sys.exit(1)
 
 
 ## scale-check
@@ -2496,7 +2370,7 @@ def scale_check_load_config(config_path='config.yaml'):
         return {}
 
 @lxc.command('scale-check')
-@click.argument('instance_id')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def scale_check_suggest_resources(instance_id, region, az):
@@ -2708,6 +2582,7 @@ def px_backup_hosts(backup_dir, region, az):
     else:
         logging.error(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}")
         click.secho(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}", fg='red')
+        sys.exit(1)
 
 
 
@@ -2787,6 +2662,7 @@ def sec_discovery(lxc_id, region, az):
             # click.secho(f"🟢 -> {host} | {' | '.join(sources)}", fg='green')
     else:
         click.secho("❌ No reachable hosts found.", fg='red')
+        sys.exit(1)
 
 # Helper functions (prefix with sec_discovery_ to avoid conflicts)
 def sec_discovery_get_local_ip_address():
@@ -2923,7 +2799,7 @@ def diagnose_network(host_details, lxc_id=None):
     return diagnostics
 
 @lxc.command('health-check')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 @click.option('--fix', is_flag=True, help="Attempt to fix common issues.")
@@ -3017,7 +2893,7 @@ def container_health_check(instance_id, region, az, fix):
     click.secho(f"✅ Health check for container {instance_id} completed.", fg='green')
 
 @lxc.command('backup-restore')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--backup-file', required=True, help="Path to the backup file to restore.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -3116,9 +2992,10 @@ def restore_container(instance_id, backup_file, region, az, force):
         click.secho(f"✅ Container {instance_id} started successfully.", fg='green')
     else:
         click.secho(f"❌ Failed to start container {instance_id}: {start_result.stderr}", fg='red')
+        sys.exit(1)
 
 @lxc.command('backup-create')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--destination', default="/var/lib/vz/dump", help="Destination directory for the backup.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -3175,9 +3052,10 @@ def create_container_backup(instance_id, destination, region, az, download, comp
             click.secho(f"✅ Backup downloaded successfully to {os.path.abspath(local_path)}", fg='green')
         else:
             click.secho(f"❌ Failed to download backup: {scp_result.stderr}", fg='red')
+            sys.exit(1)
 
 @sec.command('scan')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 @click.option('--scan-type', type=click.Choice(['quick', 'full']), default='quick', help="Type of security scan to perform.")
@@ -3271,6 +3149,7 @@ def security_scan(instance_id, region, az, scan_type):
                 click.secho("✅ No critical security issues found.", fg='green')
         else:
             click.secho(f"❌ Failed to run Lynis security audit: {lynis_result.stderr}", fg='red')
+            sys.exit(1)
     
     # 4. Check for weak SSH configuration
     click.secho("🔍 Checking SSH configuration...", fg='yellow')
@@ -3304,7 +3183,7 @@ def security_scan(instance_id, region, az, scan_type):
     click.secho(f"✅ Security scan of container {instance_id} completed.", fg='green')
 
 @lxc.command('resources')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 @click.option('--interval', default=2, help="Monitoring interval in seconds.")
@@ -3429,7 +3308,7 @@ def monitor_container_resources(instance_id, region, az, interval, count):
     click.secho(f"\n✅ Resource monitoring for container {instance_id} completed.", fg='green')
 
 @lxc.command('report')
-@click.argument('instance_id', required=True)
+@click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 @click.option('--output', type=click.Choice(['text', 'json']), default='text', help="Output format.")

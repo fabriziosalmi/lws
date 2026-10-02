@@ -45,11 +45,15 @@ class TestRunSSHCommand:
             assert mock_run.called
             call_args = mock_run.call_args[0][0]
             assert "sshpass" in call_args
-            assert "-p" in call_args
-            assert password in call_args
+            assert "-e" in call_args
             assert f"{user}@{host}" in call_args
             assert "pct" in call_args
             assert "list" in call_args
+
+            # The password must never appear in argv (visible to any local
+            # user via `ps`); it is only passed through the SSHPASS env var.
+            assert password not in call_args
+            assert mock_run.call_args.kwargs["env"]["SSHPASS"] == password
 
     @pytest.mark.unit
     @pytest.mark.ssh
@@ -225,17 +229,16 @@ class TestRunSSHCommand:
         with patch('subprocess.run', return_value=mock_result):
             with patch('logging.debug') as mock_log:
                 run_ssh_command(host, user, password, command)
-                
+
                 # Check that logging was called
                 assert mock_log.called
-                
-                # Verify password is not in any log message
+
+                # The password travels via the SSHPASS env var (not argv), so
+                # the logged command line never contains it at all - stronger
+                # than the previous "****" masking of a `-p <password>` arg.
                 for call_args in mock_log.call_args_list:
                     log_message = str(call_args)
                     assert password not in log_message
-                    # Should contain asterisks instead
-                    if 'sshpass' in log_message:
-                        assert '****' in log_message
 
     @pytest.mark.unit
     @pytest.mark.ssh
@@ -287,9 +290,11 @@ class TestRunSSHCommand:
         with patch('subprocess.run', return_value=mock_result) as mock_run:
             run_ssh_command(host, user, password, command)
             
-            # Verify SSH options
+            # Verify SSH options. accept-new (not "no") still trusts a host's
+            # key on first contact but rejects a later, changed key for a
+            # previously-known host - the actual MITM case this guards.
             call_args = mock_run.call_args[0][0]
-            assert "StrictHostKeyChecking=no" in ' '.join(call_args)
+            assert "StrictHostKeyChecking=accept-new" in ' '.join(call_args)
             assert "ConnectTimeout=15" in ' '.join(call_args)
             assert "ServerAliveInterval=5" in ' '.join(call_args)
 
