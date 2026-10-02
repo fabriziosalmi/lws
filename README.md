@@ -13,9 +13,9 @@
 
 ---
 
-## 📖 Documentation
+## Documentation
 
-**🌐 [Complete Documentation](https://fabriziosalmi.github.io/lws/)** is now available on GitHub Pages!
+[Complete documentation](https://fabriziosalmi.github.io/lws/) is published on GitHub Pages.
 
 - **[Getting Started](https://fabriziosalmi.github.io/lws/pages/getting-started.html)** - Installation and first steps
 - **[Architecture](https://fabriziosalmi.github.io/lws/pages/architecture.html)** - Modular design and structure
@@ -28,16 +28,15 @@
 
 ## Overview
 
-LWS is a command-line interface (CLI) tool designed to simplify the management of LXC containers on Proxmox VE hosts. It provides a convenient way to perform common tasks such as creating, starting, stopping, terminating, and managing LXC instances, as well as interacting with Proxmox hosts themselves.
+LWS is a command-line interface (CLI) tool for managing LXC containers on Proxmox VE hosts. It performs common tasks - creating, starting, stopping, terminating, and managing LXC instances, as well as interacting with Proxmox hosts themselves - from a single command.
 
-**Recent Updates:**
+**Recent changes:**
 
-*   **✨ Modular Architecture:** Core functionality extracted into reusable modules
-*   **🔌 RESTful API:** Programmatic access to all LWS functionality over HTTP
-*   **🖥️ Web UI:** Simple graphical interface to interact with the API
-*   **📚 Swagger Documentation:** Interactive API documentation
-*   **📖 GitHub Pages:** Comprehensive documentation site
-*   **🔒 Security & reliability hardening:** allow-listed input validation on remote-command arguments, SSH host key verification and env-var password passing, non-zero exit codes on failure, a production WSGI server for the API, and a fixed Docker image build — see [Security Considerations](#security-considerations)
+*   **Modular core:** config/SSH/Proxmox/utility functions are extracted into `lws_core/`; the CLI command layer (`lws.py`) and the REST API (`api.py`) remain monolithic - see [Architecture](https://fabriziosalmi.github.io/lws/pages/architecture.html) for the exact boundary
+*   **REST API:** programmatic access to LWS functionality over HTTP (`api.py`)
+*   **Web UI:** a single-page interface (`ui.html`) for interacting with the API
+*   **Swagger documentation:** interactive API documentation at `/api/v1/docs`
+*   **Security and reliability fixes:** allow-listed input validation on remote-command arguments, SSH host key verification and env-var password passing, non-zero exit codes on failure, a production WSGI server for the API, and a fixed Docker image build - see [Security Considerations](#security-considerations)
 
 [![asciicast](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O.svg)](https://asciinema.org/a/8rE7H67VjQ15HQ9KtsJVMRR4O)
 
@@ -65,7 +64,7 @@ LWS is a command-line interface (CLI) tool designed to simplify the management o
 
 ## Introduction
 
-**lws** (Linux Web Services) is an open-source CLI tool designed to help developers and system administrators manage Proxmox environments, LXC containers, and Docker services with a unified, AWS-like interface. It simplifies complex operations, reducing them to single commands that can be executed locally or remotely.
+**lws** (Linux Web Services) is an open-source CLI tool for managing Proxmox hosts, LXC containers, and Docker services within those containers, through a single command set executed locally or over SSH.
 
 ## Features
 
@@ -470,7 +469,7 @@ Interactive API documentation is available via Swagger UI.
 
 ## Security Considerations
 
-### 🔒 **Critical Security Recommendations**
+### Critical Security Recommendations
 
 - **Secure Storage of Credentials**:
   - LWS currently only supports password-based SSH authentication (via `sshpass`) — there is no SSH key-based auth, and no environment-variable or vault indirection for `ssh_password`. Both are read as plain values straight out of `config.yaml`
@@ -496,21 +495,23 @@ Interactive API documentation is available via Swagger UI.
   
 - **Input Validation**:
   - Container/instance IDs are validated as numeric everywhere they're accepted (CLI arguments and the REST API)
-  - Security group names, template names, firewall protocol/port fields, and source/destination IP/CIDR values are validated against an allow-list (or parsed as a real IP/CIDR) before being used to build any remote command — this closes the command-injection surface in the firewall/security-group commands rather than attempting to escape it after the fact
-  - `host`/`user`/`ssh_password` come from `config.yaml`, which you control, and aren't user-supplied CLI input — see **Secure Storage of Credentials** above for how to protect that file instead
-  
+  - Security group names, template names, firewall protocol/port fields, source/destination IP/CIDR values, and `lxc run`'s free-text container-creation options (hostname, password, network config, DNS, lock) are validated against an allow-list, parsed as a real IP/CIDR, or shell-quoted for the remote command before being used - this closes the command-injection surface in the affected commands rather than attempting to escape it after the fact
+  - `host`/`user`/`ssh_password` come from `config.yaml`, which you control, and aren't user-supplied CLI input - see **Secure Storage of Credentials** above for how to protect that file instead
+
 - **File Security**:
   - Temporary files are created using system temp directories
   - HTTP requests include timeouts to prevent indefinite blocking
 
-### 🛡️ **Security Features**
-- ✅ Allow-listed validation of values that reach a remote shell/`sed`/`grep` command, instead of escaping them after construction
-- ✅ API key compared with `hmac.compare_digest` (timing-safe); the server refuses to start with an empty or placeholder key
-- ✅ SSH password passed via the `SSHPASS` environment variable, never in argv/`ps`/logs
-- ✅ SSH host key verification (`StrictHostKeyChecking=accept-new`): a changed key for an already-known host is rejected
-- ✅ CORS denies all cross-origin browser access by default; origins must be listed explicitly
-- ✅ `api.py` runs behind a production WSGI server (waitress) unless `debug: true` is explicitly set
-- ✅ Failed commands exit with a non-zero process exit code instead of looking like a success
+### Security Properties Currently Implemented
+
+- Allow-listed validation (or `shlex.quote`) on every CLI value known to reach a remote shell/`sed`/`grep` command, instead of escaping output after construction
+- API key compared with `hmac.compare_digest` (timing-safe); the server refuses to start with an empty or placeholder key
+- SSH password passed via the `SSHPASS` environment variable, never in argv, `ps`, or logs
+- SSH host key verification (`StrictHostKeyChecking=accept-new`): a changed key for an already-known host is rejected
+- CORS denies all cross-origin browser access by default; origins must be listed explicitly
+- `api.py` runs behind a production WSGI server (waitress) unless `debug: true` is explicitly set, and never enables Werkzeug's interactive debugger regardless of that setting
+- Failed commands exit with a non-zero process exit code instead of looking like a success
+- The Web UI (`ui.html`) renders API responses and error messages through `textContent`, not `innerHTML`, so a value reflected in a response cannot execute as markup in the viewer's browser
 
 ## Best Practices
 
@@ -522,7 +523,7 @@ Interactive API documentation is available via Swagger UI.
 
 ## Contributing
 
-**lws** is an open-source project developed for fun and learning. Contributions are welcome! Feel free to submit issues, feature requests, or pull requests.
+**lws** is an open-source, single-maintainer project. Issues, feature requests, and pull requests are welcome.
 
 ### How to Contribute
 
@@ -539,21 +540,17 @@ Interactive API documentation is available via Swagger UI.
 
 ## Roadmap
 
-**lws** continues to evolve. Planned features and improvements include:
+Unscheduled, not committed to a release:
 
-- **Multi-Factor Authentication**: Support for MFA in SSH connections.
-- **Web Interface**: A simple web dashboard for visual management.
-- **Configuration Versioning**: Track changes to container configurations.
-- **Integration with CI/CD Pipelines**: Make lws part of your deployment workflows.
-- **Kubernetes Support**: Expand management capabilities to Kubernetes clusters.
-- **More Security Tools**: Additional security scanning and threat detection tools.
+- SSH key-based authentication, as an alternative to the current password-only model
+- Configuration versioning for container configurations
+- Kubernetes cluster management, alongside the current Proxmox/LXC scope
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more details.
+MIT License. See [LICENSE](LICENSE).
 
 ## Acknowledgements
 
-- The Proxmox team for their excellent virtualization platform
-- The Click developers for the wonderful CLI framework
-- All contributors who have helped improve this tool
+- Proxmox VE, the virtualization platform this tool manages
+- Click, the CLI framework this tool is built on

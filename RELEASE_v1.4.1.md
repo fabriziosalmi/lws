@@ -1,11 +1,11 @@
 # Release v1.4.1 - Testing & Modularization
 
-## 🎯 Overview
+## Overview
 This release focuses on improving code quality, testing infrastructure, and project organization. It introduces the `lws_core/` package: a small, 96%-covered module of config/SSH/Proxmox/utility helpers extracted as a first step toward modularizing the codebase.
 
-**Scope note (added after the fact, see [architecture docs](docs/_pages/architecture.md)):** the coverage and "modularized" claims below describe `lws_core/` only (~500 lines). `lws.py` (the CLI, ~3,700 lines) and `api.py` (the REST API, ~1,200 lines) hold the actual command and endpoint logic and currently have no automated tests of their own.
+**Scope note (added after the fact, see [architecture docs](docs/_pages/architecture.md)):** the coverage and "modularized" claims below describe `lws_core/` only (~500 lines) as of this release. `lws.py` (the CLI, ~3,500 lines) has no automated tests. `api.py` (the REST API, ~1,200 lines) gained a targeted test suite for its validation and routing logic in a later release (22 tests, not comprehensive coverage of its ~60 endpoints) - see `tests/TEST_SUMMARY.md` for the current state.
 
-## ✨ New Features
+## New Features
 
 ### Comprehensive Test Suite
 - **98 unit tests** with 100% pass rate
@@ -32,7 +32,7 @@ This release focuses on improving code quality, testing infrastructure, and proj
 - Getting started guide
 - Configuration documentation
 
-## 🔧 Improvements
+## Improvements
 
 ### Code Modularization
 - **First step toward a modularized codebase**: config/SSH/Proxmox/utility
@@ -62,7 +62,7 @@ This release focuses on improving code quality, testing infrastructure, and proj
   - `test_utils.py` (32 tests)
   - `test_proxmox.py` (22 tests)
 
-## 📦 Dependencies
+## Dependencies
 
 ### New Testing Dependencies
 ```
@@ -71,7 +71,7 @@ pytest-cov>=4.1.0,<5.0.0
 pytest-mock>=3.11.0,<4.0.0
 ```
 
-## 🧪 Test Categories
+## Test Categories
 
 ### Configuration Tests
 - YAML parsing and validation
@@ -97,7 +97,7 @@ pytest-mock>=3.11.0,<4.0.0
 - Error propagation
 - Parameter validation
 
-## 🚀 Running Tests
+## Running Tests
 
 ```bash
 # Run all tests
@@ -114,46 +114,46 @@ pytest -m ssh  # SSH tests only
 pytest -m unit # Unit tests only
 ```
 
-## 📊 Code Quality Metrics (for `lws_core/` only - see scope note above)
+## Code Quality Metrics (for `lws_core/` only, as of this release - see scope note above)
 
 - **Total Tests**: 98
 - **Pass Rate**: 100%
 - **Code Coverage**: 96%
-- **Modules**: `lws_core/` only; `lws.py` and `api.py` are still monolithic and untested
-- **Documentation**: Comprehensive
+- **Modules**: `lws_core/` only; `lws.py` has no tests; `api.py` later gained a targeted (not comprehensive) suite, see `tests/TEST_SUMMARY.md`
+- **Documentation**: present, not verified against the code at the time of this release
 
-## 🔍 What's Tested
+## What's Tested (in `lws_core/`, not in `lws.py`'s command implementations)
 
-✅ Configuration loading and validation  
-✅ SSH command execution with retries  
-✅ Proxmox API interactions  
-✅ Utility functions (VMID generation, container operations)  
-✅ Error handling and edge cases  
-✅ Password/secret sanitization  
-✅ Container lifecycle management  
-✅ Snapshot operations  
+- Configuration loading and validation
+- SSH command execution with retries
+- Proxmox API interactions
+- Utility functions (VMID generation, container operations)
+- Error handling and edge cases
+- Password/secret sanitization
+- Container lifecycle management (the `lws_core.utils.process_instance_command` helper; whether `lws.py`'s commands actually call it unshadowed was not verified at the time of this release)
+- Snapshot operations
 
-## 📝 Breaking Changes
+## Breaking Changes
 
-None - This is a backward-compatible release focused on quality improvements.
+None.
 
-## 🐛 Bug Fixes
+## Bug Fixes
 
 - Improved error handling in SSH operations
 - Enhanced configuration validation
 - Better logging for debugging
 
-## 📖 Documentation
+## Documentation
 
-- Added `tests/TEST_SUMMARY.md` with detailed test documentation
+- Added `tests/TEST_SUMMARY.md`
 - Documentation site in `docs/` directory
-- Improved inline code documentation
+- Inline code documentation
 - API reference documentation
 - Architecture diagrams and guides
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-This release represents a significant improvement in code quality and maintainability, making LWS more reliable and easier to contribute to.
+This release added `lws_core/` and its test suite.
 
 ---
 

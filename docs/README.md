@@ -2,11 +2,11 @@
 
 This directory contains the complete documentation for LWS, hosted on GitHub Pages.
 
-## 🌐 View Documentation
+## View Documentation
 
-**Live site:** [https://fabriziosalmi.github.io/lws/](https://fabriziosalmi.github.io/lws/)
+Live site: [https://fabriziosalmi.github.io/lws/](https://fabriziosalmi.github.io/lws/)
 
-## 📁 Structure
+## Structure
 
 ```
 docs/
@@ -32,7 +32,7 @@ docs/
     └── contributing.md
 ```
 
-## 🚀 Enabling GitHub Pages
+## Enabling GitHub Pages
 
 ### Step 1: Push to GitHub
 
@@ -71,7 +71,7 @@ For example:
 https://fabriziosalmi.github.io/lws/
 ```
 
-## 🎨 Customization
+## Customization
 
 ### Change Colors
 
@@ -79,9 +79,9 @@ Edit `docs/assets/css/style.css`:
 
 ```css
 :root {
-    --primary: #6366f1;      /* Change primary color */
-    --secondary: #ec4899;     /* Change secondary color */
-    --accent: #14b8a6;        /* Change accent color */
+    --primary: #3454d1;       /* Primary color */
+    --primary-dark: #28409f;  /* Hover/active state of --primary */
+    --accent: #0f766e;        /* Accent color */
 }
 ```
 
@@ -109,7 +109,7 @@ All documentation is in Markdown format in `docs/_pages/`:
 
 Simply edit these files and push to update the documentation.
 
-## 🧪 Local Development
+## Local Development
 
 ### Preview Locally
 
@@ -146,7 +146,7 @@ bundle exec jekyll serve
 # Open http://localhost:4000
 ```
 
-## 📝 Maintenance
+## Maintenance
 
 ### Update Navigation
 
@@ -174,7 +174,7 @@ navigation:
 4. Add link to navigation in `_config.yml`
 5. Update `index.html` if needed
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Page Not Found (404)
 
@@ -195,13 +195,13 @@ navigation:
 - Verify `_config.yml` is valid YAML
 - Ensure Jekyll theme is properly configured
 
-## 📚 Resources
+## Resources
 
 - [GitHub Pages Documentation](https://docs.github.com/en/pages)
 - [Jekyll Documentation](https://jekyllrb.com/docs/)
 - [Markdown Guide](https://www.markdownguide.org/)
 
-## ✅ Checklist
+## Checklist
 
 - [ ] Push `docs/` to GitHub
 - [ ] Enable GitHub Pages in settings
@@ -213,4 +213,4 @@ navigation:
 
 ---
 
-**Questions or issues?** Open an issue on GitHub!
+Report issues on GitHub.

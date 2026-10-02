@@ -33,9 +33,7 @@ api_key: "REPLACE_ME_WITH_32_PLUS_RANDOM_CHARACTERS"
 
 ## Response Format
 
-All responses are in JSON format:
-
-### Success Response
+### Success Response (HTTP 200)
 ```json
 {
   "output": "command output here"
@@ -43,14 +41,48 @@ All responses are in JSON format:
 ```
 If the underlying command's stdout starts with `{` or `[` (e.g. commands run with a JSON output option), the API returns that parsed JSON directly instead of wrapping it in `"output"`.
 
-### Error Response
+### Error Responses
+
+There is no single error shape. It depends on where the request failed:
+
+**The underlying `lws.py` command ran and exited non-zero (HTTP 500):**
 ```json
 {
-  "error": "Error description",
-  "details": "Detailed error message",
+  "error": "Command execution failed",
+  "details": "stderr from the command",
+  "output": "stdout from the command, if any",
   "return_code": 1
 }
 ```
+
+**Request validation failed in the route handler itself - missing/invalid body fields (HTTP 400), most endpoints below:**
+```json
+{
+  "error": "Missing 'field_name' in request body"
+}
+```
+No `details` or `return_code` - just `error`.
+
+**Missing/invalid API key (HTTP 401), a non-numeric `instance_id` path segment (HTTP 400, see note below), or any other Flask `HTTPException`:**
+```json
+{
+  "code": 401,
+  "name": "Unauthorized",
+  "description": "Unauthorized: Invalid or missing API key."
+}
+```
+A different shape again - `code`/`name`/`description`, not `error`.
+
+**Route not found (HTTP 404) or an unhandled exception (HTTP 500):**
+```json
+{
+  "error": "Not Found",
+  "message": "The requested URL was not found on the server."
+}
+```
+`error`/`message`, not `error`/`details`.
+
+> **Note:** a global `before_request` hook rejects any request whose `<instance_id>` URL path segment isn't purely numeric, with HTTP 400 in the `code`/`name`/`description` shape above, before the route handler runs at all. This affects every endpoint below with `{instance_id}` in its path. The same validation (`validate_instance_ids_list`) also applies to the `instance_ids` JSON body field on the bulk endpoints (`/lxc/instances/start`, `/stop`, `/status`, `/scale`, `/terminate`, `/reboot`, `/lxc/instances/app/remove`): every element must be numeric, or the whole request is rejected with 400 in the `error`-only shape above.
 
 > **Note:** `run_lws_command` builds the underlying CLI call from two sources: a handler-built positional `cmd_parts` list, and whatever is left in the request body/query string after the handler pops out the keys it already placed positionally (via `consumed_keys`). Earlier versions didn't pop those keys, so several endpoints below sent the same value twice — once positionally, once as a nonexistent `--key value` flag — and failed with a Click "no such option" error. That's fixed; it's noted on the endpoints below only where it's useful to know a field is positional rather than an option.
 
@@ -186,7 +218,7 @@ curl -X POST \
 
 #### POST `/px/backup-lxc`
 
-Back up a single LXC container via `vzdump` on the Proxmox host. `vmid` is positional in `px backup-lxc`; the rest of the body (`storage`, `mode`, ...) is forwarded as options.
+Back up a single LXC container via `vzdump` on the Proxmox host. `vmid` and `storage` are both required (400 if either is missing); `vmid` is positional in `px backup-lxc`, `storage`/`mode` are forwarded as options.
 
 ```bash
 curl -X POST \
@@ -520,7 +552,7 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/lxc/instances/{instance_id}/volumes/attach`
 
-Attach a storage volume. `volume_name` and `volume_size` are both positional in `lxc volume-attach`; `mount_point` is a real option.
+Attach a storage volume. All three fields are required (400 if any is missing). `volume_name` and `volume_size` are both positional in `lxc volume-attach`; `mount_point` is a real option, enforced by a manual check in that command rather than by Click.
 
 ```bash
 curl -X POST \
@@ -617,8 +649,10 @@ Run health checks on a container.
 
 ```bash
 curl -H "X-API-Key: your-key" \
-  "http://localhost:8080/api/v1/lxc/instances/100/health-check?fix=true"
+  "http://localhost:8080/api/v1/lxc/instances/100/health-check"
 ```
+
+`--fix` on `lxc health-check` is a bare Click flag (`is_flag=True`, takes no value). `run_lws_command` only omits a `--flag` as a boolean when the value is an actual Python `bool`; Flask's `request.args` always yields strings, so `?fix=true` is forwarded as the literal `--fix true`, which `lxc health-check` rejects (`Error: Got unexpected extra argument (true)`). There is currently no way to pass `--fix` through this endpoint.
 
 #### POST `/lxc/instances/{instance_id}/restore`
 
@@ -732,8 +766,10 @@ Get Docker logs.
 
 ```bash
 curl -H "X-API-Key: your-key" \
-  "http://localhost:8080/api/v1/lxc/instances/100/app/logs/nginx?follow=false&lines=100"
+  "http://localhost:8080/api/v1/lxc/instances/100/app/logs/nginx?tail=100"
 ```
+
+The query parameter is `tail` (forwarded as `app logs`'s `--tail`, a string, default `all`), not `lines` - `lines` doesn't exist as an option and is rejected with "No such option". `follow` has the same boolean-vs-string problem as `health-check`'s `--fix` above: `app logs`'s `--follow` is a bare flag, so `?follow=false` is sent as the literal `--follow false`, which fails the same way. There is currently no way to request a streamed (`--follow`) response through this endpoint.
 
 #### GET `/lxc/instances/{instance_id}/app/containers`
 
