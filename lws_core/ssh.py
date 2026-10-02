@@ -117,3 +117,62 @@ def run_ssh_command(host, user, ssh_password, command):
                 stderr=f"Error: {str(e)}"
             )
             return error_result
+
+
+def run_scp_command(ssh_password, *scp_args, timeout=None):
+    """
+    Runs `scp` with the given arguments, with the password passed via the
+    SSHPASS environment variable and host-key verification enabled - the
+    same security properties as run_ssh_command, but without its fixed
+    60-second timeout or retry-on-connection-refused logic: a file transfer
+    can legitimately take far longer than a status command, and blindly
+    retrying a partially-completed transfer is not safe in general.
+
+    Parameters:
+    - ssh_password: SSH password for the target host
+    - scp_args: positional scp arguments in scp's own order, e.g.
+      ("/local/file", "user@host:/remote/path") for an upload, or the
+      reverse for a download. Callers build the user@host:path spec
+      themselves since scp's source/destination syntax differs from the
+      "command after host" form run_ssh_command uses.
+    - timeout: optional subprocess timeout in seconds. None (the default)
+      waits indefinitely, appropriate for transfers of unknown size.
+
+    Returns:
+    - subprocess.CompletedProcess object with stdout and stderr
+    """
+    if not shutil.which('sshpass'):
+        error_msg = "sshpass command not found. Please install it with 'apt install sshpass' or equivalent."
+        logging.error(f"❌ {error_msg}")
+        raise RuntimeError(error_msg)
+
+    scp_env = {**os.environ, "SSHPASS": ssh_password}
+    scp_cmd = [
+        "sshpass", "-e", "scp",
+        "-o", "StrictHostKeyChecking=accept-new",
+        "-o", "ConnectTimeout=15",
+    ] + list(scp_args)
+
+    logging.debug(f"🔎 Executing scp command: {' '.join(scp_cmd)}")
+
+    try:
+        result = subprocess.run(scp_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout, env=scp_env)
+        if result.returncode != 0:
+            logging.debug(f"❌ scp command failed with return code {result.returncode}: {result.stderr}")
+        return result
+    except subprocess.TimeoutExpired:
+        logging.error(f"❌ scp command timed out after {timeout} seconds: {' '.join(scp_cmd)}")
+        return subprocess.CompletedProcess(
+            args=scp_cmd,
+            returncode=124,
+            stdout="",
+            stderr=f"Error: scp command timed out after {timeout} seconds"
+        )
+    except Exception as e:
+        logging.error(f"❌ An unexpected error occurred while running scp: {str(e)}")
+        return subprocess.CompletedProcess(
+            args=scp_cmd,
+            returncode=1,
+            stdout="",
+            stderr=f"Error: {str(e)}"
+        )
