@@ -166,6 +166,30 @@
         const instanceIdInput = document.getElementById('instanceIdInput');
         const apiBaseUrl = '/api/v1'; // Use relative path
 
+        // Renders a response/error message without ever parsing API-controlled
+        // content as HTML: `content` (API response bodies, error messages -
+        // never something this page authored itself) goes into a <pre> via
+        // textContent, not innerHTML, so it can't inject markup/script into
+        // this page's DOM no matter what it contains.
+        function renderResponse(statusClass, iconClass, title, content) {
+            responseArea.innerHTML = '';
+            responseArea.classList.remove('response-success', 'response-error');
+            responseArea.classList.add(`response-${statusClass}`);
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `response-message ${statusClass}`;
+            const icon = document.createElement('i');
+            icon.className = iconClass;
+            messageDiv.appendChild(icon);
+            messageDiv.append(` ${title}`);
+
+            const pre = document.createElement('pre');
+            pre.textContent = content;
+
+            responseArea.appendChild(messageDiv);
+            responseArea.appendChild(pre);
+        }
+
         async function callApi(endpoint, method = 'GET', body = null) {
             const apiKey = apiKeyInput.value;
             loadingIndicator.style.display = 'block'; // Show loading
@@ -202,28 +226,14 @@
                     throw new Error(errorMsg);
                 }
 
-                // Success
-                responseArea.classList.add('response-success');
-                // Display a success message and the formatted JSON data
-                responseArea.innerHTML = `
-                    <div class="response-message success">
-                        <i class="fas fa-check-circle"></i> Success (Status: ${response.status})
-                    </div>
-                    <pre>${JSON.stringify(data, null, 2)}</pre>
-                `;
+                // Success - display the formatted JSON data
+                renderResponse('success', 'fas fa-check-circle', `Success (Status: ${response.status})`, JSON.stringify(data, null, 2));
 
             } catch (error) {
                 // Handle fetch errors (network issues) or errors thrown above
                 console.error('API Call Error:', error);
                 loadingIndicator.style.display = 'none'; // Hide loading
-                responseArea.classList.add('response-error');
-                // Display an error message
-                responseArea.innerHTML = `
-                    <div class="response-message error">
-                        <i class="fas fa-exclamation-triangle"></i> Error
-                    </div>
-                    <pre>${error.message}</pre>
-                `;
+                renderResponse('error', 'fas fa-exclamation-triangle', 'Error', error.message);
             }
         }
 
@@ -243,13 +253,7 @@
         document.getElementById('btnDescribeInstance').addEventListener('click', () => {
             const instanceId = instanceIdInput.value.trim();
             if (!instanceId) {
-                responseArea.innerHTML = `
-                    <div class="response-message error">
-                        <i class="fas fa-exclamation-triangle"></i> Error
-                    </div>
-                    <pre>Please enter an Instance ID.</pre>
-                `;
-                responseArea.classList.add('response-error');
+                renderResponse('error', 'fas fa-exclamation-triangle', 'Error', 'Please enter an Instance ID.');
                 return;
             }
             callApi(`/lxc/instances/${instanceId}`);
