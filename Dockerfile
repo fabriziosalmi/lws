@@ -1,8 +1,10 @@
 FROM python:3.14-slim
 
-RUN apt update && apt dist-upgrade -y && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt update && apt dist-upgrade -y && apt install -y --no-install-recommends sshpass openssh-client && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt lws.py api.py /app/
+COPY lws_core/ /app/lws_core/
+COPY lws_commands/ /app/lws_commands/
 
 WORKDIR /app
 
