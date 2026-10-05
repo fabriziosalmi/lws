@@ -5,7 +5,7 @@ flask-swagger-ui>=5.33.0,<6.0.0
 flask>=3.0.2,<4.0.0
 flask-cors>=6.0.5,<7.0.0
 waitress>=3.0.2,<4.0.0 # Production WSGI server for api.py; Flask's own app.run() is dev-only
-tqdm>=4.66.2,<5.0.0 # For progress bars in lws.py
+tqdm>=4.70.1,<5.0.0 # For progress bars in lws.py
 
 # Testing dependencies
 pytest>=9.1.1,<10.0.0
