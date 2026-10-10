@@ -1,0 +1,351 @@
+/* LWS home page. Loaded after style.css, whose tokens it uses. */
+
+/* --- Buttons --------------------------------------------------------------- */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 10px 22px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: var(--on-primary);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    color: var(--on-primary);
+}
+
+.btn-secondary {
+    background: var(--surface);
+    color: var(--text);
+    border-color: var(--border-strong);
+}
+
+.btn-secondary:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* --- Home ------------------------------------------------------------------ */
+.section-title {
+    font-size: 1.85rem;
+    font-weight: 700;
+    text-align: center;
+    margin: 0 0 8px;
+}
+
+.section-subtitle {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 1.02rem;
+    max-width: 640px;
+    margin: 0 auto 44px;
+}
+
+.hero {
+    padding: 88px 0 72px;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border);
+}
+
+.hero-inner {
+    text-align: center;
+    max-width: 860px;
+}
+
+.hero-eyebrow {
+    margin: 0 0 16px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.hero h1 {
+    font-size: clamp(2rem, 1.2rem + 3.2vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    margin: 0 auto 20px;
+    max-width: 780px;
+}
+
+.hero-lead {
+    font-size: 1.12rem;
+    color: var(--text-muted);
+    max-width: 640px;
+    margin: 0 auto 32px;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 44px;
+}
+
+.hero-code {
+    text-align: left;
+    max-width: 780px;
+    margin-inline: auto;
+}
+
+.hero-code pre,
+.workflow-example pre,
+.quickstart-steps pre {
+    margin: 0;
+    background: var(--code-bg);
+    color: var(--code-text);
+    border: 1px solid var(--code-border);
+    border-radius: var(--radius);
+    padding: 20px 22px;
+    overflow-x: auto;
+    font-size: 0.86rem;
+    line-height: 1.7;
+    color-scheme: dark;
+}
+
+.code-comment {
+    color: var(--code-comment);
+}
+
+.code-command {
+    color: var(--code-command);
+    font-weight: 600;
+}
+
+.workflow {
+    padding: 88px 0;
+    background: var(--band-bg);
+    color: var(--band-text);
+}
+
+.workflow .section-title {
+    color: var(--band-heading);
+}
+
+.workflow .section-subtitle {
+    color: var(--band-muted);
+}
+
+.workflow-steps {
+    counter-reset: step;
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+    max-width: 1000px;
+}
+
+.workflow-step {
+    counter-increment: step;
+    background: var(--band-surface);
+    border: 1px solid var(--band-border);
+    border-radius: 10px;
+    padding: 26px 24px;
+    display: flex;
+    flex-direction: column;
+}
+
+.workflow-step h3 {
+    margin: 0 0 6px;
+    font-size: 1.1rem;
+    color: var(--band-heading);
+}
+
+.workflow-step h3::before {
+    content: counter(step) ". ";
+    color: var(--code-command);
+}
+
+.workflow-step p {
+    margin: 0 0 16px;
+    color: var(--band-muted);
+    font-size: 0.92rem;
+    flex: 1;
+}
+
+.workflow-step code {
+    display: block;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--band-border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: var(--code-command);
+    font-size: 0.82rem;
+    overflow-wrap: anywhere;
+}
+
+.workflow-example {
+    max-width: 1000px;
+    margin: 48px auto 0;
+    background: var(--band-surface);
+    border: 1px solid var(--band-border);
+    border-radius: 10px;
+    padding: 28px;
+}
+
+.workflow-example h3 {
+    margin: 0 0 18px;
+    font-size: 1.05rem;
+    color: var(--band-heading);
+}
+
+.workflow-example pre {
+    background: rgba(0, 0, 0, 0.35);
+    border-color: transparent;
+}
+
+.features,
+.docs-links {
+    padding: 88px 0;
+}
+
+.feature-grid,
+.doc-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 18px;
+}
+
+.feature-card,
+.doc-card {
+    height: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px 22px;
+}
+
+.feature-card h3,
+.doc-card h3 {
+    margin: 0 0 8px;
+    font-size: 1.02rem;
+    font-weight: 600;
+}
+
+.feature-card p,
+.doc-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.92rem;
+}
+
+.feature-card code,
+.section-subtitle code {
+    font-size: 0.85em;
+    background: var(--inline-code-bg);
+    color: var(--inline-code-text);
+    padding: 1px 5px;
+    border-radius: 4px;
+}
+
+.doc-card {
+    display: block;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.doc-card:hover {
+    color: var(--text);
+    border-color: var(--primary);
+    box-shadow: var(--shadow-raised);
+}
+
+.doc-card:hover h3 {
+    color: var(--primary);
+}
+
+.quickstart {
+    padding: 88px 0;
+    background: var(--bg-subtle);
+    border-block: 1px solid var(--border);
+}
+
+.quickstart-steps {
+    counter-reset: qs;
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    max-width: 760px;
+}
+
+.quickstart-steps > li {
+    counter-increment: qs;
+    position: relative;
+    padding-left: 60px;
+    margin-bottom: 36px;
+    min-width: 0;
+}
+
+.quickstart-steps > li::before {
+    content: counter(qs);
+    position: absolute;
+    left: 0;
+    top: -4px;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--primary);
+    color: var(--on-primary);
+    font-weight: 700;
+}
+
+.quickstart-steps h3 {
+    margin: 0 0 12px;
+    font-size: 1.08rem;
+}
+
+.quickstart-more {
+    text-align: center;
+    margin: 0;
+    font-weight: 600;
+}
+
+/* --- Responsive ------------------------------------------------------------ */
+@media (max-width: 900px) {
+    .workflow-steps {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 720px) {
+    .hero {
+        padding: 56px 0 48px;
+    }
+
+    .hero-actions .btn {
+        flex: 1 1 200px;
+    }
+
+    .workflow,
+    .features,
+    .quickstart,
+    .docs-links {
+        padding: 56px 0;
+    }
+
+    .workflow-example {
+        padding: 20px 16px;
+    }
+
+    .quickstart-steps > li {
+        padding-left: 0;
+        padding-top: 48px;
+    }
+}

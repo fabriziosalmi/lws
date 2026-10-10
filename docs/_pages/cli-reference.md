@@ -1,6 +1,7 @@
 ---
-layout: default
 title: CLI Reference
+seo_title: "CLI reference: every lws command for Proxmox and LXC"
+description: "Every LWS command with its options and an example: Proxmox hosts (px), LXC containers (lxc), Docker apps (app), configuration (conf) and security (sec)."
 ---
 
 # CLI Command Reference
@@ -292,8 +293,10 @@ Options:
 
 **Example:**
 ```bash
-lws px exec df -h /var/lib/vz
+lws px exec -- df -h /var/lib/vz
 ```
+
+Put `--` before the command when any of its words start with `-`. Without it, LWS reads them as its own options: `lws px exec df -h` prints the LWS help page instead of running `df -h`.
 
 ## LXC Container Commands (`lxc`)
 
@@ -332,8 +335,8 @@ Options:
 **Example:**
 ```bash
 lws lxc run \
-  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.gz \
-  --size medium \
+  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
+  --size small \
   --count 3 \
   --hostname web-server \
   --password SecurePass123
@@ -745,7 +748,7 @@ Options:
 Execute docker run inside a container.
 
 ```bash
-lws app run <instance_id> <docker_command> [OPTIONS]
+lws app run [OPTIONS] <instance_id> -- <docker run arguments>...
 
 Options:
   --region TEXT   Region
@@ -754,8 +757,10 @@ Options:
 
 **Example:**
 ```bash
-lws app run 100 "-d -p 80:80 nginx"
+lws app run 100 -- -d -p 80:80 nginx
 ```
+
+The arguments after `--` are appended to `docker run` one by one, so this runs `docker run -d -p 80:80 nginx` in container 100. The `--` is required whenever the first Docker argument starts with `-`.
 
 ### `app deploy`
 
@@ -901,7 +906,3 @@ lws lxc resources 100 --interval 5 --count 60
 # Generate performance report
 lws lxc report 100 --output json --file report-$(date +%Y%m%d).json
 ```
-
----
-
-[← Architecture](architecture.html) | [Next: API Reference →](api-reference.html)

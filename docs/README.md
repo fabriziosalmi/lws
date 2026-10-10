@@ -1,216 +1,81 @@
-# LWS Documentation
+# LWS documentation site
 
-This directory contains the complete documentation for LWS, hosted on GitHub Pages.
+The source of [fabriziosalmi.github.io/lws](https://fabriziosalmi.github.io/lws/).
+GitHub Pages builds it with Jekyll from the `docs/` folder of `main`. This file
+is excluded from the build.
 
-## View Documentation
-
-Live site: [https://fabriziosalmi.github.io/lws/](https://fabriziosalmi.github.io/lws/)
-
-## Structure
+## Layout
 
 ```
 docs/
-├── index.html              # Landing page
-├── _config.yml             # Jekyll configuration (remote_theme: cayman)
-├── CNAME                   # Custom domain (currently commented out)
-│
+├── _config.yml           Site settings, collections, version shown on the site
+├── _data/navigation.yml  Sidebar order, previous/next links, llms.txt
 ├── _layouts/
-│   └── default.html        # Shared page layout
-│
-├── assets/
-│   ├── css/                # Custom + self-hosted font styles
-│   ├── fonts/               # Self-hosted Inter font files
-│   └── js/
-│       └── main.js         # JavaScript for animations
-│
-└── _pages/                 # Jekyll collection (see `collections:` in _config.yml)
-    ├── getting-started.md
-    ├── architecture.md
-    ├── cli-reference.md
-    ├── api-reference.md
-    ├── configuration.md
-    └── contributing.md
+│   ├── base.html         HTML skeleton: head, header, footer
+│   └── default.html      Documentation page: sidebar, "On this page", prev/next
+├── _includes/
+│   ├── head.html         Title, description, canonical, Open Graph, JSON-LD, CSP
+│   ├── header.html       Top bar and search box
+│   ├── footer.html
+│   └── toc-items.html    Builds "On this page" from the page's h2/h3 headings
+├── _pages/               Documentation pages (URL: /lws/pages/<name>.html)
+├── index.html            Home page
+├── 404.html
+├── search.json           Search index, generated from the pages at build time
+├── llms.txt              Generated page list for language models
+├── llms-full.txt         Generated full text of every page
+└── assets/
+    ├── css/style.css     Tokens (light and dark), base, header, footer, home
+    ├── css/docs.css      Documentation layout, Markdown, code highlighting
+    ├── js/main.js        Copy buttons, heading anchors, current section, search
+    ├── fonts/            Inter, self-hosted (one variable font per subset)
+    └── img/              Favicon, touch icon, social preview image
 ```
 
-## Enabling GitHub Pages
+Everything is served from this site. There are no third-party scripts, fonts
+or stylesheets, and the Content-Security-Policy in `_includes/head.html`
+allows none: no inline scripts or styles either.
 
-### Step 1: Push to GitHub
+## Adding a page
 
-```bash
-git add docs/
-git commit -m "Add comprehensive documentation with GitHub Pages"
-git push origin main
-```
+1. Create `_pages/<name>.md` with front matter:
 
-### Step 2: Enable GitHub Pages
-
-1. Go to your repository on GitHub
-2. Click **Settings**
-3. Scroll to **Pages** section (left sidebar)
-4. Under **Source**, select:
-   - **Branch:** `main`
-   - **Folder:** `/docs`
-5. Click **Save**
-
-### Step 3: Wait for Deployment
-
-GitHub Pages will build and deploy your site. This usually takes 1-3 minutes.
-
-You can check the deployment status under:
-- **Actions** tab → **pages-build-deployment** workflow
-
-### Step 4: Access Your Site
-
-Your documentation will be available at:
-```
-https://YOUR_USERNAME.github.io/lws/
-```
-
-For example:
-```
-https://fabriziosalmi.github.io/lws/
-```
-
-## Customization
-
-### Change Colors
-
-Edit `docs/assets/css/style.css`:
-
-```css
-:root {
-    --primary: #3454d1;       /* Primary color */
-    --primary-dark: #28409f;  /* Hover/active state of --primary */
-    --accent: #0f766e;        /* Accent color */
-}
-```
-
-### Add Custom Domain
-
-1. Create/edit `docs/CNAME`:
-   ```
-   docs.yourdomain.com
-   ```
-
-2. Configure DNS:
-   - Add CNAME record pointing to `YOUR_USERNAME.github.io`
-
-3. Enable HTTPS in GitHub Pages settings
-
-### Update Content
-
-All documentation is in Markdown format in `docs/_pages/`:
-- `getting-started.md` - Installation guide
-- `architecture.md` - Technical architecture
-- `cli-reference.md` - CLI commands
-- `api-reference.md` - API endpoints
-- `configuration.md` - Configuration options
-- `contributing.md` - Contributing guide
-
-Simply edit these files and push to update the documentation.
-
-## Local Development
-
-### Preview Locally
-
-Python's built-in server only serves `index.html` as static HTML — it does not run Jekyll, so it will not render the `docs/_pages/` collection, the `default.html` layout, or the remote `cayman` theme configured in `_config.yml`:
-
-```bash
-cd docs
-python3 -m http.server 8000
-```
-
-Then open: `http://localhost:8000`
-
-### With Jekyll
-
-The site actually served on GitHub Pages is built with Jekyll (see `_config.yml`: `remote_theme`, `collections`, `kramdown`), so to preview the full site — including the pages under `_pages/` — run it through Jekyll locally:
-
-```bash
-# Install Jekyll
-gem install bundler jekyll
-
-# Create Gemfile in docs/
-cd docs
-cat > Gemfile << 'EOF'
-source "https://rubygems.org"
-gem "github-pages", group: :jekyll_plugins
-EOF
-
-# Install dependencies
-bundle install
-
-# Serve locally
-bundle exec jekyll serve
-
-# Open http://localhost:4000
-```
-
-## Maintenance
-
-### Update Navigation
-
-Edit `docs/_config.yml` to update the navigation menu:
-
-```yaml
-navigation:
-  - title: Getting Started
-    url: /pages/getting-started
-  - title: New Page
-    url: /pages/new-page
-```
-
-### Add New Pages
-
-1. Create new Markdown file in `docs/_pages/`
-2. Add front matter:
    ```yaml
    ---
-   layout: default
-   title: Page Title
+   title: Short title used in the sidebar and breadcrumb
+   seo_title: "Title for search results, at most 60 characters"
+   description: "What the page covers, 50 to 160 characters."
    ---
    ```
-3. Write content in Markdown
-4. Add link to navigation in `_config.yml`
-5. Update `index.html` if needed
 
-## Troubleshooting
+2. Add it to `_data/navigation.yml`. The sidebar, the previous/next links,
+   `llms.txt` and `llms-full.txt` all follow that file.
 
-### Page Not Found (404)
+`tests/test_docs_site.py` fails if a page is missing from the navigation, if a
+navigation entry points nowhere, or if a title or description is missing, too
+long or duplicated. `tests/test_docs_examples.py` parses every `lws` command
+in a code block against the real CLI, so an example with a wrong option or
+size name fails the test suite.
 
-- Check that GitHub Pages is enabled
-- Verify the branch and folder are correct
-- Wait a few minutes for deployment
-- Check the Actions tab for build errors
+## Previewing locally
 
-### CSS Not Loading
+```bash
+cd docs
+bundle install
+bundle exec jekyll serve
+# open http://localhost:4000/lws/
+```
 
-- Verify file paths in `index.html`
-- Check browser console for errors
-- Ensure `assets/` directory is committed
+The `Gemfile` pins the `github-pages` gem, so the local build matches the one
+GitHub runs. To run the same checks as CI:
 
-### Markdown Not Rendering
+```bash
+bundle exec jekyll build --destination _site/lws --baseurl /lws
+LANG=C.UTF-8 bundle exec htmlproofer _site --root-dir _site --disable-external \
+  --swap-urls '^https\://fabriziosalmi\.github\.io/lws/:/lws/'
+```
 
-- Check front matter in `.md` files
-- Verify `_config.yml` is valid YAML
-- Ensure Jekyll theme is properly configured
+## Releasing
 
-## Resources
-
-- [GitHub Pages Documentation](https://docs.github.com/en/pages)
-- [Jekyll Documentation](https://jekyllrb.com/docs/)
-- [Markdown Guide](https://www.markdownguide.org/)
-
-## Checklist
-
-- [ ] Push `docs/` to GitHub
-- [ ] Enable GitHub Pages in settings
-- [ ] Wait for deployment
-- [ ] Verify site is accessible
-- [ ] Update README.md with documentation link
-- [ ] (Optional) Configure custom domain
-- [ ] (Optional) Enable HTTPS
-
----
-
-Report issues on GitHub.
+When the version in `pyproject.toml` changes, update `lws_version` in
+`_config.yml`; `tests/test_docs_site.py` fails until the two match.

@@ -29,3 +29,15 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+
+  # The docs/ site: github-pages pins the gems GitHub Pages builds with, and
+  # .github/workflows/docs.yml builds with this lockfile.
+  - package-ecosystem: "bundler"
+    directory: "/docs"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      docs:
+        patterns:
+          - "*"

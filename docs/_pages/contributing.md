@@ -1,6 +1,7 @@
 ---
-layout: default
 title: Contributing
+seo_title: "Contributing to LWS: setup, tests and pull requests"
+description: "How to set up a development checkout of LWS, run the test suite, follow the project conventions for commits and code, and open a pull request."
 ---
 
 # Contributing to LWS
@@ -345,8 +346,7 @@ Brief description of changes
 
 ### Get Help
 
-- [Discussions](https://github.com/fabriziosalmi/lws/discussions) - Ask questions
-- [Issues](https://github.com/fabriziosalmi/lws/issues) - Report bugs
+- [Issues](https://github.com/fabriziosalmi/lws/issues) - Report bugs and ask questions
 - Email maintainers for sensitive matters
 
 ## Recognition
@@ -363,5 +363,3 @@ By contributing, you agree that your contributions will be licensed under the MI
 ---
 
 Thank you for contributing to LWS!
-
-[← Configuration](configuration.html) | [Back to Home →](../index.html)

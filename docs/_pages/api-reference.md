@@ -1,6 +1,7 @@
 ---
-layout: default
 title: API Reference
+seo_title: "REST API reference: Proxmox and LXC endpoints"
+description: "Endpoints of the LWS REST API: API key authentication, Proxmox host operations, LXC lifecycle, snapshots, volumes, migration, Docker apps and errors."
 ---
 
 # API Reference
@@ -934,7 +935,3 @@ client = LWSClient('http://localhost:8080', 'your-api-key')
 containers = client.list_containers()
 print(containers)
 ```
-
----
-
-[← CLI Reference](cli-reference.html) | [Next: Configuration →](configuration.html)

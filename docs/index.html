@@ -1,304 +1,153 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="LWS: a CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
-    <meta name="keywords" content="LXC, Proxmox, CLI, Linux, Containers, Infrastructure">
-    <meta name="author" content="Fabrizio Salmi">
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://fabriziosalmi.github.io/lws/">
-    <meta property="og:title" content="LWS - Linux Web Services">
-    <meta property="og:description" content="A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://fabriziosalmi.github.io/lws/">
-    <meta property="twitter:title" content="LWS - Linux Web Services">
-    <meta property="twitter:description" content="A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.">
-
-    <title>LWS - Linux Web Services | Proxmox Container Management</title>
-
-    <link rel="canonical" href="https://fabriziosalmi.github.io/lws/">
-    <meta name="robots" content="max-image-preview:large">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233454d1'/><text x='50' y='69' font-size='56' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>L</text></svg>">
-
-    <!--
-      Same policy as _layouts/default.html, which covers the pages/ collection.
-      This file has no front matter, so Jekyll copies it verbatim and the layout
-      never applies to it - the tag has to be repeated here.
-    -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'">
-
-    <link rel="stylesheet" href="assets/css/style.css">
-  <link rel="stylesheet" href="assets/css/fonts.css">
-
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "LWS - Linux Web Services",
-      "description": "A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH.",
-      "applicationCategory": "DeveloperApplication",
-      "operatingSystem": "Linux",
-      "url": "https://fabriziosalmi.github.io/lws/",
-      "codeRepository": "https://github.com/fabriziosalmi/lws",
-      "license": "https://github.com/fabriziosalmi/lws/blob/main/LICENSE",
-      "author": {
-        "@type": "Person",
-        "name": "Fabrizio Salmi"
-      }
-    }
-    </script>
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="container">
-            <div class="nav-brand">
-                <span class="logo">LWS</span>
-            </div>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#quickstart">Quick Start</a>
-                <a href="#docs">Docs</a>
-                <a href="https://github.com/fabriziosalmi/lws" target="_blank" rel="noopener">GitHub</a>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hero Section -->
-    <section class="hero">
-        <div class="container">
-            <div class="hero-content">
-                <h1 class="hero-title">
-                    Linux Web Services
-                    <span class="subtitle">Unified CLI for Proxmox + LXC + Docker</span>
-                </h1>
-                <p class="hero-description">
-                    Manage Proxmox hosts, LXC containers, and Docker applications running inside them,
-                    from one CLI, over SSH or a REST API.
-                </p>
-                <div class="hero-buttons">
-                    <a href="#quickstart" class="btn btn-primary">Get Started</a>
-                    <a href="pages/getting-started.html" class="btn btn-secondary">Documentation</a>
-                </div>
-                <div class="hero-code">
-                    <pre><code><span class="code-comment"># Install and run your first container</span>
+---
+layout: base
+title: LWS
+seo_title: "LWS: CLI and REST API for Proxmox VE and LXC containers"
+description: "LWS manages Proxmox VE hosts, LXC containers and the Docker apps inside them from one command line or a REST API, over SSH. Open source, MIT licensed."
+body_class: home
+---
+<main id="content" tabindex="-1">
+  <section class="hero">
+    <div class="container hero-inner">
+      <p class="hero-eyebrow">Open source &middot; MIT License &middot; v{{ site.lws_version }}</p>
+      <h1>Manage Proxmox VE and LXC containers from one command line</h1>
+      <p class="hero-lead">
+        LWS (Linux Web Services) creates, scales, snapshots and migrates LXC containers on
+        one or more Proxmox VE hosts, and deploys Docker applications inside them.
+        It works over SSH from your machine, as a CLI or as a REST API with a small web UI.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="{{ '/pages/getting-started.html' | relative_url }}">Get started</a>
+        <a class="btn btn-secondary" href="{{ '/pages/cli-reference.html' | relative_url }}">CLI reference</a>
+      </div>
+      <div class="hero-code">
+        <pre><code><span class="code-comment"># Install from a checkout</span>
 <span class="code-command">git clone</span> https://github.com/fabriziosalmi/lws.git
-<span class="code-command">cd</span> lws && <span class="code-command">pip install</span> -r requirements.txt
-<span class="code-command">lws lxc run</span> --image-id ubuntu-22.04 --size medium --count 3</code></pre>
-                </div>
-            </div>
-        </div>
-    </section>
+<span class="code-command">cd</span> lws &amp;&amp; <span class="code-command">pip install</span> -r requirements.txt
+<span class="code-command">cp</span> config.yaml.example config.yaml   <span class="code-comment"># then add your Proxmox hosts</span>
+<span class="code-command">alias</span> lws="python3 $PWD/lws.py"
 
-    <!-- Workflow Section -->
-    <section class="unified-platform">
-        <div class="container">
-            <h2 class="section-title">Workflow</h2>
-            <p class="section-subtitle">Proxmox host, to LXC container, to a Docker application inside it</p>
+<span class="code-comment"># Create three containers from a template on the host</span>
+<span class="code-command">lws lxc run</span> --size small --count 3 \
+  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst</code></pre>
+      </div>
+    </div>
+  </section>
 
-            <div class="platform-workflow">
-                <div class="workflow-step">
-                    <h3>1. Proxmox</h3>
-                    <p>List and inspect Proxmox hosts</p>
-                    <div class="code-snippet">
-                        <code>lws px list</code>
-                    </div>
-                </div>
+  <section class="workflow" aria-labelledby="workflow-title">
+    <div class="container">
+      <h2 id="workflow-title" class="section-title">From host to application</h2>
+      <p class="section-subtitle">The same tool covers the Proxmox host, the LXC container on it and the Docker application inside the container.</p>
 
-                <div class="workflow-arrow">→</div>
+      <ol class="workflow-steps">
+        <li class="workflow-step">
+          <h3>Proxmox hosts</h3>
+          <p>List hosts, check their status, manage templates, backups and firewall security groups.</p>
+          <code>lws px list</code>
+        </li>
+        <li class="workflow-step">
+          <h3>LXC containers</h3>
+          <p>Create, start, stop, resize, snapshot, clone and migrate containers.</p>
+          <code>lws lxc run --image-id &lt;template&gt; --size small</code>
+        </li>
+        <li class="workflow-step">
+          <h3>Docker applications</h3>
+          <p>Install Docker in a container and deploy a Compose file into it.</p>
+          <code>lws app deploy install &lt;id&gt; --compose-file app.yml</code>
+        </li>
+      </ol>
 
-                <div class="workflow-step">
-                    <h3>2. LXC</h3>
-                    <p>Create a container</p>
-                    <div class="code-snippet">
-                        <code>lws lxc run --size medium</code>
-                    </div>
-                </div>
-
-                <div class="workflow-arrow">→</div>
-
-                <div class="workflow-step">
-                    <h3>3. Docker</h3>
-                    <p>Deploy a Compose application into it</p>
-                    <div class="code-snippet">
-                        <code>lws app deploy install</code>
-                    </div>
-                </div>
-            </div>
-
-            <div class="platform-example">
-                <h3>Example: create a container and deploy a Compose application</h3>
-                <pre><code><span class="code-comment"># 1. Create an LXC container (prints the assigned instance ID)</span>
-<span class="code-command">lws lxc run</span> --image-id ubuntu-22.04 --size lws-web --hostname web-1
+      <div class="workflow-example">
+        <h3>Example: one container running a Compose application</h3>
+        <pre><code><span class="code-comment"># 1. Create an LXC container (prints the assigned instance ID)</span>
+<span class="code-command">lws lxc run</span> --size lws-web --hostname web \
+  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst
 
 <span class="code-comment"># 2. Install Docker in it (replace 100 with the ID from step 1)</span>
 <span class="code-command">lws app setup</span> 100
 
 <span class="code-comment"># 3. Deploy an existing docker-compose.yml into it</span>
 <span class="code-command">lws app deploy install</span> 100 --compose-file ./docker-compose.yml</code></pre>
-            </div>
-        </div>
-    </section>
+      </div>
+    </div>
+  </section>
 
-    <!-- Features Section -->
-    <section id="features" class="features">
-        <div class="container">
-            <h2 class="section-title">Features</h2>
+  <section class="features" aria-labelledby="features-title">
+    <div class="container">
+      <h2 id="features-title" class="section-title">What it does</h2>
+      <ul class="feature-grid">
+        <li class="feature-card">
+          <h3>Several Proxmox hosts</h3>
+          <p>Group hosts into regions and availability zones in <code>config.yaml</code> and target any of them with <code>--region</code> and <code>--az</code>.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Container lifecycle</h3>
+          <p>Create containers from predefined sizes, then start, stop, reboot, clone, migrate and terminate them.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Snapshots and backups</h3>
+          <p>Take and remove snapshots, create and restore container backups, and back up host configuration.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Firewall security groups</h3>
+          <p>Create Proxmox firewall security groups, add rules, and attach them to containers.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Resource checks and scaling</h3>
+          <p><code>lxc scale-check</code> compares CPU, memory and disk use with configured thresholds; <code>lxc scale</code> applies changes. Both run on demand.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Docker inside LXC</h3>
+          <p>Install Docker in a container, run images, deploy Compose files, read logs and update running apps.</p>
+        </li>
+        <li class="feature-card">
+          <h3>REST API and web UI</h3>
+          <p>A Flask API covers most CLI commands, with an API key, Swagger documentation and a minimal web UI.</p>
+        </li>
+        <li class="feature-card">
+          <h3>Retries and timeouts</h3>
+          <p>Remote commands run over SSH with automatic retries and timeouts.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
 
-            <div class="features-grid">
-                <div class="feature-card">
-                    <h3>Retries and Timeouts</h3>
-                    <p>SSH command execution with automatic retry and timeout handling</p>
-                </div>
+  <section class="quickstart" aria-labelledby="quickstart-title">
+    <div class="container">
+      <h2 id="quickstart-title" class="section-title">Quick start</h2>
+      <p class="section-subtitle">Python 3.10 or later, <code>sshpass</code>, and SSH access to a Proxmox VE host.</p>
+      <ol class="quickstart-steps">
+        <li>
+          <h3>Install</h3>
+          <pre><code>git clone https://github.com/fabriziosalmi/lws.git
+cd lws &amp;&amp; pip install -r requirements.txt</code></pre>
+        </li>
+        <li>
+          <h3>Configure</h3>
+          <pre><code>cp config.yaml.example config.yaml
+# Set the host, user and ssh_password of each Proxmox host</code></pre>
+        </li>
+        <li>
+          <h3>Create a container</h3>
+          <pre><code>python3 lws.py px templates
+python3 lws.py lxc run --size small \
+  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst</code></pre>
+        </li>
+      </ol>
+      <p class="quickstart-more"><a href="{{ '/pages/getting-started.html' | relative_url }}">Read the full getting started guide</a></p>
+    </div>
+  </section>
 
-                <div class="feature-card">
-                    <h3>Security Groups and Firewall Rules</h3>
-                    <p>Manage Proxmox firewall security groups and per-container rules from the CLI</p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>Multiple Hosts</h3>
-                    <p>Target containers across multiple Proxmox hosts, grouped into regions and availability zones in config.yaml</p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>Resource Monitoring</h3>
-                    <p>CPU, memory, and disk monitoring, and scaling recommendations via <code>lxc scale-check</code></p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>Docker Integration</h3>
-                    <p>Install and manage Docker containers within LXC containers</p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>Scaling Commands</h3>
-                    <p><code>lxc scale-check</code> recommends CPU/memory/storage changes against configured thresholds; <code>lxc scale</code> applies them - both run on demand, not as a background process</p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>Backup and Restore</h3>
-                    <p>Snapshot management and container backup/restore</p>
-                </div>
-
-                <div class="feature-card">
-                    <h3>REST API</h3>
-                    <p>A REST API covering most CLI commands, with Swagger documentation and a Web UI</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Quick Start Section -->
-    <section id="quickstart" class="quickstart">
-        <div class="container">
-            <h2 class="section-title">Quick Start</h2>
-            <div class="quickstart-steps">
-                <div class="step">
-                    <div class="step-number">1</div>
-                    <div class="step-content">
-                        <h3>Install Dependencies</h3>
-                        <pre><code>pip install -r requirements.txt</code></pre>
-                    </div>
-                </div>
-
-                <div class="step">
-                    <div class="step-number">2</div>
-                    <div class="step-content">
-                        <h3>Configure</h3>
-                        <pre><code>cp config.yaml.example config.yaml
-# Edit config.yaml with your Proxmox details</code></pre>
-                    </div>
-                </div>
-
-                <div class="step">
-                    <div class="step-number">3</div>
-                    <div class="step-content">
-                        <h3>Run Your First Container</h3>
-                        <pre><code>lws lxc run --image-id ubuntu-22.04 --size medium</code></pre>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Documentation Links -->
-    <section id="docs" class="docs-section">
-        <div class="container">
-            <h2 class="section-title">Documentation</h2>
-            <div class="docs-grid">
-                <a href="pages/getting-started.html" class="doc-card">
-                    <h3>Getting Started</h3>
-                    <p>Installation, configuration, and your first steps with LWS</p>
-                </a>
-
-                <a href="pages/architecture.html" class="doc-card">
-                    <h3>Architecture</h3>
-                    <p>Learn about the modular design and internal structure</p>
-                </a>
-
-                <a href="pages/cli-reference.html" class="doc-card">
-                    <h3>CLI Reference</h3>
-                    <p>Complete command reference with examples</p>
-                </a>
-
-                <a href="pages/api-reference.html" class="doc-card">
-                    <h3>API Reference</h3>
-                    <p>REST API endpoints and usage guide</p>
-                </a>
-
-                <a href="pages/configuration.html" class="doc-card">
-                    <h3>Configuration</h3>
-                    <p>Advanced configuration options and best practices</p>
-                </a>
-
-                <a href="pages/contributing.html" class="doc-card">
-                    <h3>Contributing</h3>
-                    <p>How to contribute to the project</p>
-                </a>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <span class="logo">LWS</span>
-                    <p>Linux Web Services</p>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>Documentation</h4>
-                        <a href="pages/getting-started.html">Getting Started</a>
-                        <a href="pages/cli-reference.html">CLI Reference</a>
-                        <a href="pages/api-reference.html">API Reference</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Community</h4>
-                        <a href="https://github.com/fabriziosalmi/lws" target="_blank" rel="noopener">GitHub</a>
-                        <a href="https://github.com/fabriziosalmi/lws/issues" target="_blank" rel="noopener">Issues</a>
-                        <a href="pages/contributing.html">Contributing</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Legal</h4>
-                        <a href="https://github.com/fabriziosalmi/lws/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
-                        <a href="https://fabriziosalmi.github.io/privacy">Privacy &amp; legal notice</a>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>LWS. Released under the MIT License.</p>
-            </div>
-        </div>
-    </footer>
-
-    <script src="assets/js/main.js"></script>
-</body>
-</html>
+  <section class="docs-links" aria-labelledby="docs-title">
+    <div class="container">
+      <h2 id="docs-title" class="section-title">Documentation</h2>
+      <ul class="doc-grid">
+        <li><a class="doc-card" href="{{ '/pages/getting-started.html' | relative_url }}"><h3>Getting Started</h3><p>Install LWS, configure your hosts and create a first container.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/configuration.html' | relative_url }}"><h3>Configuration</h3><p>Every setting in config.yaml: hosts, regions, sizes and the API key.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/cli-reference.html' | relative_url }}"><h3>CLI Reference</h3><p>All commands for hosts, containers and Docker apps, with examples.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/api-reference.html' | relative_url }}"><h3>API Reference</h3><p>REST endpoints, authentication, request and response formats.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/architecture.html' | relative_url }}"><h3>Architecture</h3><p>How the CLI, the core modules and the API fit together.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/contributing.html' | relative_url }}"><h3>Contributing</h3><p>Development setup, tests and how to open a pull request.</p></a></li>
+      </ul>
+    </div>
+  </section>
+</main>

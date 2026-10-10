@@ -1,0 +1,137 @@
+{%- assign page_title = page.seo_title | default: page.title -%}
+{%- if page.url == "/" -%}
+  {%- assign full_title = page_title -%}
+{%- else -%}
+  {%- assign full_title = page_title | append: " | LWS" -%}
+{%- endif -%}
+{%- assign description = page.description | default: site.description | strip_newlines | strip -%}
+{%- assign canonical = page.url | absolute_url -%}
+{%- assign social_image = page.image | default: site.social_image | absolute_url -%}
+{%- assign site_root = "/" | absolute_url -%}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{%- comment -%}
+  GitHub Pages cannot send response headers, so the policy is set here. Every
+  script and stylesheet is a file on this site: nothing inline runs, and nothing
+  is loaded from another origin. The JSON-LD block below is data, not script,
+  and is not subject to script-src.
+{%- endcomment %}
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>{{ full_title | escape }}</title>
+<meta name="description" content="{{ description | escape }}">
+<link rel="canonical" href="{{ canonical }}">
+{%- if page.noindex %}
+<meta name="robots" content="noindex">
+{%- else %}
+<meta name="robots" content="index, follow, max-image-preview:large">
+{%- endif %}
+<meta name="author" content="{{ site.author }}">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)">
+
+<meta property="og:type" content="{% if page.url == '/' %}website{% else %}article{% endif %}">
+<meta property="og:site_name" content="LWS">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="{{ page_title | escape }}">
+<meta property="og:description" content="{{ description | escape }}">
+<meta property="og:url" content="{{ canonical }}">
+<meta property="og:image" content="{{ social_image }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="LWS: CLI and REST API for Proxmox VE, LXC and Docker">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="{{ '/assets/img/favicon.svg' | relative_url }}" type="image/svg+xml" sizes="any">
+<link rel="icon" href="{{ '/assets/img/favicon-32.png' | relative_url }}" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="{{ '/assets/img/apple-touch-icon.png' | relative_url }}">
+<link rel="sitemap" type="application/xml" href="{{ '/sitemap.xml' | relative_url }}">
+
+<link rel="preload" href="{{ '/assets/fonts/inter-latin.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+<link rel="stylesheet" href="{{ '/assets/css/search.css' | relative_url }}">
+{%- if page.url == "/" %}
+<link rel="stylesheet" href="{{ '/assets/css/home.css' | relative_url }}">
+{%- endif %}
+{%- if layout.docs %}
+<link rel="stylesheet" href="{{ '/assets/css/docs.css' | relative_url }}">
+{%- endif %}
+<script src="{{ '/assets/js/main.js' | relative_url }}" defer></script>
+
+{%- unless page.noindex %}
+<script type="application/ld+json">
+{%- if page.url == "/" %}
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "{{ site_root }}#website",
+      "url": "{{ site_root }}",
+      "name": "LWS",
+      "alternateName": "Linux Web Services",
+      "description": {{ site.description | strip_newlines | jsonify }},
+      "inLanguage": "en"
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "{{ site_root }}#software",
+      "name": "LWS",
+      "alternateName": "Linux Web Services",
+      "description": {{ description | jsonify }},
+      "url": "{{ site_root }}",
+      "applicationCategory": "DeveloperApplication",
+      "applicationSubCategory": "Infrastructure management",
+      "operatingSystem": "Linux",
+      "softwareVersion": {{ site.lws_version | jsonify }},
+      "softwareRequirements": "Python 3.10 or later and a Proxmox VE host, reached over SSH with sshpass or used locally",
+      "downloadUrl": "{{ site.repository_url }}/releases",
+      "license": "{{ site.repository_url }}/blob/main/LICENSE",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "author": { "@type": "Person", "name": {{ site.author | jsonify }}, "url": "https://github.com/fabriziosalmi" },
+      "image": "{{ social_image }}"
+    },
+    {
+      "@type": "SoftwareSourceCode",
+      "@id": "{{ site_root }}#source",
+      "name": "LWS source code",
+      "codeRepository": "{{ site.repository_url }}",
+      "programmingLanguage": "Python",
+      "runtimePlatform": "Python 3.10+",
+      "license": "{{ site.repository_url }}/blob/main/LICENSE",
+      "targetProduct": { "@id": "{{ site_root }}#software" }
+    }
+  ]
+}
+{%- else %}
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "TechArticle",
+      "@id": "{{ canonical }}#article",
+      "headline": {{ page_title | jsonify }},
+      "name": {{ page.title | jsonify }},
+      "description": {{ description | jsonify }},
+      "url": "{{ canonical }}",
+      "mainEntityOfPage": "{{ canonical }}",
+      "inLanguage": "en",
+      "image": "{{ social_image }}",
+      "author": { "@type": "Person", "name": {{ site.author | jsonify }}, "url": "https://github.com/fabriziosalmi" },
+      "isPartOf": { "@type": "WebSite", "@id": "{{ site_root }}#website", "name": "LWS", "url": "{{ site_root }}" },
+      "about": { "@type": "SoftwareApplication", "@id": "{{ site_root }}#software", "name": "LWS" }
+    },
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "LWS", "item": "{{ site_root }}" },
+        { "@type": "ListItem", "position": 2, "name": {{ page.title | jsonify }}, "item": "{{ canonical }}" }
+      ]
+    }
+  ]
+}
+{%- endif %}
+</script>
+{%- endunless %}

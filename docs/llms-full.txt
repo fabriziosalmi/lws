@@ -1,0 +1,62 @@
+---
+layout: null
+sitemap: false
+---
+{%- comment -%}
+  Every documentation page as plain text, in the reading order of
+  _data/navigation.yml. Built from the rendered pages: headings get their
+  Markdown markers back and code blocks are fenced again, so the result reads
+  like the Markdown sources without front matter or Liquid.
+{%- endcomment -%}
+# LWS - Linux Web Services: full documentation
+
+> {{ site.description | strip_newlines | strip }}
+
+Source: {{ site.repository_url }}
+Release: {{ site.lws_version }}
+{% for section in site.data.navigation %}{% for item in section.items %}{% assign doc = site.documents | where: "url", item.url | first %}
+{%- assign text = doc.content
+  | replace: "<h1", "
+# <h1" | replace: "<h2", "
+## <h2" | replace: "<h3", "
+### <h3" | replace: "<h4", "
+#### <h4"
+  | replace: "<li>", "- <li>"
+  | replace: "<pre", "
+```
+<pre" | replace: "</pre>", "</pre>
+```
+"
+  | strip_html
+  | replace: "&lt;", "<" | replace: "&gt;", ">" | replace: "&quot;", '"' | replace: "&#39;", "'" | replace: "&amp;", "&"
+  | replace: "
+  
+", "
+
+" | replace: "
+
+
+", "
+
+" | replace: "
+
+
+", "
+
+" | replace: "
+
+
+", "
+
+" | replace: "
+
+
+", "
+
+" | strip %}
+---
+
+URL: {{ item.url | absolute_url }}
+
+{{ text }}
+{% endfor %}{% endfor %}
