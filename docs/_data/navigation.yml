@@ -13,8 +13,23 @@
 
 - section: Guides
   items:
+    - title: Docker in LXC
+      url: /pages/docker-in-lxc.html
+    - title: Snapshots and backups
+      url: /pages/snapshots-and-backups.html
+    - title: Firewall security groups
+      url: /pages/firewall-security-groups.html
+    - title: Scaling containers
+      url: /pages/scaling.html
     - title: Several Proxmox hosts
       url: /pages/multiple-hosts.html
+
+- section: Production
+  items:
+    - title: API in production
+      url: /pages/api-in-production.html
+    - title: Security model
+      url: /pages/security-model.html
 
 - section: Reference
   items:

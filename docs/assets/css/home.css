@@ -211,6 +211,16 @@
     padding: 88px 0;
 }
 
+.doc-group-title {
+    margin: 40px 0 16px;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.doc-group-title:first-of-type {
+    margin-top: 0;
+}
+
 .feature-grid,
 .doc-grid {
     list-style: none;
@@ -231,7 +241,7 @@
 }
 
 .feature-card h3,
-.doc-card h3 {
+.doc-card h4 {
     margin: 0 0 8px;
     font-size: 1.02rem;
     font-weight: 600;

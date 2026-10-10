@@ -231,7 +231,7 @@ Options:
   --az TEXT       Availability zone
 ```
 
-The security group commands go through `pvesh`, the command-line client of the Proxmox VE API on the host. The API validates every rule and writes the firewall files in `/etc/pve/firewall/` itself.
+The security group commands go through `pvesh`, the command-line client of the Proxmox VE API on the host. The API validates every rule and writes the firewall files in `/etc/pve/firewall/` itself. [Firewall security groups](firewall-security-groups.html) explains how groups, rules and the container firewall fit together.
 
 ### `px security-group-add` / `security-group-rm`
 
@@ -463,7 +463,7 @@ lws lxc terminate 100 101
 
 ### `lxc scale`
 
-Change the CPU, memory, disk and network limits of containers. CPU, memory and network changes use `pct set` and apply to a running container; the disk is grown with `pct resize`.
+Change the CPU, memory, disk and network limits of containers. CPU, memory and network changes use `pct set` and apply to a running container; the disk is grown with `pct resize`. See [Scaling containers](scaling.html) for what each setting does in Proxmox.
 
 ```bash
 lws lxc scale <instance_ids...> [OPTIONS]
@@ -792,7 +792,7 @@ Options:
 
 ## Docker/App Commands (`app`)
 
-The `app` commands install Docker in a Debian or Ubuntu container and run Docker containers or Compose applications in it.
+The `app` commands install Docker in a Debian or Ubuntu container and run Docker containers or Compose applications in it. [Docker in LXC](docker-in-lxc.html) walks through the whole setup.
 
 ### `app setup`
 
@@ -962,6 +962,8 @@ lws lxc backup-create 100 --download
 # Schedule a nightly backup (crontab; run from the folder with config.yaml)
 0 2 * * * cd /opt/lws && python3 lws.py lxc backup-create 100 --storage backups
 ```
+
+[Snapshots and backups](snapshots-and-backups.html) covers restores and retention.
 
 ### Resource Monitoring
 

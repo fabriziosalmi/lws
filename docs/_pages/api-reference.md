@@ -891,7 +891,9 @@ The web UI at `/` is served by the API itself, so it needs no entry.
 
 ## Production Deployment
 
-`api.py` uses [waitress](https://pypi.org/project/waitress/), a production WSGI server, whenever `api.debug` is `false` (the default). Setting `api.debug: true` switches to Flask's own development server instead — intended for local use — but the interactive debugger and auto-reloader are always disabled regardless, since Werkzeug's debugger allows arbitrary code execution and has no place in code that ever runs outside a developer's own machine.
+`api.py` uses [waitress](https://pypi.org/project/waitress/), a production WSGI server, whenever `api.debug` is `false` (the default). `api.debug: true` switches to Flask's development server, meant for local use; the interactive debugger and the auto-reloader stay off either way, because Werkzeug's debugger allows arbitrary code execution.
+
+[Running the API in production](api-in-production.html) covers the reverse proxy, TLS, a systemd unit and the Docker image.
 
 ## Example: Complete Workflow
 
