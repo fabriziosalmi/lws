@@ -890,7 +890,8 @@ def lxc_scale_instances():
     data = request.get_json()
     if not data or not validate_instance_ids_list(data.get('instance_ids')):
          return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
-    scale_fields = ('memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit', 'disk_read_limit', 'disk_write_limit')
+    scale_fields = ('memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit',
+                    'disk_read_limit', 'disk_write_limit')
     if not any(k in data for k in scale_fields):
         return jsonify({"error": "Missing scaling parameters (memory, cpulimit, etc.)"}), 400
 
