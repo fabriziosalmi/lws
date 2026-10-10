@@ -1,0 +1,70 @@
+name: Docs site
+
+# Builds the GitHub Pages site in docs/ with the same github-pages gem that
+# GitHub uses, then checks every internal link, anchor, image and script in the
+# output. GitHub Pages publishes whatever builds, so a broken link or a missing
+# anchor would otherwise only be found by a reader.
+#
+# External links are not checked: they fail for reasons unrelated to a change
+# (rate limits, outages) and would make this job flaky.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build & check links
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    env:
+      # Nokogiri, which html-proofer uses to parse pages, reads them in the
+      # locale's encoding. Under a non-UTF-8 locale it fails on the first
+      # non-ASCII byte, skips the page, and the run still reports success.
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          # The Ruby that GitHub Pages builds with for github-pages 232.
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: docs
+
+      - name: Build
+        # Built under _site/lws so that the site's absolute links (/lws/...)
+        # resolve inside _site, the way they resolve on github.io.
+        run: bundle exec jekyll build --destination _site/lws --baseurl /lws
+        env:
+          JEKYLL_ENV: production
+          PAGES_REPO_NWO: ${{ github.repository }}
+
+      - name: Check links, anchors, images and scripts
+        # --swap-urls turns the site's own absolute URLs (canonical links) into
+        # local paths, so they are checked too instead of skipped as external.
+        run: >-
+          bundle exec htmlproofer _site
+          --root-dir _site
+          --disable-external
+          --swap-urls '^https\://fabriziosalmi\.github\.io/lws/:/lws/'

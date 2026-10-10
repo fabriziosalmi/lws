@@ -1,358 +1,499 @@
-/* ===================================
-   LWS Documentation Pages - Styles
-   =================================== */
+/* LWS documentation pages: three-column layout, Markdown content and code
+   highlighting. Loaded after style.css, whose tokens it uses. */
 
-/* --- Docs Page Layout --- */
-.docs-page {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
-}
-
-.docs-container {
-    display: flex;
+/* --- Layout ----------------------------------------------------------------
+   Wide screens: sidebar | content | "On this page". The right column drops
+   below 1200px (the list moves into the article as a collapsible block), and
+   the sidebar becomes a collapsible menu below 900px. */
+.docs-shell {
+    display: grid;
+    grid-template-columns: 230px minmax(0, 1fr);
+    grid-template-areas: "sidebar main";
+    gap: 48px;
+    width: 100%;
     max-width: 1400px;
-    margin: 32px auto 0;
-    padding: 0 20px;
-    flex: 1;
+    margin-inline: auto;
+    padding: 32px 24px 64px;
 }
 
-/* --- Sidebar --- */
-.docs-sidebar {
-    width: 250px;
-    flex-shrink: 0;
-    padding: 20px;
+.docs-shell.has-toc {
+    grid-template-columns: 230px minmax(0, 1fr) 220px;
+    grid-template-areas: "sidebar main toc";
+}
+
+.docs-menu-mobile {
+    display: none;
+}
+
+.docs-sidebar,
+.toc-aside {
     position: sticky;
-    top: 80px;
-    height: fit-content;
-    max-height: calc(100vh - 100px);
+    top: calc(var(--header-height) + 24px);
+    align-self: start;
+    max-height: calc(100vh - var(--header-height) - 48px);
     overflow-y: auto;
 }
 
-.sidebar-section {
-    margin-bottom: 30px;
+.docs-sidebar {
+    grid-area: sidebar;
+    padding-right: 8px;
 }
 
-.sidebar-section h3 {
-    font-size: 0.9rem;
-    font-weight: 700;
+.sidebar-nav h2,
+.toc-aside h2 {
+    margin: 0 0 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-transform: uppercase;
-    color: var(--text-light);
-    margin-bottom: 15px;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
 }
 
-.sidebar-section a {
+.sidebar-nav h2:not(:first-child) {
+    margin-top: 26px;
+}
+
+.sidebar-nav ul,
+.toc-aside ul,
+.toc-inline ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-nav a {
     display: block;
-    padding: 8px 12px;
+    padding: 6px 10px;
+    margin-left: -10px;
+    border-radius: 6px;
     color: var(--text);
     text-decoration: none;
-    border-radius: 6px;
-    font-size: 0.95rem;
-    transition: var(--transition);
-    margin-bottom: 5px;
+    font-size: 0.93rem;
 }
 
-.sidebar-section a:hover {
-    background: var(--bg-secondary);
+.sidebar-nav a:hover {
+    background: var(--bg-subtle);
     color: var(--primary);
 }
 
-/* --- Main Content --- */
-.docs-content {
-    flex: 1;
-    max-width: 900px;
-    padding: 20px 40px;
+.sidebar-nav a[aria-current="page"] {
+    background: var(--inline-code-bg);
+    color: var(--primary);
+    font-weight: 600;
 }
 
-/* --- Markdown Body Styles --- */
-.markdown-body {
+.docs-main {
+    grid-area: main;
+    min-width: 0;
+    max-width: 860px;
+}
+
+.toc-aside {
+    grid-area: toc;
+    font-size: 0.85rem;
+    scroll-target-group: auto;
+}
+
+.toc-aside a {
+    display: block;
+    padding: 3px 0 3px 12px;
+    border-left: 2px solid var(--border);
+    color: var(--text-muted);
+    text-decoration: none;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.toc-aside .toc-h3 a {
+    padding-left: 24px;
+    font-size: 0.82rem;
+}
+
+.toc-aside a:hover {
     color: var(--text);
+}
+
+/* :target-current is the native scrollspy (Chromium); main.js adds the class
+   in other browsers. Both in one :is() so an unknown pseudo-class does not
+   drop the rule. */
+.toc-aside a:is(:target-current, .is-current) {
+    color: var(--primary);
+    border-left-color: var(--primary);
+    font-weight: 600;
+}
+
+.toc-inline {
+    margin: 0 0 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-subtle);
+    font-size: 0.92rem;
+}
+
+:is(.toc-inline, .docs-menu-mobile) summary {
+    cursor: pointer;
+    padding: 10px 14px;
+    font-weight: 600;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+}
+
+.toc-inline ul {
+    padding: 0 14px 12px;
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.toc-inline li {
+    margin: 0;
+}
+
+.markdown-body .toc-inline a {
+    display: block;
+    padding: 3px 0;
+    text-decoration: none;
+}
+
+.toc-inline .toc-h3 a {
+    padding-left: 16px;
+    font-size: 0.88rem;
+}
+
+.markdown-body .toc-inline a:hover {
+    text-decoration: underline;
+}
+
+/* --- Breadcrumb, previous/next, edit link --------------------------------- */
+.breadcrumb ol {
+    display: flex;
+    flex-wrap: wrap;
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.breadcrumb li + li::before {
+    content: "/";
+    padding: 0 8px;
+    color: var(--border-strong);
+}
+
+.breadcrumb a {
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
+.breadcrumb [aria-current="page"] {
+    color: var(--text);
+}
+
+.page-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+}
+
+.page-nav a {
+    display: block;
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-decoration: none;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.page-nav a:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.page-nav span {
+    display: block;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+.page-nav-next {
+    grid-column: 2;
+    text-align: right;
+}
+
+.edit-link {
+    margin: 24px 0 0;
+    font-size: 0.88rem;
+}
+
+.edit-link a {
+    color: var(--text-muted);
+}
+
+/* --- Markdown content ------------------------------------------------------ */
+.markdown-body {
     line-height: 1.7;
+    overflow-wrap: break-word;
+}
+
+.markdown-body > :first-child {
+    margin-top: 0;
 }
 
 .markdown-body h1 {
-    font-size: 2.1rem;
-    font-weight: 700;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    letter-spacing: -0.01em;
+    font-size: clamp(1.75rem, 1.3rem + 1.6vw, 2.25rem);
+    font-weight: 750;
+    letter-spacing: -0.02em;
+    margin: 0 0 20px;
 }
 
 .markdown-body h2 {
-    font-size: 1.8rem;
+    font-size: 1.5rem;
     font-weight: 700;
-    margin-top: 40px;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
+    margin: 48px 0 14px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
 }
 
 .markdown-body h3 {
-    font-size: 1.4rem;
-    font-weight: 600;
-    margin-top: 30px;
-    margin-bottom: 12px;
+    font-size: 1.2rem;
+    font-weight: 650;
+    margin: 32px 0 10px;
 }
 
 .markdown-body h4 {
-    font-size: 1.2rem;
-    font-weight: 600;
-    margin-top: 25px;
-    margin-bottom: 10px;
+    font-size: 1.04rem;
+    font-weight: 650;
+    margin: 28px 0 8px;
 }
 
-.markdown-body p {
-    margin-bottom: 15px;
-    font-size: 1.05rem;
+.markdown-body :is(h2, h3, h4) code {
+    overflow-wrap: anywhere;
+}
+
+.markdown-body :is(p, ul, ol, blockquote, table, dl) {
+    margin: 0 0 16px;
 }
 
 .markdown-body ul,
 .markdown-body ol {
-    margin-bottom: 15px;
-    padding-left: 30px;
+    padding-left: 26px;
 }
 
-.markdown-body li {
-    margin-bottom: 8px;
+.markdown-body li + li {
+    margin-top: 4px;
+}
+
+.markdown-body li > :is(ul, ol) {
+    margin: 4px 0 0;
 }
 
 .markdown-body a {
     color: var(--primary);
-    text-decoration: none;
-    border-bottom: 1px solid transparent;
-    transition: var(--transition);
+    text-decoration: underline;
+    text-decoration-color: color-mix(in srgb, var(--primary) 35%, transparent);
 }
 
 .markdown-body a:hover {
-    border-bottom-color: var(--primary);
+    text-decoration-color: currentColor;
 }
 
-/* --- Code Blocks --- */
-.markdown-body pre {
-    background: var(--bg-dark);
-    color: #e5e7eb;
-    padding: 20px;
-    border-radius: 8px;
-    overflow-x: auto;
-    margin: 20px 0;
-    box-shadow: var(--shadow);
-    position: relative;
+.markdown-body strong {
+    font-weight: 650;
 }
 
-.markdown-body code {
-    font-family: 'Fira Code', 'Courier New', monospace;
-    font-size: 0.9rem;
-    line-height: 1.6;
-}
-
-.markdown-body :not(pre) > code {
-    background: var(--bg-secondary);
-    color: var(--primary);
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-/* --- Tables --- */
-.markdown-body table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 20px 0;
-    box-shadow: var(--shadow);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-.markdown-body th {
-    background: var(--bg-dark);
-    color: white;
-    padding: 12px;
-    text-align: left;
-    font-weight: 600;
-}
-
-.markdown-body td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border);
-}
-
-.markdown-body tr:hover {
-    background: var(--bg-secondary);
-}
-
-/* --- Blockquotes --- */
-.markdown-body blockquote {
-    border-left: 4px solid var(--primary);
-    padding: 15px 20px;
-    background: var(--bg-secondary);
-    margin: 20px 0;
-    border-radius: 0 8px 8px 0;
-}
-
-.markdown-body blockquote p {
-    margin: 0;
-}
-
-/* --- Horizontal Rule --- */
 .markdown-body hr {
-    border: none;
-    height: 1px;
-    background: var(--border);
+    border: 0;
+    border-top: 1px solid var(--border);
     margin: 40px 0;
 }
 
-/* --- Images --- */
+.markdown-body blockquote {
+    padding: 12px 18px;
+    border-left: 4px solid var(--primary);
+    background: var(--bg-subtle);
+    border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.markdown-body blockquote > :last-child {
+    margin-bottom: 0;
+}
+
 .markdown-body img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-    box-shadow: var(--shadow);
-    margin: 20px 0;
+    border-radius: var(--radius);
 }
 
-/* --- Navigation Arrows --- */
-.markdown-body > p:last-child {
-    margin-top: 60px;
-    padding-top: 30px;
-    border-top: 1px solid var(--border);
-    text-align: center;
-    font-size: 0.95rem;
+/* Heading anchors, added by main.js */
+.heading-anchor {
+    margin-left: 8px;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 400;
+    opacity: 0;
 }
 
-.markdown-body > p:last-child a {
-    font-weight: 600;
-    padding: 8px 16px;
-    background: var(--bg-secondary);
-    border-radius: 6px;
-    transition: var(--transition);
+.markdown-body :is(h2, h3, h4):hover .heading-anchor {
+    opacity: 1;
 }
 
-.markdown-body > p:last-child a:hover {
-    background: var(--primary);
-    color: white;
-    border-bottom-color: transparent;
+.markdown-body .heading-anchor:hover {
+    color: var(--primary);
 }
 
-/* --- Badges/Labels --- */
-.markdown-body .badge {
-    display: inline-block;
-    padding: 4px 10px;
-    background: var(--primary);
-    color: white;
+/* Inline code */
+.markdown-body :not(pre) > code {
+    font-size: 0.86em;
+    background: var(--inline-code-bg);
+    color: var(--inline-code-text);
+    padding: 0.15em 0.4em;
     border-radius: 4px;
-    font-size: 0.85rem;
+}
+
+/* Code blocks */
+.markdown-body pre {
+    margin: 0 0 18px;
+    padding: 16px 18px;
+    background: var(--code-bg);
+    color: var(--code-text);
+    border: 1px solid var(--code-border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-size: 0.86rem;
+    line-height: 1.6;
+    tab-size: 4;
+    color-scheme: dark;
+}
+
+.markdown-body pre code {
+    font-size: inherit;
+}
+
+.markdown-body .highlighter-rouge {
+    margin: 0 0 18px;
+}
+
+.markdown-body .highlighter-rouge pre {
+    margin: 0;
+}
+
+/* Tables scroll inside themselves instead of widening the page. */
+.markdown-body table {
+    display: block;
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    border-spacing: 0;
+    font-size: 0.92rem;
+}
+
+.markdown-body :is(th, td) {
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+
+.markdown-body th {
+    background: var(--bg-subtle);
     font-weight: 600;
-    margin-right: 8px;
 }
 
-/* --- Alert Boxes --- */
-.markdown-body .alert {
-    padding: 15px 20px;
-    border-radius: 8px;
-    margin: 20px 0;
-    border-left: 4px solid;
+.markdown-body :is(th, td) code {
+    white-space: nowrap;
 }
 
-.markdown-body .alert-info {
-    background: #dbeafe;
-    border-color: #3b82f6;
-    color: #1e40af;
+/* --- Syntax highlighting (Rouge token classes, dark in both schemes) ------- */
+.highlight :is(.c, .ch, .cd, .cm, .cpf, .c1, .cs, .cp, .gp, .go) { color: var(--syntax-comment); }
+.highlight :is(.k, .kc, .kd, .kn, .kp, .kr, .kv, .o, .ow) { color: var(--syntax-keyword); }
+.highlight :is(.kt, .nb, .bp, .nn, .nv, .vc, .vg, .vi, .vm) { color: var(--syntax-name); }
+.highlight :is(.s, .sa, .sb, .sc, .dl, .sd, .s2, .se, .sh, .si, .sx, .sr, .s1, .ss) { color: var(--syntax-string); }
+.highlight :is(.m, .mb, .mf, .mh, .mi, .il, .mo, .mx, .no, .na, .nl, .py, .gh, .gu) { color: var(--syntax-constant); }
+.highlight :is(.nf, .fm, .nd) { color: var(--syntax-function); }
+.highlight :is(.nc, .ne) { color: var(--syntax-class); }
+.highlight :is(.nt, .gi) { color: var(--syntax-tag); }
+.highlight :is(.gd, .gr, .gt, .err) { color: var(--syntax-error); }
+.highlight :is(.gh, .gu, .gs) { font-weight: 600; }
+.highlight .ge { font-style: italic; }
+
+/* --- Responsive ------------------------------------------------------------ */
+@media (min-width: 1200px) {
+    .toc-inline {
+        display: none;
+    }
 }
 
-.markdown-body .alert-warning {
-    background: #fef3c7;
-    border-color: #f59e0b;
-    color: #92400e;
+@media (max-width: 1199px) {
+    .docs-shell.has-toc {
+        grid-template-columns: 230px minmax(0, 1fr);
+        grid-template-areas: "sidebar main";
+    }
+
+    .toc-aside {
+        display: none;
+    }
 }
 
-.markdown-body .alert-success {
-    background: #d1fae5;
-    border-color: #10b981;
-    color: #065f46;
-}
-
-.markdown-body .alert-danger {
-    background: #fee2e2;
-    border-color: #ef4444;
-    color: #991b1b;
-}
-
-/* --- Syntax Highlighting Colors --- */
-.markdown-body .highlight {
-    background: var(--bg-dark);
-}
-
-.markdown-body .highlight .c { color: #6b7280; } /* Comment */
-.markdown-body .highlight .k { color: #c084fc; } /* Keyword */
-.markdown-body .highlight .s { color: #34d399; } /* String */
-.markdown-body .highlight .n { color: #e5e7eb; } /* Name */
-.markdown-body .highlight .o { color: #f472b6; } /* Operator */
-
-/* --- Responsive --- */
-@media (max-width: 968px) {
-    .docs-container {
-        flex-direction: column;
+@media (max-width: 899px) {
+    .docs-shell,
+    .docs-shell.has-toc {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "menu" "main";
+        gap: 20px;
+        padding: 16px 16px 48px;
     }
 
     .docs-sidebar {
-        width: 100%;
-        position: static;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 30px;
-        max-height: none;
+        display: none;
     }
 
-    .docs-content {
-        padding: 20px;
+    .docs-menu-mobile {
+        display: block;
+        grid-area: menu;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--bg-subtle);
     }
 
-    .markdown-body h1 {
-        font-size: 2rem;
+    .docs-menu-mobile .sidebar-nav {
+        padding: 4px 14px 14px;
     }
 
-    .markdown-body h2 {
-        font-size: 1.5rem;
-    }
-}
-
-@media (max-width: 640px) {
-    .docs-content {
-        padding: 10px;
-    }
-
-    .markdown-body h1 {
-        font-size: 1.75rem;
+    .docs-menu-mobile .sidebar-nav a {
+        margin-left: 0;
+        padding: 8px 10px;
     }
 
     .markdown-body h2 {
-        font-size: 1.3rem;
+        font-size: 1.32rem;
+        margin-top: 36px;
+        padding-top: 18px;
+    }
+
+    .markdown-body h3 {
+        font-size: 1.12rem;
     }
 
     .markdown-body pre {
-        padding: 15px;
+        font-size: 0.82rem;
+        padding: 14px;
     }
 
-    .markdown-body table {
-        font-size: 0.9rem;
+    .page-nav {
+        grid-template-columns: minmax(0, 1fr);
     }
-}
 
-/* --- Table of Contents (if added) --- */
-.table-of-contents {
-    background: var(--bg-secondary);
-    padding: 20px;
-    border-radius: 8px;
-    margin: 20px 0;
-}
-
-.table-of-contents h2 {
-    margin-top: 0;
-    font-size: 1.2rem;
-}
-
-.table-of-contents ul {
-    margin-bottom: 0;
+    .page-nav-next {
+        grid-column: 1;
+    }
 }

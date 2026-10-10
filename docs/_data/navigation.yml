@@ -1,0 +1,24 @@
+# Sidebar sections and the reading order used for the previous/next links at
+# the bottom of each page. Every url must point to a page that exists;
+# tests/test_docs_site.py checks this.
+
+- section: Get started
+  items:
+    - title: Getting Started
+      url: /pages/getting-started.html
+    - title: Configuration
+      url: /pages/configuration.html
+
+- section: Reference
+  items:
+    - title: CLI Reference
+      url: /pages/cli-reference.html
+    - title: API Reference
+      url: /pages/api-reference.html
+    - title: Architecture
+      url: /pages/architecture.html
+
+- section: Project
+  items:
+    - title: Contributing
+      url: /pages/contributing.html

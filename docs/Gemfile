@@ -1,0 +1,13 @@
+# Used by .github/workflows/docs.yml and for local previews (see README.md).
+# GitHub Pages itself ignores this file and builds with its own copy of the
+# github-pages gem; pinning the same gem here keeps the CI build identical.
+source "https://rubygems.org"
+
+gem "github-pages", group: :jekyll_plugins
+
+group :test do
+  gem "html-proofer", "~> 5.0"
+end
+
+# Ruby 3 no longer bundles webrick, which `jekyll serve` needs.
+gem "webrick", "~> 1.8"

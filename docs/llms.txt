@@ -1,24 +1,26 @@
+---
+layout: null
+sitemap: false
+---
 # LWS - Linux Web Services
 
-> CLI tool and REST API for managing Proxmox VE hosts, LXC containers and Docker
-> services over SSH. Single Python entrypoint (`lws.py`) built with Click, plus
-> an optional Flask REST API (`api.py`) that wraps the CLI.
+> {{ site.description | strip_newlines | strip }}
 
 LWS is a command-line tool for Proxmox VE administrators: creating, scaling,
 snapshotting, backing up and migrating LXC containers, managing Proxmox hosts
 and firewall security groups, and deploying Docker workloads inside containers.
-A REST API and a minimal web UI expose the same functionality over HTTP.
+It is a single Python entrypoint (`lws.py`, built with Click) plus an optional
+Flask REST API (`api.py`) that runs the CLI, with Swagger documentation and a
+minimal web UI. Current release: {{ site.lws_version }}.
+
+The full text of every page below is in [llms-full.txt]({{ '/llms-full.txt' | absolute_url }}).
 
 ## Documentation
-
-- [Getting Started](https://fabriziosalmi.github.io/lws/pages/getting-started.html): installation and first steps
-- [Architecture](https://fabriziosalmi.github.io/lws/pages/architecture.html): modular design and structure
-- [CLI Reference](https://fabriziosalmi.github.io/lws/pages/cli-reference.html): full command reference
-- [API Reference](https://fabriziosalmi.github.io/lws/pages/api-reference.html): REST API endpoints
-- [Configuration](https://fabriziosalmi.github.io/lws/pages/configuration.html): config.yaml reference
-- [Contributing](https://fabriziosalmi.github.io/lws/pages/contributing.html): how to contribute
+{% for section in site.data.navigation %}{% for item in section.items %}{% assign doc = site.documents | where: "url", item.url | first %}
+- [{{ item.title }}]({{ item.url | absolute_url }}): {{ doc.description }}{% endfor %}{% endfor %}
 
 ## Source
 
-- [GitHub repository](https://github.com/fabriziosalmi/lws)
-- [License: MIT](https://github.com/fabriziosalmi/lws/blob/main/LICENSE)
+- [GitHub repository]({{ site.repository_url }})
+- [Releases]({{ site.repository_url }}/releases)
+- [License: MIT]({{ site.repository_url }}/blob/main/LICENSE)

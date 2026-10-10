@@ -1,6 +1,7 @@
 ---
-layout: default
 title: Configuration
+seo_title: "Configuration: config.yaml for Proxmox hosts and sizes"
+description: "Reference for config.yaml: Proxmox hosts grouped into regions and availability zones, instance sizes, scaling thresholds, the API key and storage."
 ---
 
 # Configuration Guide
@@ -351,7 +352,8 @@ default_network: vmbr0  # Default bridge
 Or set it per container at creation time:
 
 ```bash
-lws lxc run --net0 "name=eth0,bridge=vmbr1,ip=192.168.1.100/24,gw=192.168.1.1"
+lws lxc run --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
+  --net0 "name=eth0,bridge=vmbr1,ip=192.168.1.100/24,gw=192.168.1.1"
 ```
 
 ## Validation
@@ -430,7 +432,3 @@ Version 1.1 introduced modular architecture:
 1. No configuration changes required
 2. All existing `config.yaml` files compatible
 3. New API configuration options available
-
----
-
-[← API Reference](api-reference.html) | [Next: Contributing →](contributing.html)

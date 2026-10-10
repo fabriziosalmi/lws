@@ -1,0 +1,41 @@
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-brand">
+        <a class="brand" href="{{ '/' | relative_url }}">
+          <img src="{{ '/assets/img/favicon.svg' | relative_url }}" alt="" width="24" height="24">
+          <span>LWS</span>
+        </a>
+        <p>Linux Web Services: a CLI and REST API for Proxmox VE, LXC and Docker.</p>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <div>
+          <h2>Documentation</h2>
+          <ul>
+            <li><a href="{{ '/pages/getting-started.html' | relative_url }}">Getting Started</a></li>
+            <li><a href="{{ '/pages/configuration.html' | relative_url }}">Configuration</a></li>
+            <li><a href="{{ '/pages/cli-reference.html' | relative_url }}">CLI Reference</a></li>
+            <li><a href="{{ '/pages/api-reference.html' | relative_url }}">API Reference</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Project</h2>
+          <ul>
+            <li><a href="{{ site.repository_url }}">Source code</a></li>
+            <li><a href="{{ site.repository_url }}/releases">Releases</a></li>
+            <li><a href="{{ site.repository_url }}/issues">Issues</a></li>
+            <li><a href="{{ '/pages/contributing.html' | relative_url }}">Contributing</a></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Legal</h2>
+          <ul>
+            <li><a href="{{ site.repository_url }}/blob/main/LICENSE">MIT License</a></li>
+            <li><a href="https://fabriziosalmi.github.io/privacy">Privacy and legal notice</a></li>
+          </ul>
+        </div>
+      </nav>
+    </div>
+    <p class="footer-meta">LWS {{ site.lws_version }}. Released under the MIT License.</p>
+  </div>
+</footer>

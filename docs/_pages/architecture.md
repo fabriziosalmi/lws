@@ -1,6 +1,7 @@
 ---
-layout: default
 title: Architecture
+seo_title: "Architecture: how LWS drives Proxmox VE over SSH"
+description: "How LWS is put together: the lws.py CLI, the lws_core modules for configuration, SSH and Proxmox, and the Flask API that runs the CLI as a subprocess."
 ---
 
 # LWS Architecture
@@ -54,11 +55,15 @@ lws/
 │   ├── test_ssh.py
 │   ├── test_utils.py
 │   ├── test_python_support.py
+│   ├── test_docs_examples.py  # Every `lws` command in the docs parses against the CLI
+│   ├── test_docs_site.py      # Site version, navigation and page metadata
 │   └── test_api.py            # Targeted tests for api.py's validation/routing logic
 │
-└── docs/                      # Documentation (GitHub Pages)
+└── docs/                      # Documentation site (GitHub Pages, Jekyll; see docs/README.md)
     ├── index.html
     ├── _config.yml
+    ├── _data/navigation.yml
+    ├── _layouts/ _includes/
     └── _pages/
 ```
 
@@ -290,7 +295,3 @@ Planned architectural improvements:
    - Real-time monitoring
    - Visual resource management
    - Interactive container controls
-
----
-
-[← Getting Started](getting-started.html) | [Next: CLI Reference →](cli-reference.html)

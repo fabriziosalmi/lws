@@ -233,7 +233,7 @@ lws px upload ./ubuntu-20.04-template.tar.gz ubuntu-20.04 --region eu-south-1 --
 
 #### Create and Start LXC Container
 ```bash
-lws lxc run --image-id local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz --size medium --count 3 --hostname web-server
+lws lxc run --image-id local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz --size small --count 3 --hostname web-server
 ```
 
 #### Start/Stop/Reboot Container
@@ -338,7 +338,7 @@ lws app setup 100
 
 #### Run Docker Container
 ```bash
-lws app run 100 -d -p 80:80 nginx
+lws app run 100 -- -d -p 80:80 nginx
 ```
 
 #### Deploy with Docker Compose

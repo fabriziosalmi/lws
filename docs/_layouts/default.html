@@ -1,102 +1,88 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'self'; form-action 'self'">
-    <meta name="description" content="{{ page.title }} - LWS Documentation">
-    <title>{{ page.title }} - LWS Documentation</title>
+---
+layout: base
+docs: true
+body_class: docs-page
+---
+{%- comment -%} Sidebar links, previous/next page and the current section, from _data/navigation.yml. {%- endcomment -%}
+{%- assign prev_item = nil -%}
+{%- assign next_item = nil -%}
+{%- assign last_item = nil -%}
+{%- assign current_section = nil -%}
+{%- assign found = false -%}
+{%- capture sidebar_items -%}
+{%- for section in site.data.navigation %}
+<h2>{{ section.section }}</h2>
+<ul>
+  {%- for item in section.items %}
+    {%- if found and next_item == nil -%}{%- assign next_item = item -%}{%- endif -%}
+    {%- if item.url == page.url -%}
+      {%- assign found = true -%}
+      {%- assign prev_item = last_item -%}
+      {%- assign current_section = section.section -%}
+    {%- endif -%}
+    {%- assign last_item = item %}
+  <li><a href="{{ item.url | relative_url }}"{% if item.url == page.url %} aria-current="page"{% endif %}>{{ item.title }}</a></li>
+  {%- endfor %}
+</ul>
+{%- endfor -%}
+{%- endcapture -%}
+{%- capture toc_items -%}{% include toc-items.html html=content %}{%- endcapture -%}
+{%- assign toc_items = toc_items | strip -%}
+{%- assign has_toc = false -%}
+{%- assign toc_count = toc_items | split: "<li" | size | minus: 1 -%}
+{%- if toc_count >= 2 -%}{%- assign has_toc = true -%}{%- endif -%}
 
-    <link rel="canonical" href="{{ site.url }}{{ site.baseurl }}{{ page.url }}">
-    <meta name="robots" content="max-image-preview:large">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%233454d1'/><text x='50' y='69' font-size='56' font-family='sans-serif' font-weight='700' fill='white' text-anchor='middle'>L</text></svg>">
+<div class="docs-shell{% if has_toc %} has-toc{% endif %}">
+  <details class="docs-menu-mobile">
+    <summary>Documentation menu</summary>
+    <nav class="sidebar-nav" aria-label="Documentation">{{ sidebar_items }}</nav>
+  </details>
 
-    <link rel="stylesheet" href="../assets/css/style.css">
-    <link rel="stylesheet" href="../assets/css/docs.css">
-  <link rel="stylesheet" href="../assets/css/fonts.css">
-</head>
-<body class="docs-page">
-    <!-- Navigation -->
-    <nav class="navbar">
-        <div class="container">
-            <div class="nav-brand">
-                <a href="../index.html" class="logo">LWS</a>
-            </div>
-            <div class="nav-links">
-                <a href="../index.html">Home</a>
-                <a href="getting-started.html">Getting Started</a>
-                <a href="cli-reference.html">CLI</a>
-                <a href="api-reference.html">API</a>
-                <a href="https://github.com/fabriziosalmi/lws" target="_blank" rel="noopener">GitHub</a>
-            </div>
-        </div>
+  <nav class="docs-sidebar sidebar-nav" aria-label="Documentation">{{ sidebar_items }}</nav>
+
+  <main id="content" class="docs-main" tabindex="-1">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <ol>
+        <li><a href="{{ '/' | relative_url }}">LWS</a></li>
+        {%- if current_section %}
+        <li>{{ current_section }}</li>
+        {%- endif %}
+        <li><a href="{{ page.url | relative_url }}" aria-current="page">{{ page.title }}</a></li>
+      </ol>
     </nav>
 
-    <!-- Page Content -->
-    <div class="docs-container">
-        <aside class="docs-sidebar">
-            <div class="sidebar-section">
-                <h3>Getting Started</h3>
-                <a href="getting-started.html">Installation</a>
-                <a href="getting-started.html#your-first-container">Your First Container</a>
-                <a href="getting-started.html#using-the-api-server">Using the API</a>
-            </div>
+    <article class="markdown-body">
+      {%- if has_toc and content contains "</h1>" -%}
+        {%- assign body_parts = content | split: "</h1>" -%}
+        {{ body_parts[0] }}</h1>
+        <details class="toc-inline">
+          <summary>On this page</summary>
+          <ul>{{ toc_items }}</ul>
+        </details>
+        {%- for part in body_parts offset: 1 -%}{{ part }}{%- unless forloop.last -%}</h1>{%- endunless -%}{%- endfor -%}
+      {%- else -%}
+        {{ content }}
+      {%- endif %}
+    </article>
 
-            <div class="sidebar-section">
-                <h3>Documentation</h3>
-                <a href="architecture.html">Architecture</a>
-                <a href="cli-reference.html">CLI Reference</a>
-                <a href="api-reference.html">API Reference</a>
-                <a href="configuration.html">Configuration</a>
-            </div>
+    {%- if prev_item or next_item %}
+    <nav class="page-nav" aria-label="Previous and next page">
+      {%- if prev_item %}
+      <a class="page-nav-prev" href="{{ prev_item.url | relative_url }}" rel="prev"><span>Previous</span>{{ prev_item.title }}</a>
+      {%- endif %}
+      {%- if next_item %}
+      <a class="page-nav-next" href="{{ next_item.url | relative_url }}" rel="next"><span>Next</span>{{ next_item.title }}</a>
+      {%- endif %}
+    </nav>
+    {%- endif %}
 
-            <div class="sidebar-section">
-                <h3>Community</h3>
-                <a href="contributing.html">Contributing</a>
-                <a href="https://github.com/fabriziosalmi/lws/issues" target="_blank" rel="noopener">Issues</a>
-                <a href="https://github.com/fabriziosalmi/lws/discussions" target="_blank" rel="noopener">Discussions</a>
-            </div>
-        </aside>
+    <p class="edit-link"><a href="{{ site.repository_url }}/edit/main/docs/{{ page.path }}">Edit this page on GitHub</a></p>
+  </main>
 
-        <main class="docs-content">
-            <article class="markdown-body">
-                {{ content }}
-            </article>
-        </main>
-    </div>
-
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-brand">
-                    <span class="logo">LWS</span>
-                    <p>Linux Web Services</p>
-                </div>
-                <div class="footer-links">
-                    <div class="footer-column">
-                        <h4>Documentation</h4>
-                        <a href="getting-started.html">Getting Started</a>
-                        <a href="cli-reference.html">CLI Reference</a>
-                        <a href="api-reference.html">API Reference</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Community</h4>
-                        <a href="https://github.com/fabriziosalmi/lws" target="_blank" rel="noopener">GitHub</a>
-                        <a href="https://github.com/fabriziosalmi/lws/issues" target="_blank" rel="noopener">Issues</a>
-                        <a href="contributing.html">Contributing</a>
-                    </div>
-                    <div class="footer-column">
-                        <h4>Legal</h4>
-                        <a href="https://github.com/fabriziosalmi/lws/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
-                    </div>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>LWS. Released under the MIT License.</p>
-                <p><a href="https://fabriziosalmi.github.io/privacy">Privacy &amp; legal</a></p>
-            </div>
-        </div>
-    </footer>
-</body>
-</html>
+  {%- if has_toc %}
+  <nav class="toc-aside" aria-label="On this page">
+    <h2>On this page</h2>
+    <ul>{{ toc_items }}</ul>
+  </nav>
+  {%- endif %}
+</div>

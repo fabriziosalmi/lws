@@ -1,0 +1,40 @@
+---
+layout: null
+sitemap: false
+---
+{%- comment -%}
+  Search index for the box in the site header (assets/js/main.js). One entry
+  per documentation page, split into sections at each h1-h4 heading so a
+  result can link to the exact section. Built from the rendered pages, the
+  same way _includes/toc-items.html reads headings.
+{%- endcomment -%}
+[
+{%- assign docs = site.documents | where_exp: "doc", "doc.sitemap != false" -%}
+{%- for doc in docs -%}
+  {%- assign chunks = doc.content | split: "<h" -%}
+  {
+    "t": {{ doc.title | jsonify }},
+    "u": {{ doc.url | relative_url | jsonify }},
+    "d": {{ doc.description | default: "" | jsonify }},
+    "s": [
+    {%- assign first = true -%}
+    {%- for chunk in chunks offset: 1 -%}
+      {%- assign level = chunk | slice: 0 -%}
+      {%- assign marker = chunk | slice: 1, 5 -%}
+      {%- if marker != ' id="' -%}{%- continue -%}{%- endif -%}
+      {%- unless "1234" contains level -%}{%- continue -%}{%- endunless -%}
+      {%- assign after = chunk | remove_first: level | remove_first: ' id="' -%}
+      {%- assign heading_id = after | split: '"' | first -%}
+      {%- assign closing = "</h" | append: level | append: ">" -%}
+      {%- assign pieces = after | split: closing -%}
+      {%- assign heading_text = pieces[0] | remove_first: heading_id | remove_first: '">' | strip_html | replace: "&lt;", "<" | replace: "&gt;", ">" | replace: "&quot;", '"' | replace: "&#39;", "'" | replace: "&amp;", "&" | strip -%}
+      {%- assign body_text = pieces[1] | strip_html | replace: "&lt;", "<" | replace: "&gt;", ">" | replace: "&quot;", '"' | replace: "&#39;", "'" | replace: "&amp;", "&" | normalize_whitespace | strip | truncate: 1200, "" -%}
+      {%- if level == "1" -%}{%- assign heading_id = "" -%}{%- endif -%}
+      {%- unless first -%},{%- endunless -%}
+      {%- assign first = false %}
+      { "h": {{ heading_text | jsonify }}, "a": {{ heading_id | jsonify }}, "x": {{ body_text | jsonify }} }
+    {%- endfor %}
+    ]
+  }{%- unless forloop.last -%},{%- endunless -%}
+{%- endfor %}
+]

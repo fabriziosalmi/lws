@@ -109,3 +109,10 @@ secrets.yml
 credentials.json
 service-account*.json
 REVIEW.md
+
+# Jekyll (docs/ site, built locally or in CI)
+docs/_site/
+docs/.jekyll-cache/
+docs/.jekyll-metadata
+docs/.bundle/
+docs/vendor/

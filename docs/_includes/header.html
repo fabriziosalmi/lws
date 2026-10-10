@@ -1,0 +1,29 @@
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <div class="container site-header-inner">
+    <a class="brand" href="{{ '/' | relative_url }}"{% if page.url == "/" %} aria-current="page"{% endif %}>
+      <img src="{{ '/assets/img/favicon.svg' | relative_url }}" alt="" width="24" height="24">
+      <span>LWS</span>
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      {%- assign main_links = "Docs|/pages/getting-started.html,CLI|/pages/cli-reference.html,API|/pages/api-reference.html" | split: "," %}
+      {%- for link in main_links %}
+        {%- assign parts = link | split: "|" %}
+      <a href="{{ parts[1] | relative_url }}"{% if page.url == parts[1] %} aria-current="page"{% endif %}>{{ parts[0] }}</a>
+      {%- endfor %}
+      <a href="{{ site.repository_url }}">GitHub</a>
+    </nav>
+    {%- comment -%}
+      The search box needs JavaScript (it loads search.json and filters it in
+      the browser), so it stays hidden until main.js shows it.
+    {%- endcomment %}
+    <div class="site-search" data-search-index="{{ '/search.json' | relative_url }}" hidden>
+      <label class="visually-hidden" for="site-search-input">Search the documentation</label>
+      <input id="site-search-input" class="site-search-input" type="search" placeholder="Search docs" autocomplete="off" spellcheck="false"
+             role="combobox" aria-expanded="false" aria-controls="site-search-results" aria-autocomplete="list">
+      <kbd class="site-search-key" aria-hidden="true">/</kbd>
+      <ul id="site-search-results" class="site-search-results" role="listbox" aria-label="Search results" hidden></ul>
+      <p class="visually-hidden" role="status" aria-live="polite" data-search-status></p>
+    </div>
+  </div>
+</header>

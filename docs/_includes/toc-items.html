@@ -1,0 +1,19 @@
+{%- comment -%}
+  Builds the "On this page" list from the rendered page body, passed in as
+  include.html. kramdown gives every heading an id, so the list is read from
+  the <h2 id="..."> and <h3 id="..."> tags at build time and needs no
+  JavaScript. Splitting on "<h" also splits on <hr> and <h1>/<h4>; those
+  chunks do not start with "2 id=" or "3 id=" and are skipped.
+{%- endcomment -%}
+{%- assign chunks = include.html | split: "<h" -%}
+{%- for chunk in chunks offset: 1 -%}
+  {%- assign level = chunk | slice: 0 -%}
+  {%- assign marker = chunk | slice: 1, 5 -%}
+  {%- if marker != ' id="' -%}{%- continue -%}{%- endif -%}
+  {%- if level != "2" and level != "3" -%}{%- continue -%}{%- endif -%}
+  {%- assign after = chunk | remove_first: level | remove_first: ' id="' -%}
+  {%- assign heading_id = after | split: '"' | first -%}
+  {%- assign closing = "</h" | append: level | append: ">" -%}
+  {%- assign heading_text = after | split: closing | first | remove_first: heading_id | remove_first: '">' | strip_html | strip -%}
+<li class="toc-h{{ level }}"><a href="#{{ heading_id }}">{{ heading_text }}</a></li>
+{%- endfor -%}

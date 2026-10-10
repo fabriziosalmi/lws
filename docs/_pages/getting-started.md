@@ -1,6 +1,7 @@
 ---
-layout: default
 title: Getting Started
+seo_title: "Getting Started: install LWS and create an LXC container"
+description: "Install LWS from a checkout, point config.yaml at your Proxmox VE hosts, create a first LXC container and start the REST API with its web UI."
 ---
 
 # Getting Started with LWS
@@ -92,10 +93,12 @@ This will show you all configured Proxmox hosts and their availability.
 
 ### 2. Run a Container
 
+`--image-id` is a container template stored on the Proxmox host, written as `storage:vztmpl/<file>`. `python3 lws.py px templates` lists the files in `/var/lib/vz/template/cache`, which is the `local` storage. `--size` is one of the names under `instance_sizes` in `config.yaml`; the example file defines `micro`, `small`, `mid`, `large` and others.
+
 ```bash
 python3 lws.py lxc run \
-  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.gz \
-  --size medium \
+  --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
+  --size small \
   --hostname my-container \
   --count 1
 ```
@@ -192,10 +195,5 @@ pveum acl list
 
 ## Getting Help
 
-- [Documentation](../index.html)
+- [Documentation home](../)
 - [Report Issues](https://github.com/fabriziosalmi/lws/issues)
-- [Discussions](https://github.com/fabriziosalmi/lws/discussions)
-
----
-
-[← Back to Home](../index.html) | [Next: Architecture →](architecture.html)

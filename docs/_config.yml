@@ -1,66 +1,61 @@
-# GitHub Pages Configuration for LWS Documentation
-# https://github.com/fabriziosalmi/lws
+# Jekyll configuration for the LWS documentation site.
+# Built by GitHub Pages from the docs/ folder of the main branch.
+# Local build: see docs/README.md.
 
-title: LWS - Linux Web Services
-description: A CLI tool and REST API for managing LXC containers on Proxmox VE hosts over SSH
-baseurl: "/lws"
+title: LWS
+tagline: Linux Web Services
+description: >-
+  LWS is a command-line tool and REST API for managing Proxmox VE hosts, LXC
+  containers and the Docker workloads inside them, over SSH.
+lang: en
 url: "https://fabriziosalmi.github.io"
+baseurl: "/lws"
+repository: fabriziosalmi/lws
+repository_url: https://github.com/fabriziosalmi/lws
+author: Fabrizio Salmi
 
-# Theme
-theme: jekyll-theme-cayman
-remote_theme: pages-themes/cayman@v0.2.0
+# The released version shown on the site. tests/test_docs_site.py fails if it
+# differs from `version` in pyproject.toml.
+lws_version: "1.4.3"
 
-# Plugins
+# Image used for link previews when a page does not set its own.
+social_image: /assets/img/og-image.png
+
+# No theme. The site has its own layouts (_layouts/) and stylesheets
+# (assets/css/). `null` has to be explicit: when the key is missing, GitHub
+# Pages applies jekyll-theme-primer, whose assets/css/style.scss is written to
+# the same path as this site's assets/css/style.css.
+theme: null
+
 plugins:
-  - jekyll-remote-theme
-  - jekyll-seo-tag
   - jekyll-sitemap
 
-# Markdown settings
 markdown: kramdown
 kramdown:
   input: GFM
   syntax_highlighter: rouge
+  # Rouge emits class names only; the colours live in assets/css/docs.css.
+  syntax_highlighter_opts:
+    css_class: highlight
 
-# Collections
+# The pages/ collection keeps its existing URLs (/lws/pages/<name>.html), which
+# search engines have already indexed.
 collections:
   pages:
     output: true
     permalink: /pages/:name.html
 
-# Defaults
 defaults:
   - scope:
       path: ""
-      type: "pages"
+      type: pages
     values:
-      layout: "default"
+      layout: default
 
-# Navigation
-navigation:
-  - title: Getting Started
-    url: /pages/getting-started
-  - title: Architecture
-    url: /pages/architecture
-  - title: CLI Reference
-    url: /pages/cli-reference
-  - title: API Reference
-    url: /pages/api-reference
-  - title: Configuration
-    url: /pages/configuration
-  - title: Contributing
-    url: /pages/contributing
-
-# SEO
-author: Fabrizio Salmi
-twitter:
-  username: fabriziosalmi
-  card: summary_large_image
-
-# Google Analytics (optional - add your tracking ID)
-# google_analytics: UA-XXXXXXXXX-X
-
-# GitHub
-github:
-  repository_url: https://github.com/fabriziosalmi/lws
-  is_project_page: true
+exclude:
+  - README.md
+  - Gemfile
+  - Gemfile.lock
+  - vendor/
+  - .bundle/
+  - .jekyll-cache/
