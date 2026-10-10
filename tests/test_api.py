@@ -229,7 +229,7 @@ def _popen_ok():
 class TestSecretsAndErrors:
     @pytest.mark.unit
     def test_passwords_are_masked_in_the_logged_command(self, api_module):
-        masked = api_module.mask_secret_options(
+        masked = api_module.redact_for_log(
             ["lws.py", "lxc", "run", "--password", "hunter2", "--api-key=abc", "--size", "small"])
         assert "hunter2" not in masked and "abc" not in " ".join(masked)
         assert masked[masked.index("--password") + 1] == "***"

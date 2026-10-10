@@ -118,11 +118,11 @@ logging.basicConfig(
 # package installs can take many minutes; `api.command_timeout` overrides it.
 COMMAND_TIMEOUT = int(API_CONFIG.get('command_timeout', 3600))
 
-_SECRET_OPTION_WORDS = ('password', 'secret', 'token', 'key')
+_REDACTED_OPTION_WORDS = ('password', 'secret', 'token', 'key')
 
 
-def mask_secret_options(cmd):
-    """A copy of `cmd` for logging, with the values of secret options masked.
+def redact_for_log(cmd):
+    """A copy of `cmd` for logging, with the values of secret options replaced by ***.
 
     `lxc run --password <root password>` would otherwise be written to
     api.log in clear text.
@@ -135,7 +135,7 @@ def mask_secret_options(cmd):
             hide_next = False
             continue
         hide_next = False
-        if part.startswith('--') and any(w in part.lower() for w in _SECRET_OPTION_WORDS):
+        if part.startswith('--') and any(w in part.lower() for w in _REDACTED_OPTION_WORDS):
             if '=' in part:
                 masked.append(part.split('=', 1)[0] + '=***')
             else:
@@ -290,7 +290,7 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
     # For simplicity, many commands take IDs/names in the path or specific options.
     # Commands like 'exec' or 'run_docker' might need special handling for their command arguments.
 
-    loggable_cmd = ' '.join(shlex.quote(str(c)) for c in mask_secret_options(full_cmd))
+    loggable_cmd = ' '.join(shlex.quote(str(c)) for c in redact_for_log(full_cmd))
     logging.info(f"Executing command: {loggable_cmd}")
 
     try:
