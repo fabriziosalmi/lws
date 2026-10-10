@@ -138,7 +138,7 @@ Configures logging with both standard and JSON formats.
 - Console logging
 - File logging (`lws.log`)
 - JSON logging (`lws.json.log`)
-- Configurable log levels
+- Fixed at the ERROR level for the CLI; the REST API has its own `api.log_level` setting
 
 ## Command Groups
 
@@ -254,8 +254,10 @@ LWS organizes commands into logical groups:
 
 ### SSH Connection Optimization
 - Connection timeout: 15 seconds
-- Command timeout: 60 seconds
-- Maximum 2 retries on failure
+- Command timeout: 60 seconds per attempt, which also caps long operations
+  such as package installs, backups and migrations run over SSH
+- Up to 2 retries after a timeout or a refused connection; the command is run
+  again from the start
 - ServerAliveInterval: 5 seconds
 
 ### Parallel Execution
@@ -264,9 +266,10 @@ LWS organizes commands into logical groups:
 - ThreadPoolExecutor for concurrent operations
 
 ### Resource Monitoring
-- Configurable check intervals
-- Threshold-based scaling recommendations
-- Efficient resource usage tracking
+- `lxc resources` samples CPU, memory, disk and process counts at an interval
+  you choose (`--interval`, `--count`)
+- `lxc scale-check` suggests changes from thresholds in `config.yaml`; it runs
+  only when called
 
 ## Future Enhancements
 

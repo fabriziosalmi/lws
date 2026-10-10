@@ -6,360 +6,162 @@ description: "How to set up a development checkout of LWS, run the test suite, f
 
 # Contributing to LWS
 
-Thank you for your interest in contributing to LWS! This guide will help you get started.
+Bug reports, fixes, documentation and new commands are all welcome. This page
+covers what you need to know to get a change merged.
 
-## Ways to Contribute
+## Reporting a problem
 
-- Report bugs
-- Suggest new features
-- Improve documentation
-- Submit code patches
-- Write tests
-- Translate documentation
+Open an [issue](https://github.com/fabriziosalmi/lws/issues) with the command
+you ran, its full output, your Proxmox VE version and whether you use
+`use_local_only`. Remove passwords and API keys from anything you paste.
 
-## Getting Started
-
-### 1. Fork and Clone
+## Setting up a checkout
 
 ```bash
-# Fork the repository on GitHub
-# Then clone your fork
+# Fork the repository on GitHub, then:
 git clone https://github.com/YOUR_USERNAME/lws.git
 cd lws
-```
+git remote add upstream https://github.com/fabriziosalmi/lws.git
 
-### 2. Set Up Development Environment
-
-```bash
-# Create virtual environment
 python3 -m venv venv
 source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install development dependencies
-pip install pytest pytest-cov black flake8
+pip install -r requirements.txt   # includes pytest, pytest-cov and pytest-mock
+pip install ruff==0.15.6          # the version CI uses
 ```
 
-### 3. Create a Branch
+LWS supports Python 3.10 to 3.14. The floor is declared once, in
+`pyproject.toml`; `tests/test_python_support.py` fails if the CI matrix or the
+Dockerfile disagree with it.
+
+## Checks a pull request has to pass
+
+CI runs on every pull request:
+
+| Check | Command | Blocks the merge |
+|---|---|---|
+| Tests, Python 3.10 to 3.14 | `pytest` | Yes |
+| Lint: real errors | `ruff check --select=E9,F63,F7,F82 .` | Yes |
+| Lint: full rule set | `ruff check .` | No, advisory: `lws.py` and `api.py` carry older findings |
+| Static analysis | slopless (`.github/workflows/slopless.yml`) | On errors |
+| Documentation site | Jekyll build and link check, when `docs/` changes | Yes |
+
+Run the first two before pushing:
 
 ```bash
-git checkout -b feature/my-new-feature
-# or
-git checkout -b fix/bug-description
-```
-
-## Development Workflow
-
-### Code Style
-
-LWS follows PEP 8 style guidelines:
-
-```bash
-# Format code with black
-black lws.py lws_core/ api.py
-
-# Check with flake8
-flake8 lws.py lws_core/ api.py
-```
-
-### Running Tests
-
-```bash
-# Run all tests
+ruff check --select=E9,F63,F7,F82 .
 pytest
-
-# Run with coverage
-pytest --cov=lws_core --cov-report=html
-
-# Run specific test
-pytest tests/test_config.py
 ```
 
-### Adding New Features
+`pytest.ini` already adds coverage for `lws_core` and `api` and an HTML report
+in `htmlcov/`. The suite is fully mocked: it needs no Proxmox host, SSH access
+or Docker. Only the markers `unit`, `integration`, `slow`, `ssh` and `proxmox`
+are allowed (`--strict-markers`).
 
-1. **Create an Issue** first to discuss the feature
-2. **Write tests** for the new functionality
-3. **Implement** the feature
-4. **Update documentation**
-5. **Submit a pull request**
+## Writing code
 
-## Project Structure
+### Commands
 
-```
-lws/
-├── lws.py                  # CLI entry point
-├── api.py                  # REST API
-├── lws_core/              # Core modules
-│   ├── config.py          # Configuration
-│   ├── ssh.py             # SSH utilities
-│   ├── proxmox.py         # Proxmox commands
-│   └── utils.py           # Utilities
-├── lws_commands/          # Command groups (future)
-├── tests/                 # Test suite
-└── docs/                  # Documentation
-```
-
-## Coding Guidelines
-
-### Python Best Practices
+Every command lives in `lws.py`; `lws_commands/` is an empty placeholder. A
+new command follows the pattern of the existing ones:
 
 ```python
-# Use type hints
-def create_container(instance_id: str, size: str) -> dict:
-    """Create a new container."""
-    pass
-
-# Write docstrings
-def run_command(cmd: list) -> subprocess.CompletedProcess:
-    """
-    Execute a command with proper error handling.
-
-    Parameters:
-    - cmd: Command as list of strings
-
-    Returns:
-    - CompletedProcess with stdout and stderr
-    """
-    pass
-
-# Handle errors gracefully
-try:
-    result = run_command(cmd)
-except subprocess.CalledProcessError as e:
-    logging.error(f"Command failed: {e}")
-    raise
+@lxc.command('example')
+@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+def example(instance_ids, region, az):
+    """Short description shown in --help."""
+    ...
 ```
 
-### CLI Commands
+- **Validate every value that reaches a remote command.** OpenSSH joins the
+  arguments into one string for the host's shell, so a value that is safe as
+  a local argument can still inject a command remotely. Use
+  `_validate_pattern` with one of the patterns at the top of `lws.py`, or
+  `_validate_ip_or_cidr`, as a click callback.
+- **Run remote commands through `run_proxmox_command`** from `lws_core`, so
+  `use_local_only` is honoured and the SSH options and password handling stay
+  in one place.
+- **Exit non-zero on failure** (`sys.exit(1)`). The REST API turns the exit
+  code into the HTTP status, so a failure that exits 0 reaches API clients as
+  a success.
 
-When adding new CLI commands:
+### API endpoints
 
-```python
-@lxc.command('new-command')
-@click.option('--option', help="Description")
-@click.argument('arg')
-def new_command(option, arg):
-    """🎯 Short description of command."""
-    # Implementation
-    pass
-```
-
-### API Endpoints
-
-When adding new API endpoints:
+`api.py` runs `lws.py` as a subprocess:
 
 ```python
-@app.route('/api/v1/new/endpoint', methods=['POST'])
+@app.route('/api/v1/lxc/instances/<instance_id>/example', methods=['POST'])
 @require_api_key
-def new_endpoint():
-    """Handle new endpoint requests."""
-    data = request.get_json()
-
-    # Validate input
-    if not data or 'required_field' not in data:
-        return jsonify({"error": "Missing required field"}), 400
-
-    # Execute command
-    stdout, stderr, rc = run_lws_command(['command'], data)
-
-    # Return response
+def example_endpoint(instance_id):
+    data = request.get_json(silent=True) or {}
+    stdout, stderr, rc = run_lws_command(['lxc', 'example', instance_id], data)
     return format_response(stdout, stderr, rc)
 ```
 
-## Testing Guidelines
+`run_lws_command(command_parts, data=None, consumed_keys=None)` turns the
+remaining keys of `data` into `--key value` options. Pass `consumed_keys` for
+values you already placed in `command_parts`, so they are not sent twice.
+Non-numeric `<instance_id>` path segments are rejected before the handler
+runs.
 
-### Writing Tests
+### Tests
+
+Tests live in `tests/` and mock `subprocess` and SSH. Do not depend on a
+`config.yaml` in the working directory: the file is not tracked. Write one to
+`tmp_path` and change into it, as `tests/test_config.py` does:
 
 ```python
-import pytest
-from lws_core.config import load_config, validate_config
-
-def test_load_config_success():
-    """Test successful configuration loading."""
-    config = load_config()
-    assert config is not None
-    assert 'regions' in config
-
-def test_validate_config_missing_regions():
-    """Test validation fails with missing regions."""
-    invalid_config = {'instance_sizes': {}}
-
-    with pytest.raises(ValueError, match="Missing required configuration key: regions"):
-        validate_config(invalid_config)
+def test_load_config_from_cwd(tmp_path, monkeypatch, sample_config):
+    (tmp_path / "config.yaml").write_text(yaml.dump(sample_config))
+    monkeypatch.chdir(tmp_path)
+    assert load_config()["regions"]
 ```
-
-### Test Coverage
-
-Aim for:
-- **80%+ coverage** for core modules
-- **100% coverage** for critical paths (authentication, validation)
-- Test both success and failure cases
 
 ## Documentation
 
-### Code Documentation
+The site in `docs/` is built by GitHub Pages with Jekyll; `docs/README.md`
+explains its layout and how to preview it. When you change a command, update
+`docs/_pages/cli-reference.md` and, for the API, `docs/_pages/api-reference.md`.
 
-```python
-def important_function(param1: str, param2: int) -> bool:
-    """
-    Brief description of what the function does.
+Two tests keep the documentation honest:
 
-    This function performs XYZ operation by doing ABC.
-    It's particularly useful for cases where...
+- `tests/test_docs_examples.py` parses every `lws` command in the
+  documentation and the README with the real CLI. An example with a wrong
+  option or size name fails the suite.
+- `tests/test_docs_site.py` checks that every page is in
+  `docs/_data/navigation.yml` and has a title and description, and that the
+  version on the site matches `pyproject.toml`.
 
-    Parameters:
-    - param1: Description of param1
-    - param2: Description of param2
+## Commits and pull requests
 
-    Returns:
-    - bool: True if successful, False otherwise
+Commit titles follow a `type: summary` form, as in the history: `fix:`,
+`docs:`, `ci:`, `build(deps):`, `chore:`, `release:`, with a scope where it
+helps (`fix(api):`). Explain in the body why the change is needed.
 
-    Raises:
-    - ValueError: If param1 is empty
-    - RuntimeError: If operation fails
+```text
+fix(api): refuse to start without a real API key
 
-    Example:
-    >>> important_function("test", 42)
-    True
-    """
-    pass
+An empty api_key left every endpoint unauthenticated...
 ```
 
-### Markdown Documentation
+1. Branch from an up-to-date `main`:
+   `git fetch upstream && git checkout -b fix/short-name upstream/main`.
+2. Keep each pull request to one change, with tests for new behaviour.
+3. Describe what changed and how you checked it. There is no pull request
+   template.
+4. Pull requests are squash-merged; the title becomes the commit title.
 
-Update relevant docs in `docs/pages/` when adding features:
-- getting-started.md
-- cli-reference.md
-- api-reference.md
-- architecture.md
+## Security issues
 
-## Commit Messages
+`SECURITY.md` describes how to report a vulnerability. Avoid posting working
+exploit details in a public issue.
 
-Follow conventional commits:
+## Conduct
 
-```bash
-# Format
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-
-# Examples
-feat(lxc): add snapshot rollback command
-
-Add ability to rollback to a specific snapshot with the
-new 'lxc snapshot-rollback' command.
-
-Closes #123
-
-fix(api): handle missing API key gracefully
-
-Previously, missing API key would cause 500 error.
-Now returns proper 401 Unauthorized.
-
-docs(readme): update installation instructions
-
-Add note about Python 3.6+ requirement.
-
-test(config): add validation tests
-
-Improve test coverage for configuration validation.
-```
-
-**Types:**
-- `feat`: New feature
-- `fix`: Bug fix
-- `docs`: Documentation
-- `test`: Tests
-- `refactor`: Code refactoring
-- `style`: Formatting
-- `chore`: Maintenance
-
-## Pull Request Process
-
-### 1. Prepare Your PR
-
-```bash
-# Update your branch
-git fetch upstream
-git rebase upstream/main
-
-# Run tests
-pytest
-
-# Format code
-black .
-flake8 .
-```
-
-### 2. Create Pull Request
-
-- Clear title describing the change
-- Reference related issues (`Fixes #123`)
-- Describe what changed and why
-- Include screenshots for UI changes
-- List breaking changes (if any)
-
-### 3. PR Template
-
-```markdown
-## Description
-Brief description of changes
-
-## Type of Change
-- [ ] Bug fix
-- [ ] New feature
-- [ ] Breaking change
-- [ ] Documentation update
-
-## Testing
-- [ ] Tests pass locally
-- [ ] Added new tests
-- [ ] Updated documentation
-
-## Checklist
-- [ ] Code follows style guidelines
-- [ ] Self-review completed
-- [ ] Documentation updated
-- [ ] No breaking changes (or listed above)
-```
-
-## Review Process
-
-1. **Automated checks** must pass (tests, linting)
-2. **Code review** by maintainer(s)
-3. **Address feedback** if requested
-4. **Squash commits** if needed
-5. **Merge** when approved
-
-## Community Guidelines
-
-### Be Respectful
-
-- Use welcoming and inclusive language
-- Respect differing viewpoints
-- Accept constructive criticism gracefully
-- Focus on what's best for the community
-
-### Get Help
-
-- [Issues](https://github.com/fabriziosalmi/lws/issues) - Report bugs and ask questions
-- Email maintainers for sensitive matters
-
-## Recognition
-
-Contributors are recognized in:
-- README.md contributors section
-- Release notes
-- Git history
+The project follows its [Code of Conduct](https://github.com/fabriziosalmi/lws/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
-
----
-
-Thank you for contributing to LWS!
+Contributions are released under the [MIT License](https://github.com/fabriziosalmi/lws/blob/main/LICENSE),
+like the rest of the project.

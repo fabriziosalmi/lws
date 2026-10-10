@@ -245,6 +245,7 @@
 }
 
 .feature-card code,
+.doc-card code,
 .section-subtitle code {
     font-size: 0.85em;
     background: var(--inline-code-bg);
