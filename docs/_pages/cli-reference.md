@@ -346,7 +346,8 @@ Options:
   --max-retries INTEGER  Retries waiting for the container to start
                          (default: 5)
   --retry-delay INTEGER  Seconds between start retries (default: 5)
-  --password TEXT        Root password
+  --password TEXT        Root password, set with chpasswd once the
+                         container runs (not passed to pct create)
   --ip TEXT              Fixed IP address
   --netmask TEXT         Network mask (default: 24)
   --gateway TEXT         Network gateway

@@ -50,7 +50,7 @@ def _is_connection_failure(result):
     )
 
 
-def run_ssh_command(host, user, ssh_password, command, timeout=_USE_CONFIG):
+def run_ssh_command(host, user, ssh_password, command, timeout=_USE_CONFIG, input_text=None):
     """
     Runs an SSH command on a remote host, with error handling and logging.
 
@@ -61,6 +61,8 @@ def run_ssh_command(host, user, ssh_password, command, timeout=_USE_CONFIG):
     - command: List containing the command and its arguments
     - timeout: Seconds the command may run; None for no limit. Defaults to
       `ssh_command_timeout` from config.yaml, or DEFAULT_COMMAND_TIMEOUT.
+    - input_text: Text sent to the remote command's standard input, for
+      secrets that must not appear on the command line or in the logs.
 
     A failed connection is retried up to twice. A command that started and
     then timed out is not retried: it may have changed state on the host, and
@@ -116,7 +118,8 @@ def run_ssh_command(host, user, ssh_password, command, timeout=_USE_CONFIG):
                 logging.debug(f"🔎 Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
 
             # Execute the command
-            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=timeout, env=ssh_env)
+            result = subprocess.run(ssh_cmd, input=input_text, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, timeout=timeout, env=ssh_env)
 
             # Check if the command succeeded
             if result.returncode == 0:

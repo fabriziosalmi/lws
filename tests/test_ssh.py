@@ -284,6 +284,16 @@ class TestRunSSHCommand:
 
     @pytest.mark.unit
     @pytest.mark.ssh
+    def test_input_text_goes_to_stdin(self, mock_sshpass_installed):
+        """A secret passed as input_text reaches the remote command's stdin, not its arguments."""
+        ok = Mock(returncode=0, stdout="", stderr="")
+        with patch('subprocess.run', return_value=ok) as mock_run:
+            run_ssh_command("h", "root", "pw", ["pct exec 100 -- chpasswd"], timeout=60, input_text="root:s3cret\n")
+        assert mock_run.call_args.kwargs["input"] == "root:s3cret\n"
+        assert not any("s3cret" in part for part in mock_run.call_args.args[0])
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
     def test_command_output_mentioning_refused_is_not_retried(self, mock_sshpass_installed):
         """Only ssh's own connection errors (exit 255) are retried, not a
         remote command that failed and printed "Connection refused"."""

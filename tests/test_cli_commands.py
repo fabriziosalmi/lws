@@ -44,6 +44,7 @@ class Recorder:
 
     def __init__(self, responses=None, default=None):
         self.calls = []
+        self.inputs = {}  # index in calls -> text sent to the command's stdin
         self.responses = responses or []
         self.default = default if default is not None else ok()
 
@@ -54,8 +55,10 @@ class Recorder:
                 return result(argv) if callable(result) else result
         return self.default
 
-    def argv(self, argv, use_local_only=False, host_details=None):
+    def argv(self, argv, use_local_only=False, host_details=None, input_text=None):
         argv = [str(a) for a in argv]
+        if input_text is not None:
+            self.inputs[len(self.calls)] = input_text
         self.calls.append(argv)
         return self.respond(argv)
 
@@ -643,6 +646,36 @@ class TestLxcRunCloneMigrate:
         assert create[create.index("--features") + 1] == "nesting=1"
         assert create[create.index("--unprivileged") + 1] == "1"
         assert create[create.index("--nameserver") + 1] == "1.1.1.1 9.9.9.9"
+
+    def _run_with_password(self, remote, password, pct_responses=()):
+        pct_list = "VMID       Status     Lock         Name\n100        running                 web\n"
+        rec = remote([("pct list", ok(pct_list)), *pct_responses])
+        size = next(p for p in lws.lws.commands["lxc"].commands["run"].params if p.name == "size")
+        with patch.object(size.type, "choices", ["small"]), \
+                patch.object(lws, "get_next_vmid", return_value=101), \
+                patch.object(lws, "is_container_locked", return_value=False):
+            result = CliRunner().invoke(lws.lws, ["lxc", "run", "--image-id", "local:vztmpl/debian-12.tar.zst",
+                                                  "--size", "small", "--password", password])
+        return rec, result
+
+    def test_run_sets_the_password_through_stdin_not_the_command_line(self, remote):
+        """On pct create's command line the password showed in the host's process list and the logs."""
+        rec, result = self._run_with_password(remote, "s3cret pass")
+        assert result.exit_code == 0, result.output
+        assert not any("s3cret" in part for call in rec.calls for part in call)
+        chpasswd = rec.calls.index(["pct", "exec", "101", "--", "chpasswd"])
+        assert rec.inputs[chpasswd] == "root:s3cret pass\n"
+        assert chpasswd > rec.calls.index(["pct", "start", "101"])
+
+    def test_run_reports_when_the_password_cannot_be_set(self, remote):
+        rec, result = self._run_with_password(remote, "pw", [("pct start", fail("start failed"))])
+        assert "root password was not set" in result.output
+        assert ["pct", "exec", "101", "--", "chpasswd"] not in rec.calls
+
+    def test_run_refuses_a_password_with_a_line_break(self, remote):
+        rec, result = self._run_with_password(remote, "a\nroot2:x")
+        assert result.exit_code == 2
+        assert not any(c[:2] == ["pct", "create"] for c in rec.calls)
 
     def test_clone_removes_its_temporary_snapshot(self, remote):
         rec = remote()

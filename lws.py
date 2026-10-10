@@ -660,6 +660,9 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, features,
     elif ip:
         net0 = f"{net0},ip={ip}/{netmask}" + (f",gw={gateway}" if gateway else "")
 
+    if password and ("\n" in password or "\r" in password):
+        raise click.UsageError("--password cannot contain a line break.")
+
     host_details = config['regions'][region]['availability_zones'][az]
 
     for i in range(count):
@@ -680,8 +683,9 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, features,
         if hostname:
             create_cmd.extend(["--hostname", f"{hostname}-{instance_id}"])
 
-        if password:
-            create_cmd.extend(["--password", password])
+        # The root password is not passed to pct create: on its command line
+        # it would show in the host's process list and in the debug logs. It
+        # is set after the start, through chpasswd's standard input.
 
         if features:
             create_cmd.extend(["--features", features])
@@ -721,6 +725,8 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, features,
                     )
                     if start_result.returncode == 0:
                         click.secho(f"🚀 Instance {instance_id} started.", fg='green')
+                        if password:
+                            set_root_password(instance_id, password, host_details)
                         
                         # Run an initialization script if the --init flag is set
                         if init:
@@ -734,11 +740,30 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, features,
                         break
                     else:
                         click.secho(f"❌ Failed to start instance {instance_id}: {start_result.stderr}", fg='red')
+                        if password:
+                            click.secho("⚠️ The root password was not set: it is set once the container runs.", fg='yellow')
                         break
             else:
                 click.secho(f"❌ Failed to start instance {instance_id} after {max_retries} attempts.", fg='red')
+                if password:
+                    click.secho("⚠️ The root password was not set: it is set once the container runs.", fg='yellow')
         else:
             click.secho(f"❌ Failed to create instance {instance_id}: {create_result.stderr}", fg='red')
+
+
+def set_root_password(instance_id, password, host_details):
+    """Set root's password in a running container with chpasswd.
+
+    The password goes to chpasswd's standard input, so it never appears on a
+    command line: not in the Proxmox host's process list, not in the logs.
+    """
+    result = run_argv(["pct", "exec", str(instance_id), "--", "chpasswd"], config['use_local_only'],
+                      host_details, input_text=f"root:{password}\n")
+    if result.returncode == 0:
+        click.secho(f"🔑 Root password set for instance {instance_id}.", fg='green')
+        return True
+    click.secho(f"❌ Failed to set the root password of instance {instance_id}: {result.stderr.strip()}", fg='red')
+    return False
 
 
 

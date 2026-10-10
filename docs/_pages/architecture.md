@@ -110,7 +110,7 @@ Manages SSH connections to Proxmox hosts with retry logic and timeout handling.
 - Password sanitization in logs
 
 **Key Functions:**
-- `run_ssh_command(host, user, password, command, timeout=...)` - Execute SSH command
+- `run_ssh_command(host, user, password, command, timeout=..., input_text=None)` - Execute SSH command; `input_text` goes to the remote command's standard input, which is how secrets reach a command without appearing on its command line
 
 ### 3. Proxmox Module (`lws_core/proxmox.py`)
 
