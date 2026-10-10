@@ -8,6 +8,13 @@
       url: /pages/getting-started.html
     - title: Configuration
       url: /pages/configuration.html
+    - title: LWS compared
+      url: /pages/comparison.html
+
+- section: Guides
+  items:
+    - title: Several Proxmox hosts
+      url: /pages/multiple-hosts.html
 
 - section: Reference
   items:
@@ -15,8 +22,19 @@
       url: /pages/cli-reference.html
     - title: API Reference
       url: /pages/api-reference.html
+    - title: Instance sizes
+      url: /pages/instance-sizes.html
     - title: Architecture
       url: /pages/architecture.html
+
+- section: Help
+  items:
+    - title: Troubleshooting
+      url: /pages/troubleshooting.html
+    - title: FAQ
+      url: /pages/faq.html
+    - title: Release notes
+      url: /pages/release-notes.html
 
 - section: Project
   items:

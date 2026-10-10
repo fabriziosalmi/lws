@@ -93,7 +93,7 @@ body_class: home
         </li>
         <li class="feature-card">
           <h3>Resource checks and scaling</h3>
-          <p><code>lxc scale-check</code> compares CPU, memory and disk use with configured thresholds; <code>lxc scale</code> applies changes. Both run on demand.</p>
+          <p><code>lxc scale-check</code> suggests CPU, memory and disk allocations from thresholds in <code>config.yaml</code>; <code>lxc scale</code> applies the values you choose. Both run only when you call them.</p>
         </li>
         <li class="feature-card">
           <h3>Docker inside LXC</h3>
@@ -145,6 +145,10 @@ python3 lws.py lxc run --size small \
         <li><a class="doc-card" href="{{ '/pages/configuration.html' | relative_url }}"><h3>Configuration</h3><p>Every setting in config.yaml: hosts, regions, sizes and the API key.</p></a></li>
         <li><a class="doc-card" href="{{ '/pages/cli-reference.html' | relative_url }}"><h3>CLI Reference</h3><p>All commands for hosts, containers and Docker apps, with examples.</p></a></li>
         <li><a class="doc-card" href="{{ '/pages/api-reference.html' | relative_url }}"><h3>API Reference</h3><p>REST endpoints, authentication, request and response formats.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/multiple-hosts.html' | relative_url }}"><h3>Several Proxmox hosts</h3><p>Group hosts into regions and zones and pick one per command.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/instance-sizes.html' | relative_url }}"><h3>Instance sizes</h3><p>The memory, CPU and disk presets behind <code>--size</code>.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/comparison.html' | relative_url }}"><h3>LWS compared</h3><p>LWS next to pct, the Proxmox API, Ansible and Terraform.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/troubleshooting.html' | relative_url }}"><h3>Troubleshooting</h3><p>Causes and fixes for common SSH, configuration and API errors.</p></a></li>
         <li><a class="doc-card" href="{{ '/pages/architecture.html' | relative_url }}"><h3>Architecture</h3><p>How the CLI, the core modules and the API fit together.</p></a></li>
         <li><a class="doc-card" href="{{ '/pages/contributing.html' | relative_url }}"><h3>Contributing</h3><p>Development setup, tests and how to open a pull request.</p></a></li>
       </ul>

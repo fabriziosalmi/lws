@@ -104,3 +104,21 @@ def test_descriptions_and_titles_are_unique():
             if value:
                 assert value not in seen, f"{url} and {seen[value]} share the same {key}."
                 seen[value] = url
+
+
+def test_instance_sizes_page_matches_config_example():
+    """docs/_pages/instance-sizes.md lists every size in config.yaml.example
+    with the same values, and nothing else."""
+    sizes = yaml.safe_load((REPO_ROOT / "config.yaml.example").read_text(encoding="utf-8"))["instance_sizes"]
+    page = (DOCS / "_pages" / "instance-sizes.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| `([a-z0-9-]+)` \| (\d+) MB \| (\d+) \| `([^`]+)` \|", page, re.M)
+    documented = {name: {"memory": int(mem), "cpulimit": int(cpu), "storage": storage}
+                  for name, mem, cpu, storage in rows}
+    expected = {name: {"memory": int(s["memory"]), "cpulimit": int(s["cpulimit"]), "storage": str(s["storage"])}
+                for name, s in sizes.items()}
+    assert documented == expected, (
+        "instance-sizes.md is out of date with config.yaml.example. "
+        f"Missing: {sorted(set(expected) - set(documented))}; "
+        f"extra: {sorted(set(documented) - set(expected))}; "
+        f"different: {sorted(n for n in set(expected) & set(documented) if expected[n] != documented[n])}"
+    )

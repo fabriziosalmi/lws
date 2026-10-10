@@ -23,14 +23,18 @@ curl -H "X-API-Key: your-api-key" \
   http://localhost:8080/api/v1/lxc/instances
 ```
 
-Configure your API key in `config.yaml`:
+Generate a key and write it into `config.yaml` in one step, so no example
+value ever ends up in the file:
 
-```yaml
-# The server refuses to start if this is empty or one of a few recognized
-# placeholders. Generate a real one:
-# python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
-api_key: "REPLACE_ME_WITH_32_PLUS_RANDOM_CHARACTERS"
+```bash
+KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+sed -i "s|^api_key:.*|api_key: \"$KEY\"|" config.yaml   # on macOS: sed -i ''
+echo "$KEY"   # give this to API clients
 ```
+
+The server refuses to start when `api_key` is empty or one of the example
+values that ship in the repository. Do not use a value copied from any
+documentation page: anything published is known to everyone.
 
 ## Response Format
 

@@ -110,7 +110,7 @@ LWS is a command-line interface (CLI) tool for managing LXC containers on Proxmo
 
 - **Security Scanning**: Perform security audits on containers
 - **Network Discovery**: Discover reachable hosts in container networks
-- **Health Checks**: Perform health checks with automatic issue detection
+- **Health Checks**: Check CPU, memory, disk and DNS inside a container against fixed limits
 - **Monitoring**: Monitor real-time resource usage with thresholds
 
 ### Resource Reporting
@@ -265,8 +265,12 @@ lws lxc status 100
 
 #### Execute Command in Container
 ```bash
-lws lxc exec 100 "apt update && apt upgrade -y"
+lws lxc exec 100 "apt-get update"
+lws lxc exec 100 "apt-get -y upgrade"
 ```
+
+Run one command per call: over SSH, shell operators such as `&&` or `|` are
+read by the Proxmox host's shell and run on the host, not in the container.
 
 #### Create and Manage Snapshots
 ```bash
@@ -378,37 +382,29 @@ lws sec scan 100 --scan-type full
 lws sec discovery 100
 ```
 
-### Managing Scaling Thresholds and Triggers
+### Scaling Thresholds
 
-Scaling thresholds and triggers allow **lws** to automatically adjust resources (CPU, memory, storage) for LXC containers based on defined conditions met on both the Proxmox host and the LXC container. This feature ensures optimal performance while preventing resource exhaustion.
+`lws lxc scale-check <id>` reads the `scaling` section of `config.yaml` and
+prints suggested CPU core, memory and disk values for a container. It compares
+what the container is allocated (`pct config`) with the host's total cores and
+memory. Nothing runs automatically: apply a suggestion with `lws lxc scale`.
 
-#### Example Scaling Configuration
 ```yaml
 scaling:
-  host_cpu:
-    high_threshold: 0.80
-    low_threshold: 0.20
-    check_interval_seconds: 60
-  
-  host_memory:
-    high_threshold: 0.85
-    low_threshold: 0.30
-    check_interval_seconds: 60
-  
   lxc_cpu:
-    min_threshold: 0.30
-    max_threshold: 0.80
+    min_threshold: 0.30      # suggest more cores below 30% of the host's cores
+    max_threshold: 0.80      # suggest fewer above 80%
     step: 1
     scale_up_multiplier: 1.5
     scale_down_multiplier: 0.5
-  
+
   lxc_memory:
     min_threshold: 0.40
     max_threshold: 0.70
     step_mb: 256
     scale_up_multiplier: 1.25
     scale_down_multiplier: 0.75
-  
+
   limits:
     min_cpu_cores: 1
     max_cpu_cores: 4
@@ -416,17 +412,10 @@ scaling:
     max_memory_mb: 8192
     min_storage_gb: 10
     max_storage_gb: 500
-  
-  notifications:
-    notify_user: true
-    dry_run: true
 ```
 
-> [!TIP]
-> Use `notify_user: true` to get immediate feedback on scaling adjustments, which is especially useful in dynamic environments.
-
-> [!WARNING]
-> Be cautious when setting the `dry_run` option to `false`, as real scaling adjustments will be applied. Ensure your thresholds and multipliers are well-tested before applying them in production.
+Thresholds are fractions between 0 and 1. The full description of the keys is
+in the [configuration reference](https://fabriziosalmi.github.io/lws/pages/configuration.html#scaling-thresholds).
 
 ### API Server
 

@@ -170,7 +170,7 @@ Options:
 
 ### `px backup-lxc`
 
-Back up a single LXC container via `vzdump`, run on the Proxmox host (not to be confused with `lxc backup-create`, which backs up through `pct`).
+Back up a single LXC container with `vzdump --storage <storage> --mode <mode>`, run on the Proxmox host. The archive stays on that storage. Compression and retention follow the host's `/etc/vzdump.conf`. This command always connects over SSH, and the SSH call is stopped after 60 seconds, so a backup that takes longer is better started on the host or from a Proxmox backup job.
 
 ```bash
 lws px backup-lxc <vmid> --storage <storage-target> [OPTIONS]
@@ -184,7 +184,7 @@ Options:
 
 ### `px backup`
 
-Back up Proxmox host configuration (`/etc/pve`) to a local `.tar.gz`.
+Back up the Proxmox host configuration (`/etc/pve`) as `<backup_dir>/proxmox-backup.tar.gz`. The archive is written on the Proxmox host, not on the machine running LWS (unless `use_local_only` is set), and the fixed file name means each run replaces the previous one.
 
 ```bash
 lws px backup <backup_dir> [OPTIONS]
@@ -242,7 +242,7 @@ Options:
 
 ### `px security-group-rule-add` / `security-group-rule-rm`
 
-Add or remove a firewall rule within an existing security group.
+Add or remove a firewall rule within an existing security group. Rules are edited directly in `/etc/pve/firewall/cluster.fw` with `sed`; `pve-firewall` and the Proxmox API are not used.
 
 ```bash
 lws px security-group-rule-add <group_name> --direction <IN|OUT> [OPTIONS]
@@ -266,9 +266,25 @@ lws px security-group-rule-add web --direction IN --protocol tcp \
   --destination-port 443
 ```
 
+Things to know before relying on these commands:
+
+- `--direction` and `--action` are case-sensitive: `IN`, `OUT`, `ACCEPT`, `DROP`, `REJECT`.
+- `security-group-add` accepts `--description` but does not write it.
+- `rule-add` reports success even if the group does not exist; check with `lws px security-groups`.
+- `rule-rm` removes every rule in the group that contains the rule text it builds from the options, including the `ACCEPT` and `tcp` defaults: `--direction IN` alone removes all `IN ACCEPT -p tcp` rules of the group. It cannot remove a rule with a CIDR (`10.0.0.0/8`).
+- `security-group-rm` deletes from the group header to the next blank line. Groups created with `security-group-add` are not separated by blank lines, so check the file before removing one.
+
 ### `px security-group-attach` / `security-group-detach`
 
 Attach or detach a security group from a specific container's firewall config (`/etc/pve/firewall/<vmid>.fw`).
+
+> **Check the result on the host before relying on it.** `security-group-attach`
+> writes the line `|GROUP <name>` under `[RULES]`. In Proxmox firewall files a
+> leading `|` marks a rule as disabled, so the group may not be applied. The
+> command also does not enable the firewall for the container, on its network
+> interface (`firewall=1`) or for the datacenter. Verify in the web interface
+> (container > Firewall) that the group is listed as enabled and that the
+> firewall is on.
 
 ```bash
 lws px security-group-attach <group_name> <vmid> [OPTIONS]
@@ -281,7 +297,7 @@ Options:
 
 ### `px exec`
 
-Execute an arbitrary command on a Proxmox host over SSH. Unlike `lxc exec`, the command is joined into a single string and handed to the remote shell — there is no confirmation flag.
+Execute an arbitrary command on a Proxmox host over SSH. The arguments are joined into a single string and handed to the host's shell, so shell syntax works here. There is no confirmation prompt.
 
 ```bash
 lws px exec <command>... [OPTIONS]
@@ -463,7 +479,7 @@ lws lxc scale 100 --memory 4096 --cpulimit 4 --storage-size 64G
 
 ### `lxc scale-check`
 
-Read a container's and its host's current resource usage against the thresholds in `config.yaml`'s `scaling` block and suggest whether to scale. Read-only — it only recommends, it never changes anything.
+Compare a container's allocated cores, memory and root disk (from `pct config`) with the host's total cores and memory (`lscpu`, `free -m`), using the thresholds in `config.yaml`'s `scaling` block, and suggest new values. It reads allocations, not live usage (see `lxc resources` for that). Read-only: it never changes anything. The container needs a `cores` value in its configuration; containers created by `lxc run` only have a CPU limit, so set cores first with `lws lxc scale <id> --cpucores <n>`. The CPU suggestion is a number of cores, to apply with `--cpucores`. Thresholds are fractions between 0 and 1; see [Configuration](configuration.html#scaling-thresholds).
 
 ```bash
 lws lxc scale-check <instance_id> [OPTIONS]
@@ -538,11 +554,18 @@ Options:
 
 **Examples:**
 ```bash
-lws lxc exec 100 "apt update && apt upgrade -y"
+lws lxc exec 100 "apt-get update"
+lws lxc exec 100 "apt-get -y upgrade"
 
 # Same command across multiple containers
 lws lxc exec 100 101 102 "systemctl restart nginx"
 ```
+
+> **Run one command per call.** Over SSH (the default, `use_local_only: false`),
+> the command line is joined into one string and read by the Proxmox host's
+> shell. Shell operators such as `&&`, `;`, `|` and `>` are therefore run on
+> the host, not in the container: `lws lxc exec 100 "apt update && apt upgrade -y"`
+> would run `apt upgrade -y` on the Proxmox host itself.
 
 ### `lxc snapshot-add` / `snapshot-rm`
 
@@ -612,9 +635,11 @@ Options:
 lws lxc clone 100 200 --full
 ```
 
+The command first takes a snapshot of the source named `snapshot-<YYYYmmddHHMMSS>` and clones from it with `pct clone --snapname`. The snapshot is not removed afterwards; delete it with `lws lxc snapshot-rm`. `--target-host` is passed to `pct clone --target` and must be a node of the same Proxmox cluster. In Proxmox, a clone of a regular container is always a full copy; linked clones exist only for templates.
+
 ### `lxc migrate`
 
-Migrate container between hosts.
+Migrate a container to another node of the same Proxmox cluster with `pct migrate <id> <target-host>`, run on the source host. `--target-host` is the Proxmox node name, not an availability zone from `config.yaml`. No `--restart` is passed, so stop a running container first. The migration runs over SSH, which LWS stops after 60 seconds.
 
 ```bash
 lws lxc migrate <instance_id> [OPTIONS]
@@ -628,6 +653,15 @@ Options:
 ### `lxc backup-create` / `backup-restore`
 
 Backup and restore containers. The two commands take different options — `--backup-file` only applies to restore, not create.
+
+`backup-create` runs `mkdir -p <destination>` and `vzdump <id> --compress <level> --dumpdir <destination> --mode snapshot` on the host; `--download` then copies the archive with `scp` into the current directory. Both steps run over SSH with the 60-second limit per command.
+
+> **Before using `backup-restore`, know what it does.** It stops the container
+> if it is running, restores with `pct restore --force` over the existing
+> container ID, then starts it. After a successful restore it **deletes the
+> backup file** it restored from on the host, and a temporary copy. The
+> container ID must already exist. Try it on a test container, and keep
+> another copy of any backup you restore.
 
 ```bash
 # Create backup
@@ -696,7 +730,7 @@ Options:
 
 ### `lxc net`
 
-Check whether a TCP or UDP port is open on a container, first from inside it, then (if that fails) from the Proxmox host to the container's IP.
+Check whether a TCP port is open on a container with `nc -z`, first from inside it, then (if that fails) from the Proxmox host to the container's IP. The protocol argument accepts `udp`, but the check always uses TCP.
 
 ```bash
 lws lxc net <instance_id> <tcp|udp> <port> [OPTIONS]

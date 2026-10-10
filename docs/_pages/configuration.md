@@ -4,431 +4,238 @@ seo_title: "Configuration: config.yaml for Proxmox hosts and sizes"
 description: "Reference for config.yaml: Proxmox hosts grouped into regions and availability zones, instance sizes, scaling thresholds, the API key and storage."
 ---
 
-# Configuration Guide
+# Configuration
 
-Complete guide to configuring LWS for your infrastructure.
-
-## Configuration File Location
-
-LWS uses `config.yaml` in the project root directory.
+LWS reads a single YAML file, `config.yaml`. Start from the example in the
+repository and edit it:
 
 ```bash
-lws/
-├── config.yaml         # Your configuration
-├── config.yaml.example # Example template
-└── lws.py
+cp config.yaml.example config.yaml
+chmod 600 config.yaml   # it holds root passwords
 ```
 
-## Complete Configuration Example
+## Where the file is read from
+
+- **The CLI** (`lws.py`) reads `config.yaml` from the current directory. Run
+  it from the folder that holds the file.
+- **The REST API** (`api.py`) reads the `config.yaml` next to `api.py`. The
+  CLI commands it starts read the one in the current directory, so start the
+  API from that same folder.
+
+`lws conf validate` checks the file, and `lws conf show` prints it with
+passwords and keys masked.
+
+## A minimal configuration
 
 ```yaml
-# Basic Settings
 use_local_only: false
 start_vmid: 10000
 default_storage: local-lvm
 default_network: vmbr0
 
-# Minimum Resource Requirements
-minimum_resources:
-  cores: 1
-  memory_mb: 512
+api_key: ""   # only needed for the REST API; see below
 
-# API Configuration
-# Empty or the shipped placeholder: the server refuses to start. Generate one
-# with: python3 -c 'import secrets; print(secrets.token_urlsafe(32))'
+regions:
+  eu-south-1:
+    availability_zones:
+      az1:
+        host: pve1.example.net
+        user: root
+        ssh_password: "a-long-password"
+
+instance_sizes:
+  small:
+    memory: 1024
+    cpulimit: 1
+    storage: local-lvm:8
+```
+
+`regions` and `instance_sizes` are required; LWS refuses to load a file
+without them. The other sections are optional.
+
+## General settings
+
+| Key | Default | Used for |
+|---|---|---|
+| `use_local_only` | `false` | `true` runs most commands on the machine LWS runs on, instead of over SSH. Use it when LWS is installed on the Proxmox host it manages. Some commands, such as `px status`, `px exec`, `px backup-lxc`, `lxc migrate` and the security group commands, connect over SSH in every case. Keep the key in the file: most commands expect it. |
+| `start_vmid` | `10000` | The ID of the first container `lxc run` creates on a host that has none. On a host with containers, the next ID is the highest existing one plus one. |
+| `default_storage` | none | The storage for `--storage-size` in `lxc run` and `lxc scale`. Required if you use that option. |
+| `default_network` | `vmbr0` | The bridge in the default `--net0` of `lxc run`: `name=eth0,bridge=<default_network>`. |
+| `default_onboot` | `true` | The default of `lxc run --onboot`. |
+
+`minimum_resources`, present in `config.yaml.example`, is not read by any
+command.
+
+## Hosts: regions and availability zones
+
+```yaml
+regions:
+  <region>:
+    availability_zones:
+      <zone>:
+        host: <hostname or IP>
+        user: <SSH user>
+        ssh_password: <password>
+```
+
+Each zone is one Proxmox host, and all three keys are required. Commands pick
+a host with `--region` and `--az`, which default to `eu-south-1` and `az1`.
+[Several Proxmox hosts](multiple-hosts.html) covers this in detail.
+
+LWS authenticates with the password through `sshpass`. It does not support
+SSH keys, and it reads `ssh_password` as a literal value: there is no
+environment variable substitution. If you keep secrets in a vault, generate
+`config.yaml` from it before running LWS.
+
+## Instance sizes
+
+```yaml
+instance_sizes:
+  <name>:
+    memory: <MB>              # passed to pct create --memory
+    cpulimit: <CPUs>          # passed to pct create --cpulimit (a CPU time limit)
+    storage: <storage>:<GiB>  # passed to pct create --rootfs
+```
+
+`lxc run --size` accepts exactly the names defined here, with `small` as the
+default. [Instance sizes](instance-sizes.html) lists the sizes in
+`config.yaml.example` and explains each value.
+
+## REST API
+
+```yaml
 api_key: ""
 api:
-  host: "127.0.0.1"  # Loopback by default. Use a private address or put a
-                      # reverse proxy in front that authenticates before this.
+  host: "127.0.0.1"
   port: 8080
   debug: false
   log_level: "INFO"
   allowed_origins:
     - "http://localhost:8080"
-    - "null"  # For file:// access
+```
 
-# Regions and Availability Zones
-regions:
-  eu-south-1:
-    availability_zones:
-      az1:
-        host: proxmox1.example.com
-        user: root
-        ssh_password: SecurePassword123
-      az2:
-        host: 192.168.1.101
-        user: root
-        ssh_password: AnotherPassword
+| Key | Default | Meaning |
+|---|---|---|
+| `api_key` | none | The key clients send in the `X-API-Key` header. The API refuses to start when it is empty or one of the example values from the repository, and warns when it is shorter than 32 characters. |
+| `api.host` | `127.0.0.1` | The address the API listens on. Anything other than loopback exposes root access to every host in `regions` to that network. |
+| `api.port` | `8080` | The port. |
+| `api.debug` | `false` | `true` runs Flask's development server instead of waitress. The interactive debugger stays off either way. |
+| `api.log_level` | `INFO` | How much the API writes to `api.log`. |
+| `api.allowed_origins` | none | Origins allowed to call the API from a browser (CORS). Without the key, browsers on other origins are refused. Scripts and `curl` are not affected by CORS. |
 
-  us-east-1:
-    availability_zones:
-      az1:
-        host: proxmox-us.example.com
-        user: root
-        ssh_password: UsPassword
+Generate a key and write it into the file:
 
-# Instance Size Definitions
-instance_sizes:
-  # Basic Sizes
-  micro:
-    memory: 512
-    cpulimit: 1
-    storage: local-lvm:4
+```bash
+KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
+sed -i "s|^api_key:.*|api_key: \"$KEY\"|" config.yaml   # on macOS: sed -i ''
+```
 
-  small:
-    memory: 1024
-    cpulimit: 1
-    storage: local-lvm:8
+The example's `allowed_origins` includes `"null"`, which lets pages opened
+from a local file call the API. Remove it if you do not open `ui.html` that
+way.
 
-  medium:
-    memory: 2048
-    cpulimit: 2
-    storage: local-lvm:16
+## Scaling thresholds
 
-  large:
-    memory: 4096
-    cpulimit: 4
-    storage: local-lvm:32
+`lxc scale-check` reads the `scaling` section to suggest new CPU, memory and
+disk values for a container. Nothing runs automatically: the command prints
+suggestions, and `lxc scale` applies the values you give it.
 
-  # AWS-like Sizes
-  t2-micro:
-    memory: 1024
-    cpulimit: 1
-    storage: local-lvm:8
-
-  t2-small:
-    memory: 2048
-    cpulimit: 1
-    storage: local-lvm:20
-
-  m5-large:
-    memory: 8192
-    cpulimit: 2
-    storage: local-lvm:50
-
-  # Application-Specific
-  lws-web:
-    memory: 2048
-    cpulimit: 2
-    storage: local-lvm:20
-
-  lws-database:
-    memory: 8192
-    cpulimit: 4
-    storage: local-lvm:100
-
-# Auto-Scaling Configuration
+```yaml
 scaling:
-  host_cpu:
-    max_threshold: 80
-    min_threshold: 30
-    step: 1
-    scale_up_multiplier: 1.5
-    scale_down_multiplier: 0.5
-
   lxc_cpu:
-    max_threshold: 80
-    min_threshold: 30
+    min_threshold: 0.30        # suggest more if below this share of the host
+    max_threshold: 0.80        # suggest less if above this share of the host
     step: 1
     scale_up_multiplier: 1.5
     scale_down_multiplier: 0.5
-
-  host_memory:
-    max_threshold: 70
-    min_threshold: 40
-    step_mb: 256
-    scale_up_multiplier: 1.25
-    scale_down_multiplier: 0.75
-
   lxc_memory:
-    max_threshold: 70
-    min_threshold: 40
+    min_threshold: 0.40
+    max_threshold: 0.70
     step_mb: 256
     scale_up_multiplier: 1.25
     scale_down_multiplier: 0.75
-
+  lxc_storage:
+    min_threshold: 0.50
+    max_threshold: 0.85
+    step_gb: 10
+    scale_up_multiplier: 1.5
+    scale_down_multiplier: 0.5
   limits:
-    min_memory_mb: 512
-    max_memory_mb: 32768
     min_cpu_cores: 1
     max_cpu_cores: 16
+    min_memory_mb: 512
+    max_memory_mb: 32768
     min_storage_gb: 10
     max_storage_gb: 1024
+```
 
-  general:
-    scaling_interval: 5
-    notify_user: true
-    dry_run: false
-    scaling_log_level: DEBUG
+How the suggestion is worked out, for CPU (memory and disk follow the same
+pattern with their own keys):
 
-# Security Configuration
+- The container's allocation is compared with the host's total: cores from
+  `lscpu`, memory from `free -m`. For disk, the comparison is with
+  `max_storage_gb`.
+- Below `min_threshold` × total, it suggests the current value plus
+  `step` × `scale_up_multiplier`, up to the `limits` maximum.
+- Above `max_threshold` × total, it suggests the current value minus
+  `step` × `scale_down_multiplier`, down to the `limits` minimum.
+
+Thresholds are fractions between 0 and 1: `0.30` means 30%. Values above 1
+make every check suggest an increase. The comparison uses what the container
+is allocated in `pct config`, not what it is using at the moment; for live
+usage, see `lxc resources` and `lxc status`.
+
+The `host_cpu`, `host_memory`, `host_storage` and `general` blocks in
+`config.yaml.example` are not read by any command, except
+`host_storage.total_storage_gb`, which is used as `max_storage_gb` when
+`limits` does not set it.
+
+## Network discovery
+
+```yaml
 security:
   discovery:
-    proxmox_timeout: 2
-    lxc_timeout: 2
     discovery_methods: ['ping']
     max_parallel_workers: 10
 ```
 
-## Configuration Sections
+Used by `lws sec discovery`, which pings the /24 networks around the client,
+the Proxmox host and optionally a container. `ping` is the only method;
+`max_parallel_workers` is the number of pings in flight. The `proxmox_timeout`
+and `lxc_timeout` keys in the example are not read.
 
-### Basic Settings
+## Storage values
 
-```yaml
-use_local_only: false      # Execute commands locally (true) or via SSH (false)
-start_vmid: 10000          # Starting VMID for new containers
-default_storage: local-lvm # Default storage backend
-default_network: vmbr0     # Default network bridge
-```
-
-### API Configuration
+The `storage` of a size, and `default_storage`, name a storage defined on the
+Proxmox host (Datacenter > Storage in the web interface):
 
 ```yaml
-api_key: ""                # Empty or the placeholder refuses to start the server
-api:
-  host: "127.0.0.1"        # Loopback by default; change deliberately
-  port: 8080               # API port
-  debug: false             # Enable debug mode (development only!) - also switches
-                            # the server from the production WSGI server (waitress)
-                            # to Flask's own dev server, so leave this false unless
-                            # you're actively debugging
-  log_level: "INFO"        # Logging level
-  allowed_origins:         # CORS allowed origins. Omitting this key denies all
-    - "http://localhost:8080"  # cross-origin browser access by default (curl/scripts
-                            # aren't subject to CORS either way) - list origins
-                            # explicitly to allow browser-based access to them
+storage: local-lvm:20      # LVM-thin, the default on most installs
+storage: local-zfs:20      # ZFS
+storage: ceph-pool:20      # a Ceph RBD storage, if the cluster has one
 ```
 
-**Security Note:** Never commit your actual API key to version control!
+The storage must allow container root disks. The number after the colon is
+the size in GiB.
 
-### Regions and Availability Zones
-
-Define your Proxmox infrastructure:
-
-```yaml
-regions:
-  <region-name>:
-    availability_zones:
-      <az-name>:
-        host: <proxmox-host>    # Hostname or IP
-        user: <ssh-user>        # SSH username
-        ssh_password: <password> # SSH password
-```
-
-**Best Practices:**
-- Use descriptive region names (e.g., `eu-south-1`, `us-east-1`)
-- Group geographically close hosts
-- Use different AZs for redundancy
-
-### Instance Sizes
-
-Define container resource templates:
-
-```yaml
-instance_sizes:
-  <size-name>:
-    memory: <MB>           # RAM in megabytes
-    cpulimit: <cores>      # CPU cores
-    storage: <backend>:<size> # Storage (e.g., local-lvm:20)
-```
-
-**Naming Conventions:**
-- Use consistent naming (small, medium, large)
-- Or AWS-style (t2-micro, m5-large)
-- Or app-specific (lws-web, lws-database)
-
-### Auto-Scaling
-
-Configure automatic resource scaling:
-
-```yaml
-scaling:
-  lxc_cpu:
-    max_threshold: 80      # Scale down if below this %
-    min_threshold: 30      # Scale up if above this %
-    step: 1                # Cores to add/remove
-    scale_up_multiplier: 1.5
-    scale_down_multiplier: 0.5
-
-  limits:
-    min_memory_mb: 512     # Minimum allowed RAM
-    max_memory_mb: 32768   # Maximum allowed RAM
-```
-
-## Environment-Specific Configurations
-
-### Development
-```yaml
-api:
-  debug: true
-  log_level: "DEBUG"
-
-scaling:
-  general:
-    dry_run: true  # Simulate scaling without applying
-```
-
-### Production
-```yaml
-api:
-  debug: false
-  log_level: "WARNING"
-  allowed_origins:
-    - "https://yourdomain.com"
-
-scaling:
-  general:
-    dry_run: false
-    notify_user: true
-```
-
-## Security Best Practices
-
-### 1. API Key Security
-
-Generate a strong API key:
+## Backing up the configuration
 
 ```bash
-# On Linux/Mac
-openssl rand -hex 32
-
-# Or use Python
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-### 2. SSH Password Management
-
-LWS currently only supports password-based SSH authentication (via `sshpass`), and `ssh_password` is read as a literal value straight out of `config.yaml` — there is no `${VAR}`-style environment-variable interpolation and no SSH key-based auth. Both would require modifying LWS (`lws_core/ssh.py`) to add. Until then, the mitigation is restricting `config.yaml` itself:
-
-```yaml
-regions:
-  eu-south-1:
-    availability_zones:
-      az1:
-        host: proxmox1.example.com
-        user: root
-        ssh_password: password   # a literal value read as-is; see file permissions below
-```
-
-### 3. File Permissions
-
-```bash
-chmod 600 config.yaml
-```
-
-### 4. Secrets Management
-
-LWS has no built-in integration with any of these — `config.yaml` is read as plain YAML. If you use one, the pattern is to generate `config.yaml` from your vault externally (e.g. a wrapper script that fetches the secret and writes the file) before invoking `lws`/`api.py`, not a setting inside `config.yaml` itself:
-- HashiCorp Vault
-- AWS Secrets Manager
-- Azure Key Vault
-
-## Storage Backends
-
-Common Proxmox storage backends:
-
-```yaml
-# Local LVM
-storage: local-lvm:20
-
-# Local Directory
-storage: local:20
-
-# NFS
-storage: nfs-storage:50
-
-# Ceph
-storage: ceph-storage:100
-```
-
-## Network Configuration
-
-Configure network bridges:
-
-```yaml
-default_network: vmbr0  # Default bridge
-```
-
-Or set it per container at creation time:
-
-```bash
-lws lxc run --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
-  --net0 "name=eth0,bridge=vmbr1,ip=192.168.1.100/24,gw=192.168.1.1"
-```
-
-## Validation
-
-Validate your configuration:
-
-```bash
-# Via CLI
-lws conf validate
-
-# Via API
-curl -X POST \
-  -H "X-API-Key: your-key" \
-  http://localhost:8080/api/v1/conf/validate
-```
-
-## Configuration Backup
-
-Regular backups:
-
-```bash
-# With timestamp
 lws conf backup /backup/lws-config.yaml --timestamp
-
-# Compressed
-lws conf backup /backup/lws-config.yaml.gz --timestamp --compress
+lws conf backup /backup/lws-config.yaml --timestamp --compress
 ```
 
-## Troubleshooting
+The copy contains the passwords and the API key in clear text: store it with
+the same care as `config.yaml`.
 
-### Configuration Not Found
+## Upgrading
 
-```bash
-# Check file exists
-ls -la config.yaml
-
-# Check current directory
-pwd
-
-# Run from project root
-cd /path/to/lws
-python3 lws.py conf show
-```
-
-### Invalid YAML Syntax
-
-```bash
-# Validate YAML
-python3 -c "import yaml; yaml.safe_load(open('config.yaml'))"
-
-# Common issues:
-# - Incorrect indentation (use spaces, not tabs)
-# - Missing quotes around special characters
-# - Unclosed brackets/braces
-```
-
-### Connection Issues
-
-```bash
-# Test SSH manually
-ssh root@proxmox-host
-
-# Check sshpass
-which sshpass
-
-# Verify credentials in config
-lws conf show  # Passwords will be masked
-```
-
-## Migration Guide
-
-### From Version 1.0 to 1.1
-
-Version 1.1 introduced modular architecture:
-
-1. No configuration changes required
-2. All existing `config.yaml` files compatible
-3. New API configuration options available
+- **To 1.4.2 or later:** the REST API no longer starts with an empty
+  `api_key` or one of the example values, and `config.yaml.example` binds it
+  to `127.0.0.1`. Set a random key, and set `api.host` explicitly if the API
+  must listen on another address. The CLI is not affected.
+- **To 1.4.3 or later:** without `api.allowed_origins`, browsers on other
+  origins can no longer call the API; before, every origin was allowed. List
+  the origins that need access.
+- Configuration files from earlier versions otherwise load unchanged. See
+  [Release notes](release-notes.html).
