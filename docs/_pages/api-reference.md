@@ -677,7 +677,7 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/lxc/instances/{instance_id}/restore`
 
-Restore a vzdump backup with `pct restore`. `backup_file` is a path on the Proxmox host or a volume ID (`local:backup/...`). Optional fields: `storage` for the restored disk, `no_start` to leave the container stopped.
+Restore a vzdump backup with `pct restore`. `backup_file` is a path on the Proxmox host or a volume ID (`local:backup/...`). Optional fields: `storage` for the restored disks (default: `default_storage` from `config.yaml`; the request fails when neither is set), `no_start` to leave the container stopped.
 
 The CLI asks for confirmation before it restores, and the API cannot answer: send `"force": true`, or the request fails. If the container exists, `force` replaces it, and its current disks are destroyed. The backup file itself is kept.
 

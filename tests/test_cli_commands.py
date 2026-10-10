@@ -365,7 +365,7 @@ class TestBackups:
         result = run("lxc", "backup-restore", "100", "--backup-file", archive, "--force")
         assert result.exit_code == 0, result.output
         assert ["pct", "stop", "100"] in rec.calls
-        assert ["pct", "restore", "100", archive, "--force", "1"] in rec.calls
+        assert ["pct", "restore", "100", archive, "--storage", "local-lvm", "--force", "1"] in rec.calls
         assert not any(c[0] == "rm" for c in rec.calls)
         assert ["pct", "start", "100"] in rec.calls
 
@@ -374,8 +374,24 @@ class TestBackups:
         rec = remote([("pct status", fail("CT 200 does not exist"))])
         result = run("lxc", "backup-restore", "200", "--backup-file", archive, "--force", "--no-start")
         assert result.exit_code == 0, result.output
-        assert ["pct", "restore", "200", archive] in rec.calls
+        assert ["pct", "restore", "200", archive, "--storage", "local-lvm"] in rec.calls
         assert not any(c[:2] == ["pct", "start"] for c in rec.calls)
+
+    def test_restore_storage_option_overrides_default_storage(self, remote):
+        archive = "local:backup/vzdump-lxc-100-2026_10_10-08_00_00.tar.zst"
+        rec = remote([("pct status", fail("does not exist", 2))])
+        run("lxc", "backup-restore", "200", "--backup-file", archive, "--storage", "local-zfs", "--force")
+        assert ["pct", "restore", "200", archive, "--storage", "local-zfs"] in rec.calls
+
+    def test_restore_without_any_storage_is_refused(self, remote):
+        """pct restore would put the disk on 'local', which cannot hold container disks by default."""
+        rec = remote()
+        with patch.dict(lws.config, {"default_storage": None}):
+            result = CliRunner().invoke(lws.lws, ["lxc", "backup-restore", "200", "--backup-file",
+                                                  "/var/lib/vz/dump/x.tar.zst", "--force"])
+        assert result.exit_code == 2
+        assert "--storage" in result.output
+        assert rec.calls == []
 
     def test_restore_asks_before_replacing(self, remote):
         rec = remote([("pct status", ok("status: stopped"))])
@@ -412,6 +428,35 @@ ostype: debian
 rootfs: local-lvm:vm-100-disk-0,size=8G
 swap: 512
 """
+
+
+class TestHostAndConfigBackups:
+    def test_px_backup_creates_the_directory_on_the_host(self, remote, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        rec = remote()
+        result = run("px", "backup", "/root/pve-backups")
+        assert result.exit_code == 0, result.output
+        assert rec.calls == [["mkdir", "-p", "/root/pve-backups"],
+                             ["tar", "-czf", "/root/pve-backups/proxmox-backup.tar.gz", "/etc/pve"]]
+        assert not (tmp_path / "root").exists()
+
+    def test_px_backup_failure_exits_non_zero(self, remote):
+        remote([("tar", fail("tar: /root/x: Cannot open"))])
+        assert run("px", "backup", "/root/pve-backups").exit_code == 1
+
+    def test_conf_backup_copies_the_file_with_its_comments(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "config.yaml").write_text("# hosts\nregions: {}\n")
+        result = run("conf", "backup", "copy.yaml")
+        assert result.exit_code == 0, result.output
+        assert (tmp_path / "copy.yaml").read_text() == "# hosts\nregions: {}\n"
+        assert (tmp_path / "copy.yaml").stat().st_mode & 0o777 == 0o600
+
+    def test_conf_backup_without_config_yaml_fails(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        result = run("conf", "backup", "copy.yaml")
+        assert result.exit_code == 1
+        assert not (tmp_path / "copy.yaml").exists()
 
 
 class TestScaling:

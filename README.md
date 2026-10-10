@@ -88,7 +88,7 @@ LWS is a command-line interface (CLI) tool for managing LXC containers on Proxmo
 
 - **Container Operations**: Create, start, stop, reboot, and destroy containers
 - **Resource Scaling**: Dynamically adjust CPU, memory, and storage resources
-- **Snapshot Management**: Create, list, and restore container snapshots
+- **Snapshot Management**: Create, list, and delete container snapshots
 - **Network Configuration**: Configure network settings for containers
 - **Volume Management**: Attach and detach storage volumes to containers
 - **Container Migration**: Migrate containers between Proxmox hosts

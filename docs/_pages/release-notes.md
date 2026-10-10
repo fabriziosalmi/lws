@@ -44,7 +44,11 @@ Merged into `main` after 1.4.3:
 - **Backups.** `lxc backup-create` failed on every run (`--compress 6` is not
   a vzdump value); it now takes `--compress zstd|gzip|lzo|none`, `--mode` and
   `--storage`. `lxc backup-restore` restores vzdump archives with
-  `pct restore` and no longer deletes the backup afterwards.
+  `pct restore` and no longer deletes the backup afterwards. Without
+  `--storage`, it uses `default_storage`. `px backup` creates its directory
+  on the Proxmox host, where the archive is written, and `conf backup`
+  copies `config.yaml` as it is, comments included, and fails when there is
+  no `config.yaml`.
 - **Scaling.** The example thresholds were written as percentages, so
   `lxc scale-check` always suggested more; values above 1 are now read as
   percentages. `scale-check` no longer suggests a smaller disk, which

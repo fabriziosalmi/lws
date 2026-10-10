@@ -180,7 +180,7 @@ Options:
 
 ### `px backup-lxc`
 
-Back up a single LXC container with `vzdump --storage <storage> --mode <mode>`, run on the Proxmox host. The archive stays on that storage; compression and retention follow the host's `/etc/vzdump.conf`. `lxc backup-create` does the same with more options.
+Back up a single LXC container with `vzdump --storage <storage> --mode <mode>`, run on the Proxmox host. The archive stays on that storage; compression follows the host's `/etc/vzdump.conf`, and retention follows the storage's own backup retention settings (or `/etc/vzdump.conf`). `lxc backup-create` does the same with more options.
 
 ```bash
 lws px backup-lxc <vmid> --storage <storage-target> [OPTIONS]
@@ -194,7 +194,7 @@ Options:
 
 ### `px backup`
 
-Back up the Proxmox host configuration (`/etc/pve`) as `<backup_dir>/proxmox-backup.tar.gz`. The archive is written on the Proxmox host, not on the machine running LWS (unless `use_local_only` is set), and the fixed file name means each run replaces the previous one.
+Back up the Proxmox host configuration (`/etc/pve`) as `<backup_dir>/proxmox-backup.tar.gz`. The directory is created if needed, and the archive is written on the Proxmox host, not on the machine running LWS (unless `use_local_only` is set). The fixed file name means each run replaces the previous one.
 
 ```bash
 lws px backup <backup_dir> [OPTIONS]
@@ -693,7 +693,7 @@ lws lxc backup-restore <instance_id> --backup-file <archive> [OPTIONS]
 Options:
   --backup-file TEXT       vzdump archive: a path on the host, a volume ID
                            (local:backup/...), or a local file to upload (required)
-  --storage TEXT           Storage for the restored disk (default: as in the backup)
+  --storage TEXT           Storage for the restored disks (default: default_storage)
   --start / --no-start     Start the container afterwards (default: --start)
   --force                  Do not ask for confirmation
   --region TEXT            Region
@@ -709,9 +709,9 @@ lws lxc backup-restore 100 --backup-file /var/lib/vz/dump/vzdump-lxc-100-2026_10
 lws lxc backup-restore 205 --backup-file local:backup/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst
 ```
 
-`backup-create` prints the archive file vzdump wrote. `snapshot` mode needs storage that supports snapshots (LVM-thin, ZFS, Ceph); `stop` mode works everywhere and stops the container during the backup.
+`backup-create` prints the archive file vzdump wrote. `snapshot` mode keeps the container running and works on storage that supports snapshots (LVM-thin, ZFS, Ceph); elsewhere vzdump falls back to `suspend`. `stop` mode works everywhere and stops the container during the backup.
 
-`backup-restore` restores with `pct restore`. If the container ID is free, the backup becomes a new container. If it exists, the command asks before replacing it: the container is stopped, and its current disks are destroyed and replaced by the backup. The backup file is never deleted; only a temporary copy uploaded from your machine is removed afterwards.
+`backup-restore` restores with `pct restore`. If the container ID is free, the backup becomes a new container. If it exists, the command asks before replacing it: the container is stopped, and its current disks are destroyed and replaced by the backup. The backup file is never deleted; only a temporary copy uploaded from your machine is removed afterwards. The disks go to `--storage`, or to `default_storage` from `config.yaml`; without either, the command stops, because `pct restore` would use the storage named `local`, which cannot hold container disks on a default installation.
 
 ### `lxc resources`
 

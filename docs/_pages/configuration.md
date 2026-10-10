@@ -59,7 +59,7 @@ without them. The other sections are optional.
 |---|---|---|
 | `use_local_only` | `false` | `true` runs most commands on the machine LWS runs on, instead of over SSH. Use it when LWS is installed on the Proxmox host it manages. Some commands, such as `px status`, `px exec`, `px reboot`, `px backup-lxc` and the `px cluster-*` commands, connect over SSH in every case. Keep the key in the file: most commands expect it. |
 | `start_vmid` | `10000` | The ID of the first container `lxc run` creates on a host that has none. On a host with containers, the next ID is the highest existing one plus one. |
-| `default_storage` | none | The storage for `--storage-size` in `lxc run`. Required if you use that option. `lxc scale --storage-size` grows the disk where it already is. |
+| `default_storage` | none | The storage for `--storage-size` in `lxc run`, and for the disks restored by `lxc backup-restore` without `--storage`. `lxc scale --storage-size` grows the disk where it already is. |
 | `default_network` | `vmbr0` | The bridge in the default `--net0` of `lxc run`: `name=eth0,bridge=<default_network>`. |
 | `default_onboot` | `true` | The default of `lxc run --onboot`. |
 | `ssh_command_timeout` | `3600` | Seconds one remote command may run over SSH before LWS stops it. `0` removes the limit. A command that times out is not run again. |

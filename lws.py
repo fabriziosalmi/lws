@@ -174,6 +174,15 @@ def backup_config(destination_path, timestamp, compress):
     The copy includes SSH passwords and the API key in clear text, so it is
     written with 0600 permissions.
     """
+    # The file as it is, comments included. The in-memory configuration is not
+    # used: without a config.yaml it is an empty fallback, not worth a backup.
+    try:
+        with open('config.yaml', 'rb') as source:
+            content = source.read()
+    except OSError as e:
+        click.secho(f"❌ Cannot read config.yaml in {os.getcwd()}: {e.strerror}", fg='red')
+        sys.exit(1)
+
     if timestamp:
         stem, ext = os.path.splitext(destination_path)
         destination_path = f"{stem}_{time.strftime('%Y%m%d%H%M%S')}{ext}"
@@ -184,10 +193,10 @@ def backup_config(destination_path, timestamp, compress):
         if compress:
             destination_path = f"{destination_path}.gz"
             with _open_private(destination_path, 'wb') as raw, gzip.GzipFile(fileobj=raw, mode='wb') as backup_file:
-                backup_file.write(yaml.dump(config).encode('utf-8'))
+                backup_file.write(content)
         else:
-            with _open_private(destination_path, 'w') as backup_file:
-                yaml.dump(config, backup_file)
+            with _open_private(destination_path, 'wb') as backup_file:
+                backup_file.write(content)
 
         click.secho(f"✅ Configuration backed up to {destination_path}.", fg='green')
         click.secho("⚠️ The file contains passwords and the API key in clear text.", fg='yellow')
@@ -1502,7 +1511,9 @@ def app():
 APPS_DIR = "/opt/lws/apps"
 DOCKER_INSTALL_SCRIPT = (
     "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io && "
-    # Compose v2: docker-compose-v2 on Ubuntu; the docker-compose package elsewhere.
+    # Compose: docker-compose-v2 (Compose v2) on Ubuntu, otherwise the distribution's
+    # docker-compose package, which is Compose v1 on Debian 12 and v2 from Debian 13.
+    # compose_command() finds either.
     "(DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 || "
     "DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose)"
 )
@@ -2551,46 +2562,26 @@ def scale_check_get_lxc_resources(instance_id, host_details, host_cores=None):
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Defaults to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Defaults to az1")
 def px_backup_hosts(backup_dir, region, az):
-    """💾 Backup configurations from all Proxmox hosts."""
+    """💾 Back up /etc/pve of a Proxmox host into a directory on that host."""
     logging.info(f"Starting backup for region {region}, AZ {az}")
+    host_details = _host_details(region, az)
+    use_local_only = config['use_local_only']
 
-    # Load configuration
-    config = load_config()
-    if not config:
-        click.secho("❌ Failed to load configuration.", fg='red')
-        return
-
-    # Get host details from configuration based on region and AZ
-    try:
-        host_details = config['regions'][region]['availability_zones'][az]
-        use_local_only = config.get('use_local_only', False)
-    except KeyError as e:
-        logging.error(f"❌ Invalid region or availability zone: {e}")
-        click.secho(f"❌ Invalid region or availability zone: {e}", fg='red')
-        return
-
-    # Ensure the backup directory exists, or create it
-    if not os.path.exists(backup_dir):
-        try:
-            os.makedirs(backup_dir)
-            logging.info(f"📁 Created backup directory {backup_dir}.")
-        except OSError as e:
-            logging.error(f"❌ Failed to create backup directory {backup_dir}: {str(e)}")
-            click.secho(f"❌ Failed to create backup directory {backup_dir}: {str(e)}", fg='red')
-            return
+    # The archive is written where tar runs, on the Proxmox host, so the
+    # directory has to exist there, not on the machine running LWS.
+    mkdir = run_argv(["mkdir", "-p", backup_dir], use_local_only, host_details)
+    if mkdir.returncode != 0:
+        click.secho(f"❌ Failed to create {backup_dir} on the Proxmox host: {mkdir.stderr.strip()}", fg='red')
+        sys.exit(1)
 
     backup_file = os.path.join(backup_dir, "proxmox-backup.tar.gz")
-    tar_command = ["tar", "-czf", backup_file, "/etc/pve"]
-
     logging.info(f"🛠️ Preparing to back up Proxmox configurations to {backup_file}.")
-
-    # Run the backup command
-    result = run_proxmox_command(local_cmd=tar_command, remote_cmd=tar_command, use_local_only=use_local_only, host_details=host_details)
+    result = run_argv(["tar", "-czf", backup_file, "/etc/pve"], use_local_only, host_details)
 
     # Check the result and provide appropriate feedback
     if result and result.returncode == 0:
         logging.info(f"✅ Backup completed successfully. Saved to {backup_file}.")
-        click.secho(f"✅ Backup completed successfully. Saved to {backup_file}.", fg='green')
+        click.secho(f"✅ Backup completed. Saved to {backup_file} on {host_details['host']}.", fg='green')
     else:
         logging.error(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}")
         click.secho(f"❌ Failed to backup hosts: {result.stderr if result else 'Unknown error'}", fg='red')
@@ -2936,7 +2927,7 @@ _VOLUME_ID_RE = re.compile(r'^[A-Za-z0-9_-]+:\S+$')
 @click.option('--backup-file', required=True,
               help="A vzdump archive: a path on the Proxmox host, a volume ID (local:backup/vzdump-lxc-...), or a file on this machine, which is uploaded.")
 @click.option('--storage', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "storage"),
-              help="Storage for the restored root disk. Default: the storage in the backup.")
+              help="Storage for the restored disks. Default: default_storage from config.yaml.")
 @click.option('--start/--no-start', default=True, help="Start the container after the restore. Default: start.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
@@ -2947,6 +2938,12 @@ def restore_container(instance_id, backup_file, storage, start, region, az, forc
     If INSTANCE_ID exists, it is stopped and replaced by the backup: its
     current disks are destroyed. The backup file itself is never deleted.
     """
+    # Without --storage, pct restore puts every disk on the storage named
+    # `local`, which on a default installation cannot hold container disks.
+    storage = storage or config.get('default_storage')
+    if not storage:
+        raise click.UsageError("Pass --storage, or set default_storage in config.yaml: without a storage, "
+                               "pct restore uses 'local', which usually cannot hold container disks.")
     host_details = _host_details(region, az)
     use_local = config['use_local_only']
 
@@ -2986,11 +2983,9 @@ def restore_container(instance_id, backup_file, storage, start, region, az, forc
             click.secho(f"❌ Failed to stop container {instance_id}: {stop.stderr.strip()}", fg='red')
             sys.exit(1)
 
-    restore_cmd = ["pct", "restore", instance_id, source]
+    restore_cmd = ["pct", "restore", instance_id, source, "--storage", storage]
     if exists:
         restore_cmd += ["--force", "1"]
-    if storage:
-        restore_cmd += ["--storage", storage]
     click.secho(f"🔄 Restoring container {instance_id} from {backup_file}...", fg='yellow')
     restore = run_argv(restore_cmd, use_local, host_details)
 
