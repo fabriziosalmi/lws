@@ -112,8 +112,7 @@ api:
   debug: false
   log_level: "INFO"
   command_timeout: 3600
-  allowed_origins:
-    - "http://localhost:8080"
+  allowed_origins: []
 ```
 
 | Key | Default | Meaning |
@@ -133,9 +132,11 @@ KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')
 sed -i "s|^api_key:.*|api_key: \"$KEY\"|" config.yaml   # on macOS: sed -i ''
 ```
 
-The example's `allowed_origins` includes `"null"`, which lets pages opened
-from a local file call the API. Remove it if you do not open `ui.html` that
-way.
+The web UI is served by the API itself, at `/`, so it needs no entry in
+`allowed_origins`. Opening `ui.html` from disk does not work: it calls the
+API at a relative address. Configuration files from earlier versions may list
+`"null"`, the origin browsers give to pages opened from a file or sandboxed;
+remove it.
 
 ## Scaling thresholds
 
@@ -172,17 +173,20 @@ scaling:
     max_storage_gb: 1024
 ```
 
-How the suggestion is worked out, for CPU (memory and disk follow the same
-pattern with their own keys):
+How the suggestion is worked out, for CPU (memory follows the same pattern
+with its own keys, and disk too, except that it is only ever increased):
 
 - The container's allocation is compared with the host's total: cores from
   `lscpu`, memory from `free -m`. For disk, the comparison is with
   `max_storage_gb`. A container without a `cores` setting counts as its
   `cpulimit` rounded up, or as every host core when it has neither.
 - Below `min_threshold` × total, it suggests the current value plus
-  `step` × `scale_up_multiplier`, up to the `limits` maximum.
+  `step` × `scale_up_multiplier`.
 - Above `max_threshold` × total, it suggests the current value minus
-  `step` × `scale_down_multiplier`, down to the `limits` minimum.
+  `step` × `scale_down_multiplier`. Proxmox cannot shrink a container's
+  disk, so no smaller disk is ever suggested.
+- The result is rounded down to a whole number and kept between the
+  `limits` minimum and maximum.
 
 Thresholds are fractions between 0 and 1: `0.30` means 30%. A value above 1
 is read as a percentage, so `80` means `0.80`. The comparison uses what the

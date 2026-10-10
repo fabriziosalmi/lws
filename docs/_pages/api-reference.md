@@ -351,7 +351,7 @@ curl -X POST \
   http://localhost:8080/api/v1/px/exec
 ```
 
-The API refuses commands that contain any of `` ; & | ` $ ( ) { } ``, so pipes and command lists are not available here. Run them from the CLI, or put them in a script on the host.
+The API refuses command arguments that contain any of `` ; & | ` $ ( ) { } ``. This check is a guard against mistakes, not a sandbox: the command runs on the host's shell, as root, and any command can be sent through this endpoint. For pipes and command lists, use the CLI or a script on the host.
 
 ### LXC Container Endpoints
 
@@ -534,7 +534,7 @@ curl -X POST \
   http://localhost:8080/api/v1/lxc/instances/100/exec
 ```
 
-As with `/px/exec`, commands that contain any of `` ; & | ` $ ( ) { } `` are refused. Send one request per command.
+As with `/px/exec`, command arguments that contain any of `` ; & | ` $ ( ) { } `` are refused. Send one request per command, or run a script that is already in the container.
 
 #### POST `/lxc/instances/{instance_id}/snapshots`
 
@@ -884,9 +884,10 @@ Configure allowed origins in `config.yaml`. Omitting `allowed_origins` denies al
 ```yaml
 api:
   allowed_origins:
-    - "http://localhost:8080"
-    - "https://yourdomain.com"
+    - "https://dashboard.example.net"
 ```
+
+The web UI at `/` is served by the API itself, so it needs no entry.
 
 ## Production Deployment
 

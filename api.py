@@ -55,7 +55,7 @@ LWS_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'lws.py') # Path to lw
 # callers (the normal way to use this API) are never subject to CORS, so
 # this default costs nothing for the common case while not silently opening
 # a root-equivalent API to any website until an operator opts in.
-# To allow specific origins: allowed_origins: ["http://localhost:8000", "null"]
+# To allow specific origins: allowed_origins: ["https://dashboard.example.net"]
 allowed_origins = API_CONFIG.get('allowed_origins', [])
 CORS(app, origins=allowed_origins) # Apply CORS settings
 

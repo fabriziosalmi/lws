@@ -453,6 +453,43 @@ class TestScaling:
         # 30 is read as 30%: 2 cores < 16 * 0.30, so one more step is suggested, not 20x more.
         assert "increasing CPU cores to 3 (current: 2)" in result.output
 
+    def _scale_check(self, remote, pct_config, scaling=None):
+        lscpu = "CPU(s): 16\n"
+        free = "              total        used        free\nMem:          64000       10000       54000\n"
+        cfg = {**CONFIG, "scaling": scaling or {}}
+        remote([("lscpu", ok(lscpu)), ("free", ok(free)), ("pct config", ok(pct_config))])
+        with patch.object(lws, "scale_check_load_config", return_value=cfg):
+            return run("lxc", "scale-check", "100")
+
+    def test_scale_check_hint_uses_the_option_that_limits_the_container(self, remote):
+        """A cpulimit-only container is changed with --cpulimit; --cpucores alone would not raise its cap."""
+        result = self._scale_check(remote, PCT_CONFIG)
+        assert result.exit_code == 0, result.output
+        assert "lws lxc scale 100 --cpulimit 3 --memory 2368 --storage-size 23G" in result.output
+
+    def test_scale_check_hint_uses_cpucores_when_cores_is_set(self, remote):
+        result = self._scale_check(remote, PCT_CONFIG.replace("cpulimit: 2", "cores: 2"))
+        assert "lws lxc scale 100 --cpucores 3 " in result.output
+
+    def test_scale_check_never_suggests_a_smaller_disk(self, remote):
+        """Proxmox cannot shrink a container's disk, so lxc scale could not apply it."""
+        result = self._scale_check(remote, PCT_CONFIG.replace("size=8G", "size=900G"))
+        assert result.exit_code == 0, result.output
+        assert "900 GB storage" in result.output
+        assert "storage to" not in result.output and "--storage-size" not in result.output
+
+    def test_scale_check_decrease_stays_within_the_limits(self, remote):
+        """49152 MB is above 70% of the host and above max_memory_mb: suggest the maximum, not 48960."""
+        result = self._scale_check(remote, PCT_CONFIG.replace("memory: 2048", "memory: 49152"),
+                                   {"limits": {"max_memory_mb": 32768}})
+        assert "decreasing memory to 32768 MB (current: 49152 MB)" in result.output
+
+    def test_resources_describes_a_cpulimit_only_container(self, remote):
+        remote([("pct status", ok("status: running")), ("pct config", ok(PCT_CONFIG))], default=fail())
+        result = run("lxc", "resources", "100", "--count", "1")
+        assert "CPU: limited to the time of 2 CPUs, Memory: 2048 MB" in result.output
+        assert "None" not in result.output
+
 
 class TestDocker:
     RUNNING = ("pct status", ok("status: running"))

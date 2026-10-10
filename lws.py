@@ -2365,24 +2365,22 @@ def scale_check_suggest_resources(instance_id, region, az):
     click.secho(f"ℹ️ Proxmox Host: {total_cores} cores, {free_memory} MB free memory", fg='cyan')
 
     # Retrieve LXC resource usage
-    cpulimit, cpuunits, memory, storage = scale_check_get_lxc_resources(instance_id, host_details, total_cores)
-    if cpulimit is None or memory is None or storage is None:
+    cores, cpu_option, memory, storage = scale_check_get_lxc_resources(instance_id, host_details, total_cores)
+    if cores is None or memory is None or storage is None:
         logging.error(f"Failed to retrieve resources for container {instance_id}.")
         click.secho(f"❌ Could not retrieve resources for container {instance_id}.", fg='red')
         sys.exit(1)
 
-    logging.info(f"Instance {instance_id} resources - CPU cores: {cpulimit}, Memory: {memory} MB, Storage: {storage} GB")
-    click.secho(f"ℹ️ Instance {instance_id}: {cpulimit} cores, {memory} MB total memory, {storage} GB storage", fg='cyan')
+    logging.info(f"Instance {instance_id} resources - CPU cores: {cores}, Memory: {memory} MB, Storage: {storage} GB")
+    click.secho(f"ℹ️ Instance {instance_id}: {cores} cores, {memory} MB total memory, {storage} GB storage", fg='cyan')
 
     # Fetch thresholds and limits from the config
-    cpu_thresholds_host = config.get('scaling', {}).get('host_cpu', {})
-    cpu_thresholds_lxc = config.get('scaling', {}).get('lxc_cpu', {})
-    memory_thresholds_host = config.get('scaling', {}).get('host_memory', {})
-    memory_thresholds_lxc = config.get('scaling', {}).get('lxc_memory', {})
-    storage_thresholds_host = config.get('scaling', {}).get('host_storage', {})
-    storage_thresholds_lxc = config.get('scaling', {}).get('lxc_storage', {})
-    limits = config.get('scaling', {}).get('limits', {})
-    for thresholds in (cpu_thresholds_lxc, memory_thresholds_lxc, storage_thresholds_lxc):
+    scaling = config.get('scaling', {})
+    cpu_thresholds = scaling.get('lxc_cpu', {})
+    memory_thresholds = scaling.get('lxc_memory', {})
+    storage_thresholds = scaling.get('lxc_storage', {})
+    limits = scaling.get('limits', {})
+    for thresholds in (cpu_thresholds, memory_thresholds, storage_thresholds):
         normalize_thresholds(thresholds)
 
     min_cores = limits.get('min_cpu_cores', 1)
@@ -2390,51 +2388,59 @@ def scale_check_suggest_resources(instance_id, region, az):
     min_memory_mb = limits.get('min_memory_mb', 512)
     max_memory_mb = limits.get('max_memory_mb', total_memory)
     min_storage_gb = limits.get('min_storage_gb', 10)
-    max_storage_gb = limits.get('max_storage_gb', storage_thresholds_host.get('total_storage_gb', 1024))
+    # host_storage.total_storage_gb: read for configuration files written for 1.4.3 or earlier.
+    max_storage_gb = limits.get('max_storage_gb', scaling.get('host_storage', {}).get('total_storage_gb', 1024))
+
+    def step_up(current, thresholds, step_key, default_step, default_multiplier, low, high):
+        """current + step x multiplier, decimals dropped, kept within [low, high]."""
+        step = thresholds.get(step_key, default_step) * thresholds.get('scale_up_multiplier', default_multiplier)
+        return max(low, min(high, int(current + step)))
+
+    def step_down(current, thresholds, step_key, default_step, default_multiplier, low, high):
+        step = thresholds.get(step_key, default_step) * thresholds.get('scale_down_multiplier', default_multiplier)
+        return max(low, min(high, int(current - step)))
 
     suggestions = []
+    apply_options = []
 
-    # CPU core adjustments based on host and LXC usage
-    if cpulimit < (total_cores * cpu_thresholds_lxc.get('min_threshold', 0.30)):
-        suggested_cores = min(max_cores, int(cpulimit + cpu_thresholds_lxc.get('step', 1) * cpu_thresholds_lxc.get('scale_up_multiplier', 1.5)))
-        if suggested_cores > cpulimit:
-            logging.info(f"Suggesting CPU core increase to {suggested_cores} for instance {instance_id}.")
-            suggestions.append(f"🔧 Consider increasing CPU cores to {suggested_cores} (current: {cpulimit}).")
-    elif cpulimit > (total_cores * cpu_thresholds_lxc.get('max_threshold', 0.80)):
-        suggested_cores = max(min_cores, int(cpulimit - cpu_thresholds_lxc.get('step', 1) * cpu_thresholds_lxc.get('scale_down_multiplier', 0.5)))
-        if suggested_cores < cpulimit:
-            logging.info(f"Suggesting CPU core decrease to {suggested_cores} for instance {instance_id}.")
-            suggestions.append(f"🔧 Consider decreasing CPU cores to {suggested_cores} (current: {cpulimit}).")
+    # CPU, compared with the host's CPUs
+    suggested_cores = None
+    if cores < total_cores * cpu_thresholds.get('min_threshold', 0.30):
+        suggested_cores = step_up(cores, cpu_thresholds, 'step', 1, 1.5, min_cores, max_cores)
+    elif cores > total_cores * cpu_thresholds.get('max_threshold', 0.80):
+        suggested_cores = step_down(cores, cpu_thresholds, 'step', 1, 0.5, min_cores, max_cores)
+    if suggested_cores is not None and suggested_cores != cores:
+        verb = "increasing" if suggested_cores > cores else "decreasing"
+        logging.info(f"Suggesting {verb} CPU cores to {suggested_cores} for instance {instance_id}.")
+        suggestions.append(f"🔧 Consider {verb} CPU cores to {suggested_cores} (current: {cores}).")
+        apply_options.append(f"{cpu_option} {suggested_cores}")
 
-    # Memory adjustments based on host and LXC usage
-    if memory < (total_memory * memory_thresholds_lxc.get('min_threshold', 0.40)):
-        suggested_memory = min(max_memory_mb, int(memory + memory_thresholds_lxc.get('step_mb', 256) * memory_thresholds_lxc.get('scale_up_multiplier', 1.25)))
-        if suggested_memory > memory:
-            logging.info(f"Suggesting memory increase to {suggested_memory} MB for instance {instance_id}.")
-            suggestions.append(f"🔧 Consider increasing memory to {suggested_memory} MB (current: {memory} MB).")
-    elif memory > (total_memory * memory_thresholds_lxc.get('max_threshold', 0.70)):
-        suggested_memory = max(min_memory_mb, int(memory - memory_thresholds_lxc.get('step_mb', 256) * memory_thresholds_lxc.get('scale_down_multiplier', 0.75)))
-        if suggested_memory < memory:
-            logging.info(f"Suggesting memory decrease to {suggested_memory} MB for instance {instance_id}.")
-            suggestions.append(f"🔧 Consider decreasing memory to {suggested_memory} MB (current: {memory} MB).")
+    # Memory, compared with the host's memory
+    suggested_memory = None
+    if memory < total_memory * memory_thresholds.get('min_threshold', 0.40):
+        suggested_memory = step_up(memory, memory_thresholds, 'step_mb', 256, 1.25, min_memory_mb, max_memory_mb)
+    elif memory > total_memory * memory_thresholds.get('max_threshold', 0.70):
+        suggested_memory = step_down(memory, memory_thresholds, 'step_mb', 256, 0.75, min_memory_mb, max_memory_mb)
+    if suggested_memory is not None and suggested_memory != memory:
+        verb = "increasing" if suggested_memory > memory else "decreasing"
+        logging.info(f"Suggesting {verb} memory to {suggested_memory} MB for instance {instance_id}.")
+        suggestions.append(f"🔧 Consider {verb} memory to {suggested_memory} MB (current: {memory} MB).")
+        apply_options.append(f"--memory {suggested_memory}")
 
-    # Storage adjustments based on host and LXC usage
-    if storage < (max_storage_gb * storage_thresholds_lxc.get('min_threshold', 0.50)):
-        suggested_storage = min(max_storage_gb, int(storage + storage_thresholds_lxc.get('step_gb', 10) * storage_thresholds_lxc.get('scale_up_multiplier', 1.5)))
+    # Root disk, compared with max_storage_gb. Proxmox cannot shrink a
+    # container's disk, so only an increase is ever suggested.
+    if storage < max_storage_gb * storage_thresholds.get('min_threshold', 0.50):
+        suggested_storage = step_up(storage, storage_thresholds, 'step_gb', 10, 1.5, min_storage_gb, max_storage_gb)
         if suggested_storage > storage:
             logging.info(f"Suggesting storage increase to {suggested_storage} GB for instance {instance_id}.")
             suggestions.append(f"🔧 Consider increasing storage to {suggested_storage} GB (current: {storage} GB).")
-    elif storage > (max_storage_gb * storage_thresholds_lxc.get('max_threshold', 0.85)):
-        suggested_storage = max(min_storage_gb, int(storage - storage_thresholds_lxc.get('step_gb', 10) * storage_thresholds_lxc.get('scale_down_multiplier', 0.5)))
-        if suggested_storage < storage:
-            logging.info(f"Suggesting storage decrease to {suggested_storage} GB for instance {instance_id}.")
-            suggestions.append(f"🔧 Consider decreasing storage to {suggested_storage} GB (current: {storage} GB).")
+            apply_options.append(f"--storage-size {suggested_storage}G")
 
     # Output the suggestions
     if suggestions:
         logging.info("Suggestions made for scaling adjustments.")
         click.secho("\n".join(suggestions), fg='green')
-        click.secho(f"ℹ️ Apply them with: lws lxc scale {instance_id} --cpucores <n> --memory <MB> --storage-size <GB>G", fg='cyan')
+        click.secho(f"ℹ️ Apply them with: lws lxc scale {instance_id} {' '.join(apply_options)}", fg='cyan')
     else:
         logging.info("No changes recommended based on current resource usage.")
         click.secho("🔧 No changes recommended.", fg='green')
@@ -2495,10 +2501,12 @@ def normalize_thresholds(thresholds):
 
 def scale_check_get_lxc_resources(instance_id, host_details, host_cores=None):
     """
-    The cores, CPU units, memory (MB) and root disk size (GB) allocated to a container.
+    The CPUs, the lws lxc scale option that sets them, the memory (MB) and the
+    root disk size (GB) allocated to a container.
 
     A container without a `cores` setting may use every CPU of the host; its
-    `cpulimit`, if set, caps the time it gets, so that is used instead.
+    `cpulimit`, if set, caps the time it gets, so that is used instead, and
+    `--cpulimit` is the option that changes it.
     """
     command = ["pct", "config", instance_id]
     result = run_proxmox_command(command, command, config['use_local_only'], host_details)
@@ -2511,14 +2519,15 @@ def scale_check_get_lxc_resources(instance_id, host_details, host_cores=None):
                 settings[key.strip()] = value.strip()
 
         cores = None
+        cpu_option = '--cpucores'
         try:
             if 'cores' in settings:
                 cores = int(settings['cores'])
             elif float(settings.get('cpulimit', 0) or 0) > 0:
                 cores = max(1, math.ceil(float(settings['cpulimit'])))
+                cpu_option = '--cpulimit'
             elif host_cores:
                 cores = int(host_cores)
-            cpuunits = int(settings['cpuunits']) if 'cpuunits' in settings else None
             memory = int(settings['memory']) if 'memory' in settings else None
         except ValueError:
             logging.error(f"Unexpected values in pct config for {instance_id}: {settings}")
@@ -2531,7 +2540,7 @@ def scale_check_get_lxc_resources(instance_id, host_details, host_cores=None):
             if storage == int(storage):
                 storage = int(storage)
 
-        return cores, cpuunits, memory, storage
+        return cores, cpu_option, memory, storage
     else:
         logging.error(f"Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
         return None, None, None, None
@@ -3227,16 +3236,20 @@ def monitor_container_resources(instance_id, region, az, interval, count):
         return
     
     # Parse CPU and memory limits
-    cpu_limit = None
-    memory_limit = None
-    
+    settings = {}
     for line in config_result.stdout.splitlines():
-        if line.startswith("cores:"):
-            cpu_limit = line.split(":")[1].strip()
-        elif line.startswith("memory:"):
-            memory_limit = int(line.split(":")[1].strip())
-    
-    click.secho(f"📌 Resource limits - CPU cores: {cpu_limit}, Memory: {memory_limit} MB", fg='cyan')
+        key, sep, value = line.partition(":")
+        if sep:
+            settings[key.strip()] = value.strip()
+    if 'cores' in settings:
+        cpu_limit = f"{settings['cores']} cores"
+    elif float(settings.get('cpulimit', 0) or 0) > 0:
+        cpu_limit = f"limited to the time of {settings['cpulimit']} CPUs"
+    else:
+        cpu_limit = "all host CPUs"
+    memory_limit = settings.get('memory', 'unknown')
+
+    click.secho(f"📌 Resource limits - CPU: {cpu_limit}, Memory: {memory_limit} MB", fg='cyan')
     
     # Monitor resource usage over time
     for i in range(count):

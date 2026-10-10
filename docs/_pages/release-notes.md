@@ -47,8 +47,12 @@ Merged into `main` after 1.4.3:
   `pct restore` and no longer deletes the backup afterwards.
 - **Scaling.** The example thresholds were written as percentages, so
   `lxc scale-check` always suggested more; values above 1 are now read as
-  percentages. `lxc scale --storage-size` grows the disk with `pct resize`,
-  and `--net-limit` keeps the rest of the network settings.
+  percentages. `scale-check` no longer suggests a smaller disk, which
+  Proxmox cannot apply, and ends with the exact `lxc scale` command to run.
+  `lxc scale --storage-size` grows the disk with `pct resize`, and
+  `--net-limit` keeps the rest of the network settings.
+- **CORS.** `config.yaml.example` no longer allows the `"null"` origin. The
+  web UI is served by the API and needs no CORS entry.
 - **Docker apps.** `app setup` installs Docker and Compose from the
   container's package manager and checks the `nesting` and `keyctl` features
   (`--enable-nesting` sets them). `app deploy` keeps each Compose file in

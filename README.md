@@ -445,7 +445,7 @@ A simple web interface is provided to interact with the API.
 1.  **Ensure the API server (`api.py`) is running.**
 2.  **Access the UI:**
     *   Navigate your browser to the root URL of the running API server (e.g., `http://localhost:8080/`). The API server serves `ui.html` directly.
-    *   Alternatively, open the `ui.html` file directly in your browser (`file:///.../ui.html`). **Note:** Direct file access might cause CORS issues when making API calls, depending on your browser and the API's `allowed_origins` configuration in `config.yaml`. Serving the UI via the API is recommended.
+    *   Opening `ui.html` from disk (`file:///.../ui.html`) does not work: the page calls the API at a relative address.
 3.  **Enter your API Key** in the input field and use the buttons to trigger API calls. Responses will be displayed in a formatted view.
 
 ### Swagger Documentation

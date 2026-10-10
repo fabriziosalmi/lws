@@ -490,7 +490,7 @@ Proxmox has no disk bandwidth limits for containers; the former `--disk-read-lim
 
 Compare a container's allocated cores, memory and root disk (from `pct config`) with the host's total cores and memory (`lscpu`, `free -m`), using the thresholds in `config.yaml`'s `scaling` block, and suggest new values. It reads allocations, not live usage (see `lxc resources` for that). Read-only: it never changes anything.
 
-A container without a `cores` setting is counted by its `cpulimit`, or as using every host core when it has neither. Threshold values above 1 are read as percentages (80 means 0.80). See [Configuration](configuration.html#scaling-thresholds).
+A container without a `cores` setting is counted by its `cpulimit`, or as using every host core when it has neither. Threshold values above 1 are read as percentages (80 means 0.80). A smaller disk is never suggested, since Proxmox cannot shrink one. The last line of the output is the `lxc scale` command that applies the suggestions, with `--cpulimit` for a container limited by `cpulimit` and `--cpucores` otherwise. See [Configuration](configuration.html#scaling-thresholds).
 
 ```bash
 lws lxc scale-check <instance_id> [OPTIONS]

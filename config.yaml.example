@@ -19,9 +19,9 @@ api:
   debug: false         # Set to true for development only
   log_level: "INFO"    # Log level (DEBUG, INFO, WARNING, ERROR)
   command_timeout: 3600  # Seconds the API waits for one lws command before stopping it
-  allowed_origins:     # Example: Allow localhost server and file:// origin
-    - "http://localhost:8080" # If serving ui.html via python http.server
-    - "null" # For file:// access (use with caution)
+  # Origins of other web pages that may call the API from a browser (CORS).
+  # The web UI is served by the API itself at / and needs no entry here.
+  allowed_origins: []  # e.g. ["https://dashboard.example.net"]
 
 regions:  
   eu-south-1:
