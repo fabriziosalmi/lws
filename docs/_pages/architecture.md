@@ -105,12 +105,12 @@ Manages SSH connections to Proxmox hosts with retry logic and timeout handling.
 - A fresh SSH connection per command (via `sshpass` + the system `ssh` binary — no connection reuse/pooling)
 - `StrictHostKeyChecking=accept-new`: trusts a host's key on first contact (these hosts are rarely pre-seeded into `known_hosts`), but rejects a later, changed key for a previously-known host — the actual MITM case this setting exists to catch
 - The SSH password is passed via the `SSHPASS` environment variable (`sshpass -e`), not as a `-p` argument, so it never appears in `ps`/`/proc/<pid>/cmdline` to other local users
-- Automatic retry on failure (up to 2 retries)
-- 60-second command timeout
+- Up to 2 retries when the connection itself fails (ssh exit code 255); a command that ran is never retried
+- A per-command timeout, `ssh_command_timeout` in `config.yaml` (3600 seconds by default, 0 for none)
 - Password sanitization in logs
 
 **Key Functions:**
-- `run_ssh_command(host, user, password, command)` - Execute SSH command
+- `run_ssh_command(host, user, password, command, timeout=..., input_text=None)` - Execute SSH command; `input_text` goes to the remote command's standard input, which is how secrets reach a command without appearing on its command line
 
 ### 3. Proxmox Module (`lws_core/proxmox.py`)
 
@@ -119,6 +119,7 @@ Wrappers for executing Proxmox commands locally or remotely.
 **Key Functions:**
 - `execute_command()` - Execute command locally or via SSH
 - `run_proxmox_command()` - Run Proxmox-specific commands
+- `run_argv(argv, use_local_only, host_details)` - Run one argument list, locally or over SSH. OpenSSH joins the remote arguments into a single string that the host's shell parses again, so `run_argv` quotes each argument (`shlex.join`) for the remote copy: the host receives exactly the arguments a local run would.
 
 ### 4. Utilities Module (`lws_core/utils.py`)
 
@@ -242,7 +243,8 @@ LWS organizes commands into logical groups:
 - API key authentication (timing-safe comparison; refuses to start with an empty or placeholder key)
 - SSH password passed via the `SSHPASS` environment variable, never in a log message, argv, or process list
 - SSH host key verification (`StrictHostKeyChecking=accept-new`): trust-on-first-use, but a changed key for an already-known host is rejected
-- Allow-listed input validation on values that get interpolated into remote shell/`sed`/`grep` commands (security group names, container IDs, firewall rule fields) rather than escaping after the fact
+- Allow-listed input validation on values that end up in remote commands (security group names, container IDs, firewall rule fields, storage names), on top of the quoting in `run_argv`
+- Firewall security groups are changed through the Proxmox API (`pvesh`), not by editing files under `/etc/pve/firewall`
 - CORS denies all cross-origin browser access by default; origins must be listed explicitly to allow them
 
 ### 5. Extensibility
@@ -254,11 +256,13 @@ LWS organizes commands into logical groups:
 
 ### SSH Connection Optimization
 - Connection timeout: 15 seconds
-- Command timeout: 60 seconds per attempt, which also caps long operations
-  such as package installs, backups and migrations run over SSH
-- Up to 2 retries after a timeout or a refused connection; the command is run
-  again from the start
-- ServerAliveInterval: 5 seconds
+- Command timeout: `ssh_command_timeout`, 3600 seconds by default, so that
+  backups, package installs and migrations can finish
+- Up to 2 retries when the connection is refused or times out before the
+  command starts; a command that timed out is not run again, since it may
+  already have changed the host
+- ServerAliveInterval: 5 seconds, so a dead connection is noticed long
+  before the command timeout
 
 ### Parallel Execution
 - Multiple containers can be managed in parallel

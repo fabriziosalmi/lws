@@ -82,7 +82,7 @@ so they list exactly what the example file defines.
 | `lws-metrics-monitoring` | 2048 MB | 1 | `local-lvm:20` | Prometheus for metrics and monitoring |
 | `lws-metrics-visualization` | 2048 MB | 1 | `local-lvm:20` | Grafana for data visualization |
 | `lws-mq` | 2048 MB | 1 | `local-lvm:20` | Apache ActiveMQ for messaging queues |
-| `lws-firewall` | 4096 MB | 2 | `local-lvm:20` | OPNsense for firewall and routing |
+| `lws-firewall` | 4096 MB | 2 | `local-lvm:20` | An nftables firewall and router |
 | `lws-search-analytics` | 8192 MB | 4 | `local-lvm:50` | OpenSearch for search and analytics |
 | `lws-serverless` | 2048 MB | 2 | `local-lvm:20` | OpenFaaS for serverless functions |
 | `lws-email` | 4096 MB | 2 | `local-lvm:40` | Mailcow for email management |
@@ -154,6 +154,6 @@ so they list exactly what the example file defines.
 
 
 The examples in the application table come from comments in
-`config.yaml.example`. They are starting points, not tested requirements, and
-one does not apply as written: OPNsense is based on FreeBSD and cannot run in
-an LXC container. A Linux firewall such as nftables can.
+`config.yaml.example`. They are starting points, not tested requirements.
+Containers share the Linux kernel of the host, so FreeBSD-based software such
+as OPNsense or pfSense needs a virtual machine instead.

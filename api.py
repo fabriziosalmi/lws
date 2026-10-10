@@ -17,7 +17,7 @@ from functools import wraps
 import shlex  # Import shlex for safe command splitting
 
 # Import Flask and related extensions
-from flask import Flask, request, jsonify, send_from_directory, url_for, abort  # Added abort
+from flask import Flask, request, jsonify, send_from_directory, abort
 from flask_cors import CORS
 from werkzeug.exceptions import HTTPException
 # Import Swagger UI
@@ -55,7 +55,7 @@ LWS_SCRIPT_PATH = os.path.join(os.path.dirname(__file__), 'lws.py') # Path to lw
 # callers (the normal way to use this API) are never subject to CORS, so
 # this default costs nothing for the common case while not silently opening
 # a root-equivalent API to any website until an operator opts in.
-# To allow specific origins: allowed_origins: ["http://localhost:8000", "null"]
+# To allow specific origins: allowed_origins: ["https://dashboard.example.net"]
 allowed_origins = API_CONFIG.get('allowed_origins', [])
 CORS(app, origins=allowed_origins) # Apply CORS settings
 
@@ -69,6 +69,9 @@ PLACEHOLDER_API_KEYS = {
     "your-secure-api-key",
     "changeme",
     "change-me",
+    # Shown in docs/_pages/api-reference.md until October 2026; anyone who
+    # pasted it has a key that is public.
+    "REPLACE_ME_WITH_32_PLUS_RANDOM_CHARACTERS",
 }
 
 if not API_KEY:
@@ -98,14 +101,49 @@ if len(API_KEY) < 32:
 log_level_str = API_CONFIG.get('log_level', 'INFO').upper()
 log_level = getattr(logging, log_level_str, logging.INFO)
 
+# force=True: the checks above may already have logged, and the first
+# logging call installs Python's default stderr handler, after which a plain
+# basicConfig() does nothing (no api.log, log_level ignored).
 logging.basicConfig(
     level=log_level,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
         logging.FileHandler("api.log"),
         logging.StreamHandler(sys.stdout)
-    ]
+    ],
+    force=True,
 )
+
+# How long one lws command may run before the API stops it. Backups and
+# package installs can take many minutes; `api.command_timeout` overrides it.
+COMMAND_TIMEOUT = int(API_CONFIG.get('command_timeout', 3600))
+
+_REDACTED_OPTION_WORDS = ('password', 'secret', 'token', 'key')
+
+
+def redact_for_log(cmd):
+    """A copy of `cmd` for logging, with the values of secret options replaced by ***.
+
+    `lxc run --password <root password>` would otherwise be written to
+    api.log in clear text.
+    """
+    masked = []
+    hide_next = False
+    for part in map(str, cmd):
+        if hide_next and not part.startswith('--'):
+            masked.append('***')
+            hide_next = False
+            continue
+        hide_next = False
+        if part.startswith('--') and any(w in part.lower() for w in _REDACTED_OPTION_WORDS):
+            if '=' in part:
+                masked.append(part.split('=', 1)[0] + '=***')
+            else:
+                masked.append(part)
+                hide_next = True
+            continue
+        masked.append(part)
+    return masked
 logging.info("API starting up...")
 logging.info(f"Log level set to {log_level_str}")
 
@@ -175,7 +213,10 @@ def not_found(error):
 def handle_generic_exception(e):
     """Handle unexpected errors."""
     logging.exception(f"An unexpected error occurred: {e}")
-    return jsonify({"error": "Internal Server Error", "message": str(e)}), 500
+    # The details are in api.log; they can include paths and configuration
+    # values, so they are not sent to the client.
+    return jsonify({"error": "Internal Server Error",
+                    "message": "An unexpected error occurred. See the API server log."}), 500
 
 
 # --- Helper Function to Run lws.py Commands ---
@@ -221,7 +262,11 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
     # Add options from query parameters and JSON body
     options = {}
     if request.args:
-        options.update(request.args.to_dict())
+        # Query strings carry only text: read "true"/"false" as flags, so
+        # ?force=true becomes --force instead of `--force true`.
+        for key, value in request.args.to_dict().items():
+            lowered = value.lower()
+            options[key] = True if lowered == 'true' else False if lowered == 'false' else value
     if data:
         options.update(data)
 
@@ -245,12 +290,23 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
     # For simplicity, many commands take IDs/names in the path or specific options.
     # Commands like 'exec' or 'run_docker' might need special handling for their command arguments.
 
-    logging.info(f"Executing command: {' '.join(shlex.quote(str(c)) for c in full_cmd)}") # Log the command safely
+    loggable_cmd = ' '.join(shlex.quote(str(c)) for c in redact_for_log(full_cmd))
+    logging.info(f"Executing command: {loggable_cmd}")
 
     try:
-        # Use Popen for potentially long-running commands or streaming output if needed later
-        process = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        stdout, stderr = process.communicate(timeout=300) # 5 minute timeout
+        # stdin is closed: a command that asks for confirmation (backup-restore
+        # over an existing container) is refused at once instead of waiting
+        # for an answer from the server's terminal until the timeout.
+        process = subprocess.Popen(full_cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True)
+        try:
+            stdout, stderr = process.communicate(timeout=COMMAND_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            # Stop the child instead of leaving it running unattended.
+            process.kill()
+            process.communicate()
+            logging.error(f"Command timed out after {COMMAND_TIMEOUT} seconds: {loggable_cmd}")
+            return None, f"Command execution timed out after {COMMAND_TIMEOUT} seconds.", 124
         return_code = process.returncode
 
         logging.debug(f"Command stdout: {stdout.strip()}")
@@ -260,13 +316,23 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
 
         return stdout, stderr, return_code
 
-    except subprocess.TimeoutExpired:
-        logging.error(f"Command timed out: {' '.join(shlex.quote(str(c)) for c in full_cmd)}")
-        return None, "Command execution timed out after 300 seconds.", 124 # Timeout return code
     except Exception as e:
         logging.exception(f"Error executing command: {e}")
         # Do not expose internal details to user
         return None, "Internal error executing command.", 1
+
+def region_az_options(data):
+    """--region/--az from a request body, as arguments placed before a `--`.
+
+    run_lws_command appends options at the end of the command, which for
+    commands ending in `-- <arguments>` would pass them on as arguments.
+    """
+    parts = []
+    for key in ('region', 'az'):
+        if isinstance(data.get(key), str):
+            parts += [f'--{key}', data[key]]
+    return parts
+
 
 def format_response(stdout, stderr, return_code):
     """Formats the command output into a JSON response."""
@@ -319,10 +385,10 @@ def swagger_spec():
             "version": "1.0.0",
             "description": "API for managing Linux Web Services (LXC on Proxmox)"
         },
+        # The paths below are full rules (/api/v1/...), so the server is the
+        # site root. Adding /api/v1 here made "Try it out" call /api/v1/api/v1/...
         "servers": [
-            # Determine server URL dynamically if needed, or keep relative
-             {"url": request.host_url.rstrip('/') + url_for('serve_ui').rstrip('/') + '/api/v1'}
-             # Or simply use relative: {"url": "/api/v1"}
+            {"url": request.host_url.rstrip('/')}
         ],
         "paths": {}, # Initialize empty paths
         "components": {
@@ -459,6 +525,13 @@ def serve_ui():
     # Assumes ui.html is in the same directory as api.py
     return send_from_directory(os.path.dirname(__file__), 'ui.html')
 
+
+@app.route('/vendor/<path:filename>', methods=['GET'])
+def serve_vendor(filename):
+    """Serves the self-hosted libraries ui.html loads (Font Awesome)."""
+    # send_from_directory refuses paths that escape the directory.
+    return send_from_directory(os.path.join(os.path.dirname(__file__), 'vendor'), filename)
+
 # --- Health Check ---
 @app.route('/api/v1/health', methods=['GET'])
 def health_check():
@@ -562,11 +635,14 @@ def px_list_clusters():
 @app.route('/api/v1/px/update', methods=['POST'])
 @require_api_key
 def px_update_hosts():
-    """Update all Proxmox hosts."""
-    # Note: lws.py px update doesn't take region/az, it seems to run locally?
-    # Clarify if this should target specific hosts or run where API runs.
-    # Assuming it runs where the API runs for now.
-    stdout, stderr, rc = run_lws_command(['px', 'update'])
+    """Update the packages of the configured Proxmox hosts.
+
+    Optional JSON body: {"region": ..., "az": ...} to limit the hosts. The
+    request itself is the confirmation, so --yes is always passed.
+    """
+    data = request.get_json(silent=True) or {}
+    data = {k: v for k, v in data.items() if k in ('region', 'az')}
+    stdout, stderr, rc = run_lws_command(['px', 'update', '--yes'], data)
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/cluster/start', methods=['POST'])
@@ -728,17 +804,17 @@ def px_exec():
     cmd_to_exec = data['command']
     if isinstance(cmd_to_exec, str):
         cmd_to_exec_parts = shlex.split(cmd_to_exec) # Split safely
-    elif isinstance(cmd_to_exec, list):
+    elif isinstance(cmd_to_exec, list) and all(isinstance(p, str) for p in cmd_to_exec):
         cmd_to_exec_parts = cmd_to_exec
     else:
         return jsonify({"error": "'command' must be a string or a list of strings"}), 400
+    if not cmd_to_exec_parts:
+        return jsonify({"error": "'command' is empty"}), 400
 
-    cmd_parts = ['px', 'exec'] + cmd_to_exec_parts
-    
-    # Pass region/az from data if present
-    exec_data = {k: v for k, v in data.items() if k in ['region', 'az']}
-    
-    stdout, stderr, rc = run_lws_command(cmd_parts, exec_data)
+    # lws px exec [--region R] [--az A] -- <command>: after `--`, an argument
+    # such as `-h` in `df -h` is part of the command, not an lws option.
+    cmd_parts = ['px', 'exec'] + region_az_options(data) + ['--'] + cmd_to_exec_parts
+    stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/backup', methods=['POST'])
@@ -814,7 +890,9 @@ def lxc_scale_instances():
     data = request.get_json()
     if not data or not validate_instance_ids_list(data.get('instance_ids')):
          return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
-    if not any(k in data for k in ['memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit', 'disk_read_limit', 'disk_write_limit']):
+    scale_fields = ('memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit',
+                    'disk_read_limit', 'disk_write_limit')
+    if not any(k in data for k in scale_fields):
         return jsonify({"error": "Missing scaling parameters (memory, cpulimit, etc.)"}), 400
 
     cmd_parts = ['lxc', 'scale'] + data['instance_ids']
@@ -974,22 +1052,18 @@ def lxc_exec(instance_id):
     if not data or 'command' not in data:
          return jsonify({"error": "Missing 'command' in request body"}), 400
 
-    # The command itself might have multiple parts
+    # `lws lxc exec` takes the command as one string and splits it itself.
     cmd_to_exec = data['command']
-    if isinstance(cmd_to_exec, str):
-        cmd_to_exec_parts = shlex.split(cmd_to_exec) # Split safely
-    elif isinstance(cmd_to_exec, list):
-        cmd_to_exec_parts = cmd_to_exec
-    else:
+    if isinstance(cmd_to_exec, list) and all(isinstance(p, str) for p in cmd_to_exec):
+        cmd_to_exec = shlex.join(cmd_to_exec)
+    elif not isinstance(cmd_to_exec, str):
         return jsonify({"error": "'command' must be a string or a list of strings"}), 400
+    if not cmd_to_exec.strip():
+        return jsonify({"error": "'command' is empty"}), 400
 
-    # The lws command expects the command parts after the instance ID
-    cmd_parts = ['lxc', 'exec', instance_id] + cmd_to_exec_parts
-    
-    # Pass region/az from data if present
-    exec_data = {k: v for k, v in data.items() if k in ['region', 'az']}
-
-    stdout, stderr, rc = run_lws_command(cmd_parts, exec_data)
+    # lws lxc exec [--region R] [--az A] -- <id> <command>
+    cmd_parts = ['lxc', 'exec'] + region_az_options(data) + ['--', instance_id, cmd_to_exec]
+    stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/net-check', methods=['GET'])
@@ -1092,13 +1166,15 @@ def app_run_docker(instance_id):
     elif not isinstance(docker_cmd_parts, list):
          return jsonify({"error": "'docker_command' must be a string or list"}), 400
 
-    # lws app run <id> -- <docker command parts>
-    cmd_parts = ['app', 'run', instance_id] + docker_cmd_parts
-    
-    # Pass region/az from data if present
-    run_data = {k: v for k, v in data.items() if k in ['region', 'az']}
+    if not all(isinstance(p, str) for p in docker_cmd_parts):
+        return jsonify({"error": "'docker_command' items must be strings"}), 400
 
-    stdout, stderr, rc = run_lws_command(cmd_parts, run_data)
+    # lws app run [--region R] [--az A] <id> -- <docker run arguments>
+    # Options go before `--`: everything after it is passed to docker run, so
+    # `-d` and `-p` reach Docker instead of being read as lws options.
+    cmd_parts = ['app', 'run'] + region_az_options(data) + [instance_id, '--'] + docker_cmd_parts
+
+    stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/app/deploy', methods=['POST'])

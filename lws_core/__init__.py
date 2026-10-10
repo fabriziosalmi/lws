@@ -17,7 +17,7 @@ from .ssh import run_ssh_command, run_scp_command
 from .config import config, load_config, validate_config, mask_sensitive_info, _ensure_config_loaded
 
 # Import proxmox (depends on ssh)
-from .proxmox import execute_command, run_proxmox_command
+from .proxmox import execute_command, run_proxmox_command, run_argv
 
 # Import utils last (depends on config and proxmox)
 from .utils import (
@@ -44,6 +44,7 @@ __all__ = [
     'run_scp_command',
     'execute_command',
     'run_proxmox_command',
+    'run_argv',
     'is_service_active',
     'command_alias',
     'process_instance_command',

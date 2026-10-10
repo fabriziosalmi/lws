@@ -217,3 +217,127 @@ class TestApiKeyAuthentication:
     def test_health_check_needs_no_key(self, client):
         resp = client.get("/api/v1/health")
         assert resp.status_code == 200
+
+
+def _popen_ok():
+    process = Mock()
+    process.communicate.return_value = ("ok", "")
+    process.returncode = 0
+    return process
+
+
+class TestSecretsAndErrors:
+    @pytest.mark.unit
+    def test_passwords_are_masked_in_the_logged_command(self, api_module):
+        masked = api_module.redact_for_log(
+            ["lws.py", "lxc", "run", "--password", "hunter2", "--api-key=abc", "--size", "small"])
+        assert "hunter2" not in masked and "abc" not in " ".join(masked)
+        assert masked[masked.index("--password") + 1] == "***"
+        assert "--api-key=***" in masked
+
+    @pytest.mark.unit
+    def test_logged_command_never_contains_the_password(self, api_module, caplog):
+        with api_module.app.test_request_context("/"):
+            with patch("subprocess.Popen", return_value=_popen_ok()), caplog.at_level("INFO"):
+                api_module.run_lws_command(["lxc", "run"], {"password": "hunter2", "image_id": "x"})
+        assert "hunter2" not in caplog.text
+
+    @pytest.mark.unit
+    def test_timed_out_child_is_killed(self, api_module):
+        import subprocess as sp
+        process = Mock()
+        process.communicate.side_effect = [sp.TimeoutExpired(cmd="x", timeout=1), ("", "")]
+        with api_module.app.test_request_context("/"):
+            with patch("subprocess.Popen", return_value=process):
+                stdout, stderr, rc = api_module.run_lws_command(["px", "list"])
+        assert rc == 124
+        process.kill.assert_called_once()
+
+    @pytest.mark.unit
+    def test_query_string_booleans_become_flags(self, api_module):
+        with api_module.app.test_request_context("/?force=true&region=eu-south-1"):
+            with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+                api_module.run_lws_command(["px", "security-group-rm", "web"])
+        cmd = popen.call_args[0][0]
+        assert "--force" in cmd and "true" not in cmd
+        assert cmd[cmd.index("--region") + 1] == "eu-south-1"
+
+    @pytest.mark.unit
+    def test_the_old_documentation_placeholder_is_refused(self, api_module):
+        assert "REPLACE_ME_WITH_32_PLUS_RANDOM_CHARACTERS" in api_module.PLACEHOLDER_API_KEYS
+
+    @pytest.mark.unit
+    def test_unexpected_errors_do_not_reach_the_client(self, api_module):
+        with api_module.app.app_context():
+            body, status = api_module.handle_generic_exception(RuntimeError("/etc/secret/path leaked"))
+        assert status == 500
+        assert "leaked" not in body.get_data(as_text=True)
+
+
+class TestEndpoints:
+    @pytest.mark.unit
+    def test_app_run_puts_docker_arguments_after_the_separator(self, client, api_key):
+        with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+            response = client.post("/api/v1/lxc/instances/101/app/run",
+                                   json={"docker_command": "-d -p 80:80 nginx", "region": "eu-south-1"},
+                                   headers={"X-API-Key": api_key})
+        assert response.status_code == 200
+        cmd = popen.call_args[0][0]
+        i = cmd.index("--")
+        assert cmd[i + 1:] == ["-d", "-p", "80:80", "nginx"]
+        assert cmd[cmd.index("--region") + 1] == "eu-south-1" and cmd.index("--region") < i
+
+    @pytest.mark.unit
+    def test_lxc_exec_sends_the_command_as_one_argument(self, client, api_key):
+        for command in ("df -h /", ["df", "-h", "/"]):
+            with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+                response = client.post("/api/v1/lxc/instances/100/exec",
+                                       json={"command": command, "region": "eu-south-1"},
+                                       headers={"X-API-Key": api_key})
+            assert response.status_code == 200
+            cmd = popen.call_args[0][0]
+            assert cmd[cmd.index("--"):] == ["--", "100", "df -h /"]
+            assert cmd.index("--region") < cmd.index("--")
+
+    @pytest.mark.unit
+    def test_px_exec_puts_the_command_after_the_separator(self, client, api_key):
+        with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+            response = client.post("/api/v1/px/exec", json={"command": "df -h /var/lib/vz", "az": "az1"},
+                                   headers={"X-API-Key": api_key})
+        assert response.status_code == 200
+        cmd = popen.call_args[0][0]
+        assert cmd[cmd.index("--"):] == ["--", "df", "-h", "/var/lib/vz"]
+        assert cmd.index("--az") < cmd.index("--")
+
+    @pytest.mark.unit
+    def test_exec_rejects_an_empty_command(self, client, api_key):
+        for url in ("/api/v1/px/exec", "/api/v1/lxc/instances/100/exec"):
+            response = client.post(url, json={"command": "  "}, headers={"X-API-Key": api_key})
+            assert response.status_code == 400
+
+    @pytest.mark.unit
+    def test_commands_cannot_wait_for_an_answer_on_stdin(self, api_module):
+        """A confirmation prompt must fail at once, not hang until the timeout."""
+        import subprocess as sp
+        with api_module.app.test_request_context("/"):
+            with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+                api_module.run_lws_command(["lxc", "backup-restore", "100"])
+        assert popen.call_args.kwargs["stdin"] is sp.DEVNULL
+
+    @pytest.mark.unit
+    def test_px_update_is_confirmed_by_the_request(self, client, api_key):
+        with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+            client.post("/api/v1/px/update", json={"region": "eu-south-1"}, headers={"X-API-Key": api_key})
+        cmd = popen.call_args[0][0]
+        assert "--yes" in cmd
+
+    @pytest.mark.unit
+    def test_swagger_server_is_the_site_root(self, client):
+        spec = client.get("/api/v1/swagger.json").get_json()
+        assert not spec["servers"][0]["url"].endswith("/api/v1")
+
+    @pytest.mark.unit
+    def test_ui_assets_are_served(self, client):
+        response = client.get("/vendor/font-awesome/all.min.css")
+        assert response.status_code == 200
+        assert client.get("/vendor/../api.py").status_code == 404

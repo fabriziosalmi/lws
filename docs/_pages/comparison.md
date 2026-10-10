@@ -60,11 +60,6 @@ can be used side by side with LWS.
 - **Every container option.** `pct` on the host exposes every option of
   Proxmox containers. LWS covers the common ones; anything else can be run
   through `lws px exec`.
-- **Long-running operations over SSH.** Each remote command LWS runs over SSH
-  stops after 60 seconds and is retried up to twice (`lws_core/ssh.py`). Slow
-  operations, such as large backups or package installs, are better run on the
-  host. With `use_local_only: true` in `config.yaml` and LWS installed on the
-  Proxmox host, most commands run locally, without that limit.
 
 ## Using LWS next to other tools
 

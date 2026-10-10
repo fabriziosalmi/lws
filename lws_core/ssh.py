@@ -11,8 +11,46 @@ import logging
 import subprocess
 import shutil
 
+# How long one remote command may run, in seconds. Backups, package installs
+# and migrations legitimately take minutes, so this is a safety net for a
+# command that hangs, not a limit for normal work. A dead connection is
+# detected sooner by ServerAliveInterval (5 s x the default 3 probes).
+# `ssh_command_timeout` in config.yaml overrides it; 0 or null disables it.
+DEFAULT_COMMAND_TIMEOUT = 3600
 
-def run_ssh_command(host, user, ssh_password, command):
+_USE_CONFIG = object()
+
+
+def configured_command_timeout():
+    """The per-command SSH timeout from config.yaml, or the default."""
+    try:
+        from .config import config
+        value = config.get('ssh_command_timeout', DEFAULT_COMMAND_TIMEOUT)
+    except Exception:
+        return DEFAULT_COMMAND_TIMEOUT
+    if value in (None, 0, "0"):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        logging.error(f"❌ Invalid ssh_command_timeout {value!r}; using {DEFAULT_COMMAND_TIMEOUT} seconds.")
+        return DEFAULT_COMMAND_TIMEOUT
+    return value if value > 0 else None
+
+
+def _is_connection_failure(result):
+    """True when ssh itself could not connect, so the command never started.
+
+    ssh exits with 255 for its own errors. Retrying anything else could run a
+    remote command twice: a command's own output may well mention a refused
+    connection.
+    """
+    return result.returncode == 255 and (
+        "Connection refused" in result.stderr or "Connection timed out" in result.stderr
+    )
+
+
+def run_ssh_command(host, user, ssh_password, command, timeout=_USE_CONFIG, input_text=None):
     """
     Runs an SSH command on a remote host, with error handling and logging.
 
@@ -21,6 +59,14 @@ def run_ssh_command(host, user, ssh_password, command):
     - user: SSH username
     - ssh_password: SSH password
     - command: List containing the command and its arguments
+    - timeout: Seconds the command may run; None for no limit. Defaults to
+      `ssh_command_timeout` from config.yaml, or DEFAULT_COMMAND_TIMEOUT.
+    - input_text: Text sent to the remote command's standard input, for
+      secrets that must not appear on the command line or in the logs.
+
+    A failed connection is retried up to twice. A command that started and
+    then timed out is not retried: it may have changed state on the host, and
+    running it again (a second vzdump, a second apt-get) is not safe.
 
     Returns:
     - subprocess.CompletedProcess object with stdout and stderr
@@ -60,6 +106,9 @@ def run_ssh_command(host, user, ssh_password, command):
         f"{user}@{host}"
     ] + command
 
+    if timeout is _USE_CONFIG:
+        timeout = configured_command_timeout()
+
     while retry_count <= max_retries:
         try:
             # Log the sanitized command instead of the real command with the password
@@ -69,7 +118,8 @@ def run_ssh_command(host, user, ssh_password, command):
                 logging.debug(f"🔎 Executing SSH command: {' '.join(sanitized_ssh_cmd)}")
 
             # Execute the command
-            result = subprocess.run(ssh_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60, env=ssh_env)
+            result = subprocess.run(ssh_cmd, input=input_text, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    text=True, timeout=timeout, env=ssh_env)
 
             # Check if the command succeeded
             if result.returncode == 0:
@@ -81,8 +131,8 @@ def run_ssh_command(host, user, ssh_password, command):
             logging.debug(f"❌ SSH command failed with return code {result.returncode}: {' '.join(sanitized_ssh_cmd)}")
             logging.debug(f"❌ Error output: {result.stderr}")
 
-            # Check for specific SSH errors that would benefit from retry
-            if "Connection refused" in result.stderr or "Connection timed out" in result.stderr:
+            # Retry only when ssh could not connect, so the command never ran
+            if _is_connection_failure(result):
                 retry_count += 1
                 if retry_count <= max_retries:
                     logging.debug(f"🔄 Retrying SSH connection to {host} after connection issue ({retry_count}/{max_retries})")
@@ -92,21 +142,15 @@ def run_ssh_command(host, user, ssh_password, command):
             # For other errors, don't retry - just return the error
             return result
 
-        except subprocess.TimeoutExpired as te:
-            logging.error(f"❌ SSH command timed out after 60 seconds: {' '.join(sanitized_ssh_cmd)}")
-            retry_count += 1
-            if retry_count <= max_retries:
-                logging.debug(f"🔄 Retrying SSH command after timeout ({retry_count}/{max_retries})")
-                time.sleep(2)
-                continue
-            # Create a dummy result for the timeout
-            error_result = subprocess.CompletedProcess(
+        except subprocess.TimeoutExpired:
+            # Not retried: the command was running and may have changed state.
+            logging.error(f"❌ SSH command timed out after {timeout:g} seconds: {' '.join(sanitized_ssh_cmd)}")
+            return subprocess.CompletedProcess(
                 args=sanitized_ssh_cmd,
                 returncode=124,  # Common timeout exit code
                 stdout="",
-                stderr=f"Error: SSH command timed out after 60 seconds"
+                stderr=f"Error: SSH command timed out after {timeout:g} seconds"
             )
-            return error_result
         except Exception as e:
             logging.error(f"❌ An unexpected error occurred while running SSH command: {str(e)}")
             # Create a dummy result with the error info
@@ -123,9 +167,9 @@ def run_scp_command(ssh_password, *scp_args, timeout=None):
     """
     Runs `scp` with the given arguments, with the password passed via the
     SSHPASS environment variable and host-key verification enabled - the
-    same security properties as run_ssh_command, but without its fixed
-    60-second timeout or retry-on-connection-refused logic: a file transfer
-    can legitimately take far longer than a status command, and blindly
+    same security properties as run_ssh_command, but without its command
+    timeout or retry-on-connection-refused logic: a file transfer can
+    legitimately take far longer than a status command, and blindly
     retrying a partially-completed transfer is not safe in general.
 
     Parameters:

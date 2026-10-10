@@ -88,7 +88,7 @@ LWS is a command-line interface (CLI) tool for managing LXC containers on Proxmo
 
 - **Container Operations**: Create, start, stop, reboot, and destroy containers
 - **Resource Scaling**: Dynamically adjust CPU, memory, and storage resources
-- **Snapshot Management**: Create, list, and restore container snapshots
+- **Snapshot Management**: Create, list, and delete container snapshots
 - **Network Configuration**: Configure network settings for containers
 - **Volume Management**: Attach and detach storage volumes to containers
 - **Container Migration**: Migrate containers between Proxmox hosts
@@ -266,11 +266,11 @@ lws lxc status 100
 #### Execute Command in Container
 ```bash
 lws lxc exec 100 "apt-get update"
-lws lxc exec 100 "apt-get -y upgrade"
+lws lxc exec 100 "sh -c 'apt-get update && apt-get -y upgrade'"
 ```
 
-Run one command per call: over SSH, shell operators such as `&&` or `|` are
-read by the Proxmox host's shell and run on the host, not in the container.
+The command runs in the container without a shell. For `&&`, `|` or
+redirections, wrap it in `sh -c '...'` as in the second line.
 
 #### Create and Manage Snapshots
 ```bash
@@ -330,7 +330,7 @@ lws lxc backup-create 100 --download
 
 #### Restore Container from Backup
 ```bash
-lws lxc backup-restore 100 --backup-file backup-100-20230915-123456.tar.gz
+lws lxc backup-restore 100 --backup-file /var/lib/vz/dump/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst
 ```
 
 ### Docker Management
@@ -357,7 +357,7 @@ lws app update 100 docker-compose.yml
 
 #### View Docker Logs
 ```bash
-lws app logs 100 nginx --follow
+lws app logs 100 nginx --tail 100
 ```
 
 #### List Docker Containers
@@ -445,7 +445,7 @@ A simple web interface is provided to interact with the API.
 1.  **Ensure the API server (`api.py`) is running.**
 2.  **Access the UI:**
     *   Navigate your browser to the root URL of the running API server (e.g., `http://localhost:8080/`). The API server serves `ui.html` directly.
-    *   Alternatively, open the `ui.html` file directly in your browser (`file:///.../ui.html`). **Note:** Direct file access might cause CORS issues when making API calls, depending on your browser and the API's `allowed_origins` configuration in `config.yaml`. Serving the UI via the API is recommended.
+    *   Opening `ui.html` from disk (`file:///.../ui.html`) does not work: the page calls the API at a relative address.
 3.  **Enter your API Key** in the input field and use the buttons to trigger API calls. Responses will be displayed in a formatted view.
 
 ### Swagger Documentation

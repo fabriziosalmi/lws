@@ -84,10 +84,12 @@ has no TLS and no rate limiting of its own. By default it listens on
 `127.0.0.1`. To reach it from elsewhere, keep it on a private network or VPN,
 or put it behind a reverse proxy that adds TLS and its own authentication.
 
-## Why does a long operation fail after a minute?
+## Why did a long operation stop with a timeout?
 
-Each remote command run over SSH is stopped after 60 seconds and retried up to
-twice. See [Troubleshooting](troubleshooting.html#error-ssh-command-timed-out-after-60-seconds).
+LWS stops a remote command that runs longer than `ssh_command_timeout`
+seconds, 3600 by default, and does not run it again. Raise the value in
+`config.yaml`, or set it to `0` for no limit. See
+[Troubleshooting](troubleshooting.html#error-ssh-command-timed-out-after-3600-seconds).
 
 ## Where do I report a bug?
 

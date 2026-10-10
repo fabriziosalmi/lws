@@ -414,3 +414,49 @@ class TestRunProxmoxCommand:
             
             # Verify execute_command was called with use_local_only=True
             assert mock_exec.call_args[0][1] is True  # use_local_only parameter
+
+
+class TestRunArgv:
+    """run_argv gives the remote shell exactly the argument list, as subprocess does locally."""
+
+    @pytest.mark.unit
+    def test_remote_command_is_quoted_as_one_string(self):
+        from lws_core.proxmox import run_argv
+        host = {"host": "pve1", "user": "root", "ssh_password": "pw"}
+        with patch('lws_core.proxmox.run_ssh_command') as mock_ssh:
+            run_argv(["pct", "exec", "100", "--", "sh", "-c", "apt-get update && apt-get -y upgrade"], False, host)
+        command = mock_ssh.call_args.args[3]
+        assert command == ["pct exec 100 -- sh -c 'apt-get update && apt-get -y upgrade'"]
+
+    @pytest.mark.unit
+    def test_input_text_reaches_stdin_and_not_the_command(self):
+        from lws_core.proxmox import run_argv
+        host = {"host": "pve1", "user": "root", "ssh_password": "pw"}
+        with patch('lws_core.proxmox.run_ssh_command') as mock_ssh:
+            run_argv(["pct", "exec", "100", "--", "chpasswd"], False, host, input_text="root:s3cret\n")
+        assert mock_ssh.call_args.kwargs == {"input_text": "root:s3cret\n"}
+        assert "s3cret" not in mock_ssh.call_args.args[3][0]
+        with patch('subprocess.run') as mock_run:
+            run_argv(["chpasswd"], True, None, input_text="root:s3cret\n")
+        assert mock_run.call_args.kwargs["input"] == "root:s3cret\n"
+
+    @pytest.mark.unit
+    def test_shell_operators_in_arguments_stay_arguments(self):
+        """`&&` passed as an argument must not become a command separator on the host."""
+        import shlex
+        from lws_core.proxmox import run_argv
+        host = {"host": "pve1", "user": "root", "ssh_password": "pw"}
+        argv = ["pct", "exec", "100", "--", "echo", "a", "&&", "reboot"]
+        with patch('lws_core.proxmox.run_ssh_command') as mock_ssh:
+            run_argv(argv, False, host)
+        remote = mock_ssh.call_args.args[3][0]
+        assert shlex.split(remote) == argv
+        assert "'&&'" in remote
+
+    @pytest.mark.unit
+    def test_local_command_is_the_plain_list(self):
+        from lws_core.proxmox import run_argv
+        with patch('lws_core.proxmox.subprocess.run') as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="", stderr="")
+            run_argv(["pct", "list"], True, None)
+        assert mock_run.call_args.args[0] == ["pct", "list"]

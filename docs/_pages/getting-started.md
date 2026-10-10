@@ -109,12 +109,11 @@ python3 lws.py lxc show
 
 ```bash
 python3 lws.py lxc exec <container-id> "apt-get update"
-python3 lws.py lxc exec <container-id> "apt-get -y upgrade"
+python3 lws.py lxc exec <container-id> "sh -c 'apt-get update && apt-get -y upgrade'"
 ```
 
-Run one command per call: shell operators such as `&&` or `|` in the command
-are read by the Proxmox host's shell and run on the host, not in the
-container.
+The command runs in the container without a shell. For `&&`, `|` or
+redirections, wrap it in `sh -c '...'` as in the second line.
 
 ## Using the API Server
 

@@ -111,11 +111,11 @@ create the container on the node that holds the highest IDs.
 
 With `use_local_only: true`, LWS runs most commands directly on the machine it
 runs on instead of over SSH. Use this when LWS is installed on a Proxmox host
-and manages only that host: there is no SSH connection and no 60-second limit
-per remote command.
+and manages only that host: there is no SSH connection and no
+`ssh_command_timeout` per remote command.
 
 Some commands always connect over SSH even in this mode, among them
-`px status`, `px exec`, `px backup-lxc`, `lxc migrate` and the security group
+`px status`, `px exec`, `px reboot`, `px backup-lxc` and the `px cluster-*`
 commands. They still need the host's entry in `regions`.
 
 ## Moving containers between hosts
@@ -131,8 +131,15 @@ lws lxc migrate 105 --target-host pve2 --region eu-south-1 --az az1
 (`lws px clusters` shows the cluster members), not a zone from `config.yaml`.
 Hosts that are not in the same cluster cannot be targets.
 
-The command runs `pct migrate` on the source host without `--restart`, and
-Proxmox does not move a running container without it, so stop the container
-first. The migration runs over SSH, which LWS stops after 60 seconds: for a
-container whose disk takes longer than that to copy, run `pct migrate` on the
-host or use the Proxmox web interface.
+The command runs `pct migrate` on the source host. Proxmox moves a running
+container only with a restart: pass `--restart` to stop it, move it and start
+it again on the target, or stop it yourself first. `--target-storage` puts
+its disks on another storage of the target node:
+
+```bash
+lws lxc migrate 105 --target-host pve2 --restart --target-storage local-zfs
+```
+
+The migration copies the container's disks between the nodes. LWS waits for
+it up to `ssh_command_timeout` seconds (3600 by default); raise the value in
+`config.yaml` for containers whose disks take longer to copy.
