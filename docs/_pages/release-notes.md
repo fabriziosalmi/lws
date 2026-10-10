@@ -62,6 +62,10 @@ Merged into `main` after 1.4.3:
   (`--enable-nesting` sets them). `app deploy` keeps each Compose file in
   `/opt/lws/apps/<name>/`, and `--auto-start` installs a systemd unit inside
   the container instead of on the host.
+- **`lxc run --password`** no longer passes the root password to
+  `pct create`, where it showed in the Proxmox host's process list and in
+  LWS's debug logs. The password is set with `chpasswd` inside the
+  container once it runs, read from standard input.
 - **Other commands.** `lxc run` gains `--features` and `--unprivileged`;
   `lxc clone` removes its temporary snapshot; `lxc migrate` gains
   `--restart` and `--target-storage`; `lxc health-check --fix` no longer runs

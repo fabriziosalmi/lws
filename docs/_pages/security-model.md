@@ -133,10 +133,12 @@ is not a sandbox, since `/api/v1/px/exec` still runs any command on the host.
   lines that `ps` shows to other users. The environment of a process is
   readable by its own account and root only.
 - LWS does not write the SSH password to its logs.
-- `lxc run --password` passes the container's root password to
-  `pct create` as an argument: it is visible in the host's process list while
-  the command runs, and stays in the shell history of the machine you typed
-  it on. Leave it out when you do not need it.
+- `lxc run --password` does not pass the container's root password to
+  `pct create`. Once the container runs, LWS sets it with `chpasswd` inside
+  the container, which reads it from standard input, so it appears neither
+  in the Proxmox host's process list nor in LWS's logs. It is still an
+  argument of `lws` itself, so it stays in the shell history and the process
+  list of the machine you typed it on. Leave it out when you do not need it.
 - The API logs each command before running it, with the values of options
   whose name contains `password`, `secret`, `token` or `key` replaced by
   `***`. The text of `exec` commands is logged as sent, and at
