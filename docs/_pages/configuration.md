@@ -138,11 +138,16 @@ API at a relative address. Configuration files from earlier versions may list
 `"null"`, the origin browsers give to pages opened from a file or sandboxed;
 remove it.
 
+Before exposing the API beyond the machine it runs on, read
+[Running the API in production](api-in-production.html) and the
+[Security model](security-model.html).
+
 ## Scaling thresholds
 
 `lxc scale-check` reads the `scaling` section to suggest new CPU, memory and
 disk values for a container. Nothing runs automatically: the command prints
 suggestions, and `lxc scale` applies the values you give it.
+[Scaling containers](scaling.html) works through an example.
 
 ```yaml
 scaling:

@@ -58,8 +58,9 @@ body_class: home
 
       <div class="workflow-example">
         <h3>Example: one container running a Compose application</h3>
-        <pre><code><span class="code-comment"># 1. Create an LXC container (prints the assigned instance ID)</span>
-<span class="code-command">lws lxc run</span> --size lws-web --hostname web \
+        <pre><code><span class="code-comment"># 1. Create an LXC container with the nesting feature Docker needs
+#    (prints the assigned instance ID)</span>
+<span class="code-command">lws lxc run</span> --size lws-web --hostname web --features nesting=1 \
   --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst
 
 <span class="code-comment"># 2. Install Docker in it (replace 100 with the ID from step 1)</span>
@@ -104,8 +105,8 @@ body_class: home
           <p>A Flask API covers most CLI commands, with an API key, Swagger documentation and a minimal web UI.</p>
         </li>
         <li class="feature-card">
-          <h3>Retries and timeouts</h3>
-          <p>Remote commands run over SSH with automatic retries and timeouts.</p>
+          <h3>Safe retries and timeouts</h3>
+          <p>A failed SSH connection is retried; a command that already ran is never repeated. Long operations get up to an hour, configurable.</p>
         </li>
       </ul>
     </div>
@@ -140,17 +141,27 @@ python3 lws.py lxc run --size small \
   <section class="docs-links" aria-labelledby="docs-title">
     <div class="container">
       <h2 id="docs-title" class="section-title">Documentation</h2>
+      <h3 class="doc-group-title">Guides</h3>
       <ul class="doc-grid">
-        <li><a class="doc-card" href="{{ '/pages/getting-started.html' | relative_url }}"><h3>Getting Started</h3><p>Install LWS, configure your hosts and create a first container.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/configuration.html' | relative_url }}"><h3>Configuration</h3><p>Every setting in config.yaml: hosts, regions, sizes and the API key.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/cli-reference.html' | relative_url }}"><h3>CLI Reference</h3><p>All commands for hosts, containers and Docker apps, with examples.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/api-reference.html' | relative_url }}"><h3>API Reference</h3><p>REST endpoints, authentication, request and response formats.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/multiple-hosts.html' | relative_url }}"><h3>Several Proxmox hosts</h3><p>Group hosts into regions and zones and pick one per command.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/instance-sizes.html' | relative_url }}"><h3>Instance sizes</h3><p>The memory, CPU and disk presets behind <code>--size</code>.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/comparison.html' | relative_url }}"><h3>LWS compared</h3><p>LWS next to pct, the Proxmox API, Ansible and Terraform.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/troubleshooting.html' | relative_url }}"><h3>Troubleshooting</h3><p>Causes and fixes for common SSH, configuration and API errors.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/architecture.html' | relative_url }}"><h3>Architecture</h3><p>How the CLI, the core modules and the API fit together.</p></a></li>
-        <li><a class="doc-card" href="{{ '/pages/contributing.html' | relative_url }}"><h3>Contributing</h3><p>Development setup, tests and how to open a pull request.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/getting-started.html' | relative_url }}"><h4>Getting Started</h4><p>Install LWS, configure your hosts and create a first container.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/docker-in-lxc.html' | relative_url }}"><h4>Docker in LXC</h4><p>Enable nesting, install Docker and deploy a Compose application in a container.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/snapshots-and-backups.html' | relative_url }}"><h4>Snapshots and backups</h4><p>Snapshots before changes, vzdump backups, restores and retention.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/firewall-security-groups.html' | relative_url }}"><h4>Firewall security groups</h4><p>Group firewall rules once and attach them to containers.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/scaling.html' | relative_url }}"><h4>Scaling containers</h4><p>CPU, memory, disk and network limits, and how <code>scale-check</code> suggests them.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/multiple-hosts.html' | relative_url }}"><h4>Several Proxmox hosts</h4><p>Group hosts into regions and zones and pick one per command.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/api-in-production.html' | relative_url }}"><h4>API in production</h4><p>Reverse proxy, TLS, a systemd unit and the Docker image.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/security-model.html' | relative_url }}"><h4>Security model</h4><p>What LWS can reach, where secrets live and how input is checked.</p></a></li>
+      </ul>
+      <h3 class="doc-group-title">Reference and help</h3>
+      <ul class="doc-grid">
+        <li><a class="doc-card" href="{{ '/pages/configuration.html' | relative_url }}"><h4>Configuration</h4><p>Every setting in config.yaml: hosts, regions, sizes and the API key.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/cli-reference.html' | relative_url }}"><h4>CLI Reference</h4><p>All commands for hosts, containers and Docker apps, with examples.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/api-reference.html' | relative_url }}"><h4>API Reference</h4><p>REST endpoints, authentication, request and response formats.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/instance-sizes.html' | relative_url }}"><h4>Instance sizes</h4><p>The memory, CPU and disk presets behind <code>--size</code>.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/comparison.html' | relative_url }}"><h4>LWS compared</h4><p>LWS next to pct, the Proxmox API, Ansible and Terraform.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/troubleshooting.html' | relative_url }}"><h4>Troubleshooting</h4><p>Causes and fixes for common SSH, configuration and API errors.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/architecture.html' | relative_url }}"><h4>Architecture</h4><p>How the CLI, the core modules and the API fit together.</p></a></li>
+        <li><a class="doc-card" href="{{ '/pages/contributing.html' | relative_url }}"><h4>Contributing</h4><p>Development setup, tests and how to open a pull request.</p></a></li>
       </ul>
     </div>
   </section>
