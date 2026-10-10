@@ -12,8 +12,14 @@ Tests cover:
 import pytest
 import subprocess
 import time
+import importlib
 from unittest.mock import patch, Mock, MagicMock, call
 from lws_core.ssh import run_ssh_command, run_scp_command
+
+# The module, not the `config` dict that lws_core re-exports under the same
+# name: on Python 3.10, patch('lws_core.config.config') resolves
+# `lws_core.config` to that dict and fails.
+CONFIG_MODULE = importlib.import_module('lws_core.config')
 
 
 class TestRunSSHCommand:
@@ -262,7 +268,7 @@ class TestRunSSHCommand:
         """Without ssh_command_timeout in config.yaml, a command may run for an hour."""
         ok = Mock(returncode=0, stdout="", stderr="")
         with patch('subprocess.run', return_value=ok) as mock_run, \
-                patch('lws_core.config.config', {}):
+                patch.object(CONFIG_MODULE, 'config', {}):
             run_ssh_command("h", "root", "pw", ["pct", "list"])
         assert mock_run.call_args.kwargs["timeout"] == 3600
 
@@ -272,7 +278,7 @@ class TestRunSSHCommand:
     def test_timeout_from_config(self, mock_sshpass_installed, configured, expected):
         ok = Mock(returncode=0, stdout="", stderr="")
         with patch('subprocess.run', return_value=ok) as mock_run, \
-                patch('lws_core.config.config', {"ssh_command_timeout": configured}):
+                patch.object(CONFIG_MODULE, 'config', {"ssh_command_timeout": configured}):
             run_ssh_command("h", "root", "pw", ["pct", "list"])
         assert mock_run.call_args.kwargs["timeout"] == expected
 
