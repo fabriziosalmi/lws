@@ -56,22 +56,27 @@ LWS logs in to Proxmox hosts with a password through `sshpass`. Install it on
 the machine that runs LWS: `apt install sshpass` on Debian and Ubuntu,
 `dnf install sshpass` on Fedora.
 
-### `Error: SSH command timed out after 60 seconds`
+### `Error: SSH command timed out after 3600 seconds`
 
-Every remote command LWS runs over SSH is stopped after 60 seconds. On a
-timeout, LWS runs the same command again, up to twice more, and then gives up
-with this message. Commands that legitimately take longer, such as installing
-packages in a container, large backups or migrations, cannot finish this way.
+LWS stops a remote command that is still running after
+`ssh_command_timeout` seconds (3600 by default, see
+[Configuration](configuration.html#general-settings)). The limit is there to
+catch a command that hangs; backups, package installs and migrations normally
+finish well within it.
 
-What to do:
+A command that timed out is not run again: it may have changed something on
+the host before it was stopped. Check the state of the host or container
+before you retry it by hand.
 
-- Run the long step on the Proxmox host yourself, with `pct` or the web
-  interface.
-- Or install LWS on the Proxmox host and set `use_local_only: true` in its
-  `config.yaml`: most commands then run locally, with no time limit.
+If your operations legitimately take longer, raise the limit, or set it to
+`0` to remove it:
 
-Because the command is started again after a timeout, check the container's
-state before retrying by hand.
+```yaml
+ssh_command_timeout: 7200
+```
+
+Only a connection that fails before the command starts (`Connection refused`
+or `Connection timed out` from SSH itself) is retried, up to twice.
 
 ### `Host key verification failed`
 
@@ -111,8 +116,13 @@ lws px exec -- df -h /var/lib/vz
 lws lxc exec 100 "df -h /"
 ```
 
-Keep it to one command. Over SSH, shell operators such as `&&`, `;` or `|`
-inside that string are run by the Proxmox host's shell, on the host.
+The string is split into words the way a shell would split it, and the
+command runs in the container without a shell. To use `&&`, `|`, `>` or
+variables, pass a shell explicitly:
+
+```bash
+lws lxc exec 100 "sh -c 'apt-get update && apt-get -y upgrade'"
+```
 
 ### `invalid instance id: ...` and other `invalid ...` messages
 
@@ -154,10 +164,12 @@ the folder that contains both:
 cd /path/to/lws && python3 api.py
 ```
 
-### `Command execution timed out after 300 seconds.`
+### `Command execution timed out after 3600 seconds.`
 
-The API stops waiting for a command after five minutes. The command may still
-be running on the host; check its state before sending the request again.
+The API stops an `lws` command that runs longer than `api.command_timeout`
+seconds (3600 by default). The remote step it started on the host may still be
+running; check the host or container before sending the request again, and
+raise `api.command_timeout` if your operations need longer.
 
 ## Logs
 

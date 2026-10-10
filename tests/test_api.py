@@ -229,7 +229,8 @@ def _popen_ok():
 class TestSecretsAndErrors:
     @pytest.mark.unit
     def test_passwords_are_masked_in_the_logged_command(self, api_module):
-        masked = api_module.mask_secret_options(["lws.py", "lxc", "run", "--password", "hunter2", "--api-key=abc", "--size", "small"])
+        masked = api_module.mask_secret_options(
+            ["lws.py", "lxc", "run", "--password", "hunter2", "--api-key=abc", "--size", "small"])
         assert "hunter2" not in masked and "abc" not in " ".join(masked)
         assert masked[masked.index("--password") + 1] == "***"
         assert "--api-key=***" in masked
@@ -285,6 +286,43 @@ class TestEndpoints:
         i = cmd.index("--")
         assert cmd[i + 1:] == ["-d", "-p", "80:80", "nginx"]
         assert cmd[cmd.index("--region") + 1] == "eu-south-1" and cmd.index("--region") < i
+
+    @pytest.mark.unit
+    def test_lxc_exec_sends_the_command_as_one_argument(self, client, api_key):
+        for command in ("df -h /", ["df", "-h", "/"]):
+            with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+                response = client.post("/api/v1/lxc/instances/100/exec",
+                                       json={"command": command, "region": "eu-south-1"},
+                                       headers={"X-API-Key": api_key})
+            assert response.status_code == 200
+            cmd = popen.call_args[0][0]
+            assert cmd[cmd.index("--"):] == ["--", "100", "df -h /"]
+            assert cmd.index("--region") < cmd.index("--")
+
+    @pytest.mark.unit
+    def test_px_exec_puts_the_command_after_the_separator(self, client, api_key):
+        with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+            response = client.post("/api/v1/px/exec", json={"command": "df -h /var/lib/vz", "az": "az1"},
+                                   headers={"X-API-Key": api_key})
+        assert response.status_code == 200
+        cmd = popen.call_args[0][0]
+        assert cmd[cmd.index("--"):] == ["--", "df", "-h", "/var/lib/vz"]
+        assert cmd.index("--az") < cmd.index("--")
+
+    @pytest.mark.unit
+    def test_exec_rejects_an_empty_command(self, client, api_key):
+        for url in ("/api/v1/px/exec", "/api/v1/lxc/instances/100/exec"):
+            response = client.post(url, json={"command": "  "}, headers={"X-API-Key": api_key})
+            assert response.status_code == 400
+
+    @pytest.mark.unit
+    def test_commands_cannot_wait_for_an_answer_on_stdin(self, api_module):
+        """A confirmation prompt must fail at once, not hang until the timeout."""
+        import subprocess as sp
+        with api_module.app.test_request_context("/"):
+            with patch("subprocess.Popen", return_value=_popen_ok()) as popen:
+                api_module.run_lws_command(["lxc", "backup-restore", "100"])
+        assert popen.call_args.kwargs["stdin"] is sp.DEVNULL
 
     @pytest.mark.unit
     def test_px_update_is_confirmed_by_the_request(self, client, api_key):

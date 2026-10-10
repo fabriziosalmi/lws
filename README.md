@@ -266,11 +266,11 @@ lws lxc status 100
 #### Execute Command in Container
 ```bash
 lws lxc exec 100 "apt-get update"
-lws lxc exec 100 "apt-get -y upgrade"
+lws lxc exec 100 "sh -c 'apt-get update && apt-get -y upgrade'"
 ```
 
-Run one command per call: over SSH, shell operators such as `&&` or `|` are
-read by the Proxmox host's shell and run on the host, not in the container.
+The command runs in the container without a shell. For `&&`, `|` or
+redirections, wrap it in `sh -c '...'` as in the second line.
 
 #### Create and Manage Snapshots
 ```bash
@@ -330,7 +330,7 @@ lws lxc backup-create 100 --download
 
 #### Restore Container from Backup
 ```bash
-lws lxc backup-restore 100 --backup-file backup-100-20230915-123456.tar.gz
+lws lxc backup-restore 100 --backup-file /var/lib/vz/dump/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst
 ```
 
 ### Docker Management
@@ -357,7 +357,7 @@ lws app update 100 docker-compose.yml
 
 #### View Docker Logs
 ```bash
-lws app logs 100 nginx --follow
+lws app logs 100 nginx --tail 100
 ```
 
 #### List Docker Containers

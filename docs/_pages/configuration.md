@@ -57,14 +57,15 @@ without them. The other sections are optional.
 
 | Key | Default | Used for |
 |---|---|---|
-| `use_local_only` | `false` | `true` runs most commands on the machine LWS runs on, instead of over SSH. Use it when LWS is installed on the Proxmox host it manages. Some commands, such as `px status`, `px exec`, `px backup-lxc`, `lxc migrate` and the security group commands, connect over SSH in every case. Keep the key in the file: most commands expect it. |
+| `use_local_only` | `false` | `true` runs most commands on the machine LWS runs on, instead of over SSH. Use it when LWS is installed on the Proxmox host it manages. Some commands, such as `px status`, `px exec`, `px reboot`, `px backup-lxc` and the `px cluster-*` commands, connect over SSH in every case. Keep the key in the file: most commands expect it. |
 | `start_vmid` | `10000` | The ID of the first container `lxc run` creates on a host that has none. On a host with containers, the next ID is the highest existing one plus one. |
-| `default_storage` | none | The storage for `--storage-size` in `lxc run` and `lxc scale`. Required if you use that option. |
+| `default_storage` | none | The storage for `--storage-size` in `lxc run`. Required if you use that option. `lxc scale --storage-size` grows the disk where it already is. |
 | `default_network` | `vmbr0` | The bridge in the default `--net0` of `lxc run`: `name=eth0,bridge=<default_network>`. |
 | `default_onboot` | `true` | The default of `lxc run --onboot`. |
+| `ssh_command_timeout` | `3600` | Seconds one remote command may run over SSH before LWS stops it. `0` removes the limit. A command that times out is not run again. |
 
-`minimum_resources`, present in `config.yaml.example`, is not read by any
-command.
+Older configuration files may contain a `minimum_resources` block. No command
+reads it.
 
 ## Hosts: regions and availability zones
 
@@ -110,6 +111,7 @@ api:
   port: 8080
   debug: false
   log_level: "INFO"
+  command_timeout: 3600
   allowed_origins:
     - "http://localhost:8080"
 ```
@@ -121,6 +123,7 @@ api:
 | `api.port` | `8080` | The port. |
 | `api.debug` | `false` | `true` runs Flask's development server instead of waitress. The interactive debugger stays off either way. |
 | `api.log_level` | `INFO` | How much the API writes to `api.log`. |
+| `api.command_timeout` | `3600` | Seconds the API waits for one `lws` command before it stops the command and answers with an error. |
 | `api.allowed_origins` | none | Origins allowed to call the API from a browser (CORS). Without the key, browsers on other origins are refused. Scripts and `curl` are not affected by CORS. |
 
 Generate a key and write it into the file:
@@ -174,21 +177,22 @@ pattern with their own keys):
 
 - The container's allocation is compared with the host's total: cores from
   `lscpu`, memory from `free -m`. For disk, the comparison is with
-  `max_storage_gb`.
+  `max_storage_gb`. A container without a `cores` setting counts as its
+  `cpulimit` rounded up, or as every host core when it has neither.
 - Below `min_threshold` × total, it suggests the current value plus
   `step` × `scale_up_multiplier`, up to the `limits` maximum.
 - Above `max_threshold` × total, it suggests the current value minus
   `step` × `scale_down_multiplier`, down to the `limits` minimum.
 
-Thresholds are fractions between 0 and 1: `0.30` means 30%. Values above 1
-make every check suggest an increase. The comparison uses what the container
-is allocated in `pct config`, not what it is using at the moment; for live
-usage, see `lxc resources` and `lxc status`.
+Thresholds are fractions between 0 and 1: `0.30` means 30%. A value above 1
+is read as a percentage, so `80` means `0.80`. The comparison uses what the
+container is allocated in `pct config`, not what it is using at the moment;
+for live usage, see `lxc resources` and `lxc status`.
 
-The `host_cpu`, `host_memory`, `host_storage` and `general` blocks in
-`config.yaml.example` are not read by any command, except
-`host_storage.total_storage_gb`, which is used as `max_storage_gb` when
-`limits` does not set it.
+Configuration files written for 1.4.3 or earlier may also contain `host_cpu`,
+`host_memory`, `host_storage` and `general` blocks under `scaling`. They are
+ignored, except `host_storage.total_storage_gb`, which is used as
+`max_storage_gb` when `limits` does not set it.
 
 ## Network discovery
 
@@ -201,8 +205,8 @@ security:
 
 Used by `lws sec discovery`, which pings the /24 networks around the client,
 the Proxmox host and optionally a container. `ping` is the only method;
-`max_parallel_workers` is the number of pings in flight. The `proxmox_timeout`
-and `lxc_timeout` keys in the example are not read.
+`max_parallel_workers` is the number of pings in flight. Older files may also
+have `proxmox_timeout` and `lxc_timeout` keys; they are not read.
 
 ## Storage values
 

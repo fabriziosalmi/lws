@@ -148,10 +148,20 @@ Options:
 
 ### `px update`
 
-Run `apt-get update` on the machine running `lws` — **not** on any configured Proxmox host, and it takes no `--region`/`--az` (there's nothing to target). Despite the name and the `px` group, this always runs locally.
+Upgrade the packages of the configured Proxmox hosts with `apt-get update` and `apt-get dist-upgrade`, the upgrade Proxmox VE requires (plain `upgrade` skips new dependencies such as a new kernel). Existing configuration files are kept. The command lists the hosts and asks before it starts; a new kernel takes effect after a reboot.
 
 ```bash
-lws px update
+lws px update [OPTIONS]
+
+Options:
+  --region TEXT   Only hosts in this region (default: every configured host)
+  --az TEXT       Only this availability zone (requires --region)
+  --yes           Do not ask for confirmation
+```
+
+**Example:**
+```bash
+lws px update --region eu-south-1 --az az2
 ```
 
 ### `px cluster-start` / `cluster-stop` / `cluster-restart`
@@ -170,7 +180,7 @@ Options:
 
 ### `px backup-lxc`
 
-Back up a single LXC container with `vzdump --storage <storage> --mode <mode>`, run on the Proxmox host. The archive stays on that storage. Compression and retention follow the host's `/etc/vzdump.conf`. This command always connects over SSH, and the SSH call is stopped after 60 seconds, so a backup that takes longer is better started on the host or from a Proxmox backup job.
+Back up a single LXC container with `vzdump --storage <storage> --mode <mode>`, run on the Proxmox host. The archive stays on that storage; compression and retention follow the host's `/etc/vzdump.conf`. `lxc backup-create` does the same with more options.
 
 ```bash
 lws px backup-lxc <vmid> --storage <storage-target> [OPTIONS]
@@ -211,7 +221,7 @@ Options:
 
 ### `px security-groups`
 
-List all security groups and their rules defined in the cluster firewall (`/etc/pve/firewall/cluster.fw`).
+List the security groups of the cluster firewall and their rules, numbered by position, as the Proxmox API reports them.
 
 ```bash
 lws px security-groups [OPTIONS]
@@ -221,6 +231,8 @@ Options:
   --az TEXT       Availability zone
 ```
 
+The security group commands go through `pvesh`, the command-line client of the Proxmox VE API on the host. The API validates every rule and writes the firewall files in `/etc/pve/firewall/` itself.
+
 ### `px security-group-add` / `security-group-rm`
 
 Create or delete a security group in the cluster firewall.
@@ -229,71 +241,62 @@ Create or delete a security group in the cluster firewall.
 lws px security-group-add <group_name> [OPTIONS]
 
 Options:
-  --description TEXT  Description of the security group
+  --description TEXT  Comment shown with the group
   --region TEXT        Region
   --az TEXT            Availability zone
 
 lws px security-group-rm <group_name> [OPTIONS]
 
 Options:
+  --force         Also delete the group's rules (without it, a group with rules is kept)
   --region TEXT   Region
   --az TEXT       Availability zone
 ```
 
 ### `px security-group-rule-add` / `security-group-rule-rm`
 
-Add or remove a firewall rule within an existing security group. Rules are edited directly in `/etc/pve/firewall/cluster.fw` with `sed`; `pve-firewall` and the Proxmox API are not used.
+Add or remove a firewall rule in an existing security group.
 
 ```bash
 lws px security-group-rule-add <group_name> --direction <IN|OUT> [OPTIONS]
 lws px security-group-rule-rm <group_name> --direction <IN|OUT> [OPTIONS]
 
 Options:
-  --direction TEXT       IN or OUT (required)
-  --action TEXT          ACCEPT, DROP, or REJECT (default: ACCEPT)
-  --protocol TEXT        e.g. tcp, udp, icmp (default: tcp)
-  --source-ip TEXT        Source IP or CIDR
-  --source-port TEXT      Source port or range (e.g. 22, 80:443)
-  --destination-ip TEXT   Destination IP or CIDR
-  --destination-port TEXT Destination port or range
-  --region TEXT           Region
-  --az TEXT               Availability zone
+  --direction [IN|OUT]              Direction of the rule (required)
+  --action [ACCEPT|DROP|REJECT]     Action (default: ACCEPT)
+  --protocol TEXT                   e.g. tcp, udp, icmp (default: tcp)
+  --source-ip TEXT                  Source IP or CIDR
+  --source-port TEXT                Source port or range (e.g. 22, 80:443)
+  --destination-ip TEXT             Destination IP or CIDR
+  --destination-port TEXT           Destination port or range
+  --region TEXT                     Region
+  --az TEXT                         Availability zone
 ```
 
 **Example:**
 ```bash
-lws px security-group-rule-add web --direction IN --protocol tcp \
-  --destination-port 443
+lws px security-group-rule-add web --direction IN --protocol tcp --destination-port 443
+lws px security-group-rule-rm web --direction IN --protocol tcp --destination-port 443
 ```
 
-Things to know before relying on these commands:
-
-- `--direction` and `--action` are case-sensitive: `IN`, `OUT`, `ACCEPT`, `DROP`, `REJECT`.
-- `security-group-add` accepts `--description` but does not write it.
-- `rule-add` reports success even if the group does not exist; check with `lws px security-groups`.
-- `rule-rm` removes every rule in the group that contains the rule text it builds from the options, including the `ACCEPT` and `tcp` defaults: `--direction IN` alone removes all `IN ACCEPT -p tcp` rules of the group. It cannot remove a rule with a CIDR (`10.0.0.0/8`).
-- `security-group-rm` deletes from the group header to the next blank line. Groups created with `security-group-add` are not separated by blank lines, so check the file before removing one.
+`rule-rm` removes the rules that match all the given values exactly, including the defaults (`ACCEPT`, `tcp`); a value you leave out must be absent from the rule. It fails if no rule matches.
 
 ### `px security-group-attach` / `security-group-detach`
 
-Attach or detach a security group from a specific container's firewall config (`/etc/pve/firewall/<vmid>.fw`).
-
-> **Check the result on the host before relying on it.** `security-group-attach`
-> writes the line `|GROUP <name>` under `[RULES]`. In Proxmox firewall files a
-> leading `|` marks a rule as disabled, so the group may not be applied. The
-> command also does not enable the firewall for the container, on its network
-> interface (`firewall=1`) or for the datacenter. Verify in the web interface
-> (container > Firewall) that the group is listed as enabled and that the
-> firewall is on.
+Attach a security group to a container, or detach it. The group becomes a rule in the container's firewall (`GROUP <name>`, enabled).
 
 ```bash
 lws px security-group-attach <group_name> <vmid> [OPTIONS]
 lws px security-group-detach <group_name> <vmid> [OPTIONS]
 
 Options:
-  --region TEXT   Region
-  --az TEXT       Availability zone
+  --enable-firewall  (attach) Also enable the container's firewall and set
+                     firewall=1 on its network interfaces
+  --region TEXT      Region
+  --az TEXT          Availability zone
 ```
+
+Proxmox applies the rules only when the firewall is on at three levels: the datacenter, the container, and the container's network interface. `--enable-firewall` handles the last two. `attach` reports when the datacenter firewall is off; LWS does not enable it, because doing so without rules that allow SSH (22) and the web interface (8006) can lock you out of the hosts.
 
 ### `px exec`
 
@@ -328,10 +331,13 @@ Options:
   --count INTEGER        Number of instances (default: 1)
   --size TEXT            Instance size, one of the keys under instance_sizes
                          in config.yaml (default: small)
-  --hostname TEXT        Hostname for container
+  --hostname TEXT        Hostname for container; the container ID is appended
   --net0 TEXT            Network config string, Proxmox pct syntax
                          (default: name=eth0,bridge=<default_network>)
-  --storage-size TEXT    Override storage size (e.g. 16G)
+  --storage-size TEXT    Root disk size in GiB, replacing the size's own
+                         (e.g. 16), on default_storage
+  --features TEXT        LXC features, e.g. nesting=1 (needed for Docker)
+  --unprivileged         Create an unprivileged container
   --onboot TEXT          Start the container on boot
                          (default: default_onboot in config.yaml, or True)
   --lock TEXT            Set a Proxmox lock on the container (default: none)
@@ -348,7 +354,7 @@ Options:
   --dhcp                 Enable DHCP
 ```
 
-**Example:**
+**Examples:**
 ```bash
 lws lxc run \
   --image-id local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst \
@@ -356,6 +362,10 @@ lws lxc run \
   --count 3 \
   --hostname web-server \
   --password SecurePass123
+
+# An unprivileged container ready for Docker
+lws lxc run --size lws-web --unprivileged --features nesting=1,keyctl=1 --dhcp \
+  --image-id local:vztmpl/debian-12-standard_12.7-1_amd64.tar.zst
 ```
 
 ### `lxc show`
@@ -453,33 +463,34 @@ lws lxc terminate 100 101
 
 ### `lxc scale`
 
-Resize container resources.
+Change the CPU, memory, disk and network limits of containers. CPU, memory and network changes use `pct set` and apply to a running container; the disk is grown with `pct resize`.
 
 ```bash
 lws lxc scale <instance_ids...> [OPTIONS]
 
 Options:
-  --memory TEXT             New memory in MB
-  --cpulimit TEXT           New CPU limit
-  --cpucores TEXT           New number of CPU cores
-  --storage-size TEXT       New root storage size (e.g., 16G)
-  --net-limit TEXT          Network bandwidth limit (e.g., 10mbit)
-  --disk-read-limit TEXT    Disk read limit (e.g., 50mb)
-  --disk-write-limit TEXT   Disk write limit (e.g., 30mb)
-  --region TEXT             Region
-  --az TEXT                 Availability zone
+  --memory INTEGER        Memory in MB
+  --cpulimit FLOAT        CPU time limit, in CPUs (0 removes the limit)
+  --cpucores INTEGER      Number of CPU cores the container sees
+  --storage-size TEXT     New root disk size, e.g. 32G, or +8G to add 8 GiB
+                          (a plain number is GiB). Disks can only grow.
+  --net-limit FLOAT       Rate limit of net0 in MB/s (0 removes the limit)
+  --region TEXT           Region
+  --az TEXT               Availability zone
 ```
-
-`--memory`/`--cpulimit`/`--cpucores` are plain strings, not validated as numeric by Click (their Click default is `None`, which gives no inferred type) - an invalid value here is rejected by `pct set` on the remote host, not by this command itself.
 
 **Example:**
 ```bash
-lws lxc scale 100 --memory 4096 --cpulimit 4 --storage-size 64G
+lws lxc scale 100 --memory 4096 --cpucores 2 --storage-size 64G
 ```
+
+Proxmox has no disk bandwidth limits for containers; the former `--disk-read-limit` and `--disk-write-limit` options are refused with an explanation.
 
 ### `lxc scale-check`
 
-Compare a container's allocated cores, memory and root disk (from `pct config`) with the host's total cores and memory (`lscpu`, `free -m`), using the thresholds in `config.yaml`'s `scaling` block, and suggest new values. It reads allocations, not live usage (see `lxc resources` for that). Read-only: it never changes anything. The container needs a `cores` value in its configuration; containers created by `lxc run` only have a CPU limit, so set cores first with `lws lxc scale <id> --cpucores <n>`. The CPU suggestion is a number of cores, to apply with `--cpucores`. Thresholds are fractions between 0 and 1; see [Configuration](configuration.html#scaling-thresholds).
+Compare a container's allocated cores, memory and root disk (from `pct config`) with the host's total cores and memory (`lscpu`, `free -m`), using the thresholds in `config.yaml`'s `scaling` block, and suggest new values. It reads allocations, not live usage (see `lxc resources` for that). Read-only: it never changes anything.
+
+A container without a `cores` setting is counted by its `cpulimit`, or as using every host core when it has neither. Threshold values above 1 are read as percentages (80 means 0.80). See [Configuration](configuration.html#scaling-thresholds).
 
 ```bash
 lws lxc scale-check <instance_id> [OPTIONS]
@@ -555,17 +566,15 @@ Options:
 **Examples:**
 ```bash
 lws lxc exec 100 "apt-get update"
-lws lxc exec 100 "apt-get -y upgrade"
 
 # Same command across multiple containers
 lws lxc exec 100 101 102 "systemctl restart nginx"
+
+# Several commands, or a pipeline: give them to a shell in the container
+lws lxc exec 100 "sh -c 'apt-get update && apt-get -y upgrade'"
 ```
 
-> **Run one command per call.** Over SSH (the default, `use_local_only: false`),
-> the command line is joined into one string and read by the Proxmox host's
-> shell. Shell operators such as `&&`, `;`, `|` and `>` are therefore run on
-> the host, not in the container: `lws lxc exec 100 "apt update && apt upgrade -y"`
-> would run `apt upgrade -y` on the Proxmox host itself.
+The command is split like a shell would split it (quotes group words) and run directly, without a shell, in every mode. Shell syntax such as `&&`, `|` or `>` therefore reaches the program as plain words; use `sh -c '...'` as above when you need it.
 
 ### `lxc snapshot-add` / `snapshot-rm`
 
@@ -609,7 +618,7 @@ Options:
 
 ### `lxc clone`
 
-Clone a container.
+Clone a container, on the same node or on another node of the cluster.
 
 ```bash
 lws lxc clone <source_id> <target_id> [OPTIONS]
@@ -617,13 +626,11 @@ lws lxc clone <source_id> <target_id> [OPTIONS]
 Options:
   --region TEXT              Region
   --az TEXT                  Availability zone
-  --target-host TEXT         Target Proxmox host for the clone, validated
-                             as a hostname
+  --target-host TEXT         Cluster node to create the clone on
   --description TEXT         Description for the new container
-  --hostname TEXT            Hostname for the new container, validated
-                             as a hostname
-  --storage TEXT             Target storage for a full clone
-  --full                     Full clone (vs linked)
+  --hostname TEXT            Hostname for the new container
+  --storage TEXT             Target storage for the clone
+  --full                     Full clone (only matters when cloning a template)
   --pool TEXT                Add the new container to the specified pool
   --bwlimit TEXT             I/O bandwidth limit in KiB/s, digits only
   --start / --no-start       Start the cloned container after creation
@@ -632,57 +639,79 @@ Options:
 
 **Example:**
 ```bash
-lws lxc clone 100 200 --full
+lws lxc clone 100 200 --hostname web-copy
 ```
 
-The command first takes a snapshot of the source named `snapshot-<YYYYmmddHHMMSS>` and clones from it with `pct clone --snapname`. The snapshot is not removed afterwards; delete it with `lws lxc snapshot-rm`. `--target-host` is passed to `pct clone --target` and must be a node of the same Proxmox cluster. In Proxmox, a clone of a regular container is always a full copy; linked clones exist only for templates.
+To clone a running container, the command takes a temporary snapshot of the source (`lws-clone-<timestamp>`), clones from it with `pct clone --snapname`, and deletes the snapshot afterwards. In Proxmox, a clone of a regular container is always a full copy; linked clones exist only for templates. A clone created on another node is started there through the cluster API.
 
 ### `lxc migrate`
 
-Migrate a container to another node of the same Proxmox cluster with `pct migrate <id> <target-host>`, run on the source host. `--target-host` is the Proxmox node name, not an availability zone from `config.yaml`. No `--restart` is passed, so stop a running container first. The migration runs over SSH, which LWS stops after 60 seconds.
+Move a container to another node of the same Proxmox cluster with `pct migrate`, run on the source node.
 
 ```bash
-lws lxc migrate <instance_id> [OPTIONS]
+lws lxc migrate <instance_id> --target-host <node> [OPTIONS]
 
 Options:
-  --target-host TEXT  Target Proxmox host (required)
-  --region TEXT       Region
-  --az TEXT           Availability zone
+  --target-host TEXT     Proxmox node name to move to (required)
+  --restart              Migrate a running container: stop it, move it and
+                         start it on the target
+  --target-storage TEXT  Storage on the target node for the disks
+  --region TEXT          Region
+  --az TEXT              Availability zone
 ```
+
+**Example:**
+```bash
+lws lxc migrate 105 --target-host pve2 --restart
+```
+
+`--target-host` is the node name as the cluster knows it (`lws px clusters` lists them), not an availability zone from `config.yaml`. Without `--restart`, Proxmox refuses to move a running container.
 
 ### `lxc backup-create` / `backup-restore`
 
-Backup and restore containers. The two commands take different options — `--backup-file` only applies to restore, not create.
-
-`backup-create` runs `mkdir -p <destination>` and `vzdump <id> --compress <level> --dumpdir <destination> --mode snapshot` on the host; `--download` then copies the archive with `scp` into the current directory. Both steps run over SSH with the 60-second limit per command.
-
-> **Before using `backup-restore`, know what it does.** It stops the container
-> if it is running, restores with `pct restore --force` over the existing
-> container ID, then starts it. After a successful restore it **deletes the
-> backup file** it restored from on the host, and a temporary copy. The
-> container ID must already exist. Try it on a test container, and keep
-> another copy of any backup you restore.
+Create a vzdump backup of a container, or restore one.
 
 ```bash
-# Create backup
+# Create a backup
 lws lxc backup-create <instance_id> [OPTIONS]
 
 Options:
-  --destination TEXT    Destination directory for the backup (default: /var/lib/vz/dump)
-  --download            Download the backup file to the local system
-  --compress-level INT  Compression level, 1-9 (default: 6)
-  --region TEXT         Region
-  --az TEXT             Availability zone
+  --destination TEXT                  Directory on the host for the archive
+                                      (default: /var/lib/vz/dump)
+  --storage TEXT                      A Proxmox backup storage to use instead
+                                      of --destination
+  --mode [snapshot|suspend|stop]      vzdump mode (default: snapshot)
+  --compress [zstd|gzip|lzo|none]     Compression (default: zstd)
+  --download                          Copy the archive into the current
+                                      directory afterwards
+  --region TEXT                       Region
+  --az TEXT                           Availability zone
 
-# Restore from backup
-lws lxc backup-restore <instance_id> --backup-file <path> [OPTIONS]
+# Restore a backup
+lws lxc backup-restore <instance_id> --backup-file <archive> [OPTIONS]
 
 Options:
-  --backup-file TEXT  Path to the backup file to restore (required)
-  --force             Force restore without confirmation
-  --region TEXT       Region
-  --az TEXT           Availability zone
+  --backup-file TEXT       vzdump archive: a path on the host, a volume ID
+                           (local:backup/...), or a local file to upload (required)
+  --storage TEXT           Storage for the restored disk (default: as in the backup)
+  --start / --no-start     Start the container afterwards (default: --start)
+  --force                  Do not ask for confirmation
+  --region TEXT            Region
+  --az TEXT                Availability zone
 ```
+
+**Examples:**
+```bash
+lws lxc backup-create 100
+lws lxc backup-create 100 --storage backups --mode stop --compress gzip
+
+lws lxc backup-restore 100 --backup-file /var/lib/vz/dump/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst
+lws lxc backup-restore 205 --backup-file local:backup/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst
+```
+
+`backup-create` prints the archive file vzdump wrote. `snapshot` mode needs storage that supports snapshots (LVM-thin, ZFS, Ceph); `stop` mode works everywhere and stops the container during the backup.
+
+`backup-restore` restores with `pct restore`. If the container ID is free, the backup becomes a new container. If it exists, the command asks before replacing it: the container is stopped, and its current disks are destroyed and replaced by the backup. The backup file is never deleted; only a temporary copy uploaded from your machine is removed afterwards.
 
 ### `lxc resources`
 
@@ -717,20 +746,21 @@ Options:
 
 ### `lxc health-check`
 
-Perform health check on a container.
+Check CPU, memory and disk use inside a container against an 80% limit, and DNS resolution. When CPU or memory is high, it lists the busiest processes.
 
 ```bash
 lws lxc health-check <instance_id> [OPTIONS]
 
 Options:
-  --fix           Attempt to fix issues automatically
+  --fix           When the disk is over 80% full, delete files older than
+                  7 days in /tmp and /var/tmp; when DNS fails, restart networking
   --region TEXT   Region
   --az TEXT       Availability zone
 ```
 
 ### `lxc net`
 
-Check whether a TCP port is open on a container with `nc -z`, first from inside it, then (if that fails) from the Proxmox host to the container's IP. The protocol argument accepts `udp`, but the check always uses TCP.
+Check whether a port is open on a container with `nc -z`, first from inside it, then (if that fails) from the Proxmox host to the container's IP. For UDP (`nc -zu`), a port is reported closed only when an ICMP "port unreachable" comes back, so an "open" UDP result is a best guess.
 
 ```bash
 lws lxc net <instance_id> <tcp|udp> <port> [OPTIONS]
@@ -762,20 +792,24 @@ Options:
 
 ## Docker/App Commands (`app`)
 
+The `app` commands install Docker in a Debian or Ubuntu container and run Docker containers or Compose applications in it.
+
 ### `app setup`
 
-Install Docker and Docker Compose in a container.
+Install Docker and Docker Compose in a container from its apt repositories: `docker.io`, plus `docker-compose-v2` (Ubuntu) or `docker-compose` (Debian). The container must be running.
 
 ```bash
-lws app setup <instance_id> [package_name] [OPTIONS]
-
-Arguments:
-  package_name         Package to install, positional, not a flag (default: docker)
+lws app setup <instance_id> [OPTIONS]
 
 Options:
+  --enable-nesting     Set the LXC features Docker needs (nesting=1, and
+                       keyctl=1 for unprivileged containers), then restart
+                       the container
   --region TEXT        Region
   --az TEXT            Availability zone
 ```
+
+Without `--enable-nesting`, the command warns when the features are missing. A second, optional positional argument (`package_name`) is accepted for compatibility and ignored.
 
 ### `app run`
 
@@ -794,34 +828,35 @@ Options:
 lws app run 100 -- -d -p 80:80 nginx
 ```
 
-The arguments after `--` are appended to `docker run` one by one, so this runs `docker run -d -p 80:80 nginx` in container 100. The `--` is required whenever the first Docker argument starts with `-`.
+The arguments after `--` are passed to `docker run` one by one, so this runs `docker run -d -p 80:80 nginx` in container 100. The `--` is required whenever the first Docker argument starts with `-`. Docker must already be installed (`app setup`).
 
 ### `app deploy`
 
-Manage Docker Compose applications.
+Manage a Docker Compose application.
 
 ```bash
-lws app deploy <action> <instance_id> [OPTIONS]
+lws app deploy <action> <instance_id> --compose-file <file> [OPTIONS]
 
 Actions: install, uninstall, start, stop, restart, status
 
 Options:
-  --compose-file TEXT  Docker Compose file path (required)
-  --auto-start         Start after install
+  --compose-file TEXT  Local path or URL of the Compose file (required)
+  --auto-start         With install: start the app at boot
   --region TEXT        Region
   --az TEXT            Availability zone
 ```
 
 **Example:**
 ```bash
-lws app deploy install 100 \
-  --compose-file docker-compose.yml \
-  --auto-start
+lws app deploy install 100 --compose-file ./docker-compose.yml --auto-start
+lws app deploy status 100 --compose-file ./docker-compose.yml
 ```
+
+The first service name in the Compose file is the application name. `install` copies the file to `/opt/lws/apps/<app>/docker-compose.yml` in the container and runs `docker compose -p <app> up -d` there; the other actions use the same project, so they find the containers again. `--auto-start` installs a systemd unit, `lws-<app>.service`, in the container; `uninstall` removes it.
 
 ### `app update`
 
-Upload a new Compose file to a container and re-deploy. Unlike `app deploy`, `compose_file` here is a positional argument, not an option.
+Copy a new version of the Compose file into the container, pull its images and recreate the services that changed (`pull`, then `up -d`). Unlike `app deploy`, `compose_file` here is a positional argument, not an option.
 
 ```bash
 lws app update <instance_id> <compose_file> [OPTIONS]
@@ -833,22 +868,22 @@ Options:
 
 ### `app logs`
 
-Fetch Docker logs from a container.
+Show the logs of a Docker container inside an LXC container.
 
 ```bash
 lws app logs <instance_id> <container_name> [OPTIONS]
 
 Options:
-  --follow        Stream logs in real time
-  --tail TEXT     Number of lines to show from the end of the logs, as
-                  passed to `docker logs --tail` (default: all)
+  --tail TEXT     Number of lines to show from the end (default: all)
   --region TEXT   Region
   --az TEXT       Availability zone
 ```
 
+The logs are printed once; LWS cannot stream them. To follow them, run `pct exec <instance_id> -- docker logs -f <container>` on the host.
+
 ### `app list`
 
-List Docker containers in an LXC container.
+List the running Docker containers in an LXC container.
 
 ```bash
 lws app list <instance_id> [OPTIONS]
@@ -860,13 +895,13 @@ Options:
 
 ### `app remove`
 
-Uninstall Docker from containers.
+Uninstall Docker from containers. Only the Docker packages that are installed are removed.
 
 ```bash
 lws app remove <instance_ids...> [OPTIONS]
 
 Options:
-  --purge         Remove all Docker data
+  --purge         First remove all Docker images, containers, volumes and networks
   --region TEXT   Region
   --az TEXT       Availability zone
 ```
@@ -918,14 +953,14 @@ done
 ### Backup Strategy
 
 ```bash
-# Create snapshots before updates
+# Create a snapshot before an update
 lws lxc snapshot-add 100 before-$(date +%Y%m%d)
 
-# Create full backup
+# Create a full backup and copy it here
 lws lxc backup-create 100 --download
 
-# Schedule regular backups (crontab)
-0 2 * * * /path/to/lws lxc backup-create 100
+# Schedule a nightly backup (crontab; run from the folder with config.yaml)
+0 2 * * * cd /opt/lws && python3 lws.py lxc backup-create 100 --storage backups
 ```
 
 ### Resource Monitoring

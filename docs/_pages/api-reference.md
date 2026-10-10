@@ -202,12 +202,17 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/px/update`
 
-Run `apt-get update` on the machine running the API server — **not** on any Proxmox host. No request body needed.
+Run `apt-get update` and `apt-get dist-upgrade` on Proxmox hosts. Without a body, every configured host is updated; `region`, and `region` with `az`, limit it. The request is the confirmation: the API always passes `--yes`.
 
 ```bash
-curl -X POST -H "X-API-Key: your-key" \
+curl -X POST \
+  -H "X-API-Key: your-key" \
+  -H "Content-Type: application/json" \
+  -d '{"region": "eu-south-1", "az": "az1"}' \
   http://localhost:8080/api/v1/px/update
 ```
+
+Upgrading a host can take many minutes. The request waits for it, up to `api.command_timeout` seconds.
 
 #### POST `/px/cluster/start` / `/px/cluster/stop` / `/px/cluster/restart`
 
@@ -268,7 +273,7 @@ curl -X DELETE -H "X-API-Key: your-key" \
 
 #### GET `/px/security-groups`
 
-List all security groups and their rules in the cluster firewall.
+List the security groups of the cluster firewall, with their rules, through the Proxmox API (`pvesh`).
 
 ```bash
 curl -H "X-API-Key: your-key" \
@@ -289,16 +294,16 @@ curl -X POST \
 
 #### DELETE `/px/security-groups/{group_name}`
 
-Delete a security group. `group_name` comes from the URL.
+Delete a security group. `group_name` comes from the URL. A group that still has rules is not deleted unless the query string has `force=true`, which deletes its rules first.
 
 ```bash
 curl -X DELETE -H "X-API-Key: your-key" \
-  "http://localhost:8080/api/v1/px/security-groups/web?region=eu-south-1&az=az1"
+  "http://localhost:8080/api/v1/px/security-groups/web?region=eu-south-1&az=az1&force=true"
 ```
 
 #### POST `/px/security-groups/{group_name}/rules` / DELETE `.../rules`
 
-Add or remove a firewall rule within an existing security group. `group_name` comes from the URL; the rule fields (`direction`, `action`, `protocol`, `source_ip`, `source_port`, `destination_ip`, `destination_port`) are all real options on `px security-group-rule-add`/`rule-rm`. `protocol`, the IP/CIDR fields, and the port fields are validated server-side (allow-listed characters, or parsed as an IP/CIDR) before being used.
+Add or remove a firewall rule within an existing security group. `group_name` comes from the URL; the rule fields (`direction`, `action`, `protocol`, `source_ip`, `source_port`, `destination_ip`, `destination_port`) are all real options on `px security-group-rule-add`/`rule-rm`. `protocol`, the IP/CIDR fields, and the port fields are validated server-side (allow-listed characters, or parsed as an IP/CIDR) before being used. `DELETE` removes the rules whose fields match the request exactly; fields left out must be unset in the rule too.
 
 ```bash
 curl -X POST \
@@ -312,11 +317,13 @@ curl -X POST \
 
 Attach or detach a security group from a container's firewall config. `group_name` and `vmid` are both positional; both are validated server-side (`group_name` against an allow-listed charset, `vmid` as numeric).
 
+The rules of an attached group apply only while the container's firewall is on. `"enable_firewall": true` on `attach` turns it on, and sets `firewall=1` on the container's network interfaces; without it, the response warns when the firewall is off.
+
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
-  -d '{"group_name": "web", "vmid": "100"}' \
+  -d '{"group_name": "web", "vmid": "100", "enable_firewall": true}' \
   http://localhost:8080/api/v1/px/security-groups/attach
 ```
 
@@ -334,7 +341,7 @@ curl -X POST \
 
 #### POST `/px/exec`
 
-Execute an arbitrary command on a Proxmox host over SSH. The handler filters the request body down to `region`/`az` before forwarding it.
+Execute a command on a Proxmox host over SSH. `command` is a string or a list of strings; `region` and `az` are optional. Other body fields are ignored.
 
 ```bash
 curl -X POST \
@@ -343,6 +350,8 @@ curl -X POST \
   -d '{"command": "df -h /var/lib/vz"}' \
   http://localhost:8080/api/v1/px/exec
 ```
+
+The API refuses commands that contain any of `` ; & | ` $ ( ) { } ``, so pipes and command lists are not available here. Run them from the CLI, or put them in a script on the host.
 
 ### LXC Container Endpoints
 
@@ -355,8 +364,8 @@ curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "image_id": "local:vztmpl/ubuntu-22.04.tar.gz",
-    "size": "medium",
+    "image_id": "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst",
+    "size": "small",
     "count": 1,
     "hostname": "web-server",
     "region": "eu-south-1",
@@ -378,10 +387,15 @@ curl -X POST \
   "gateway": "string",
   "dns": "string",
   "dhcp": "boolean",
+  "storage_size": "string, root disk in GiB (uses default_storage)",
+  "features": "string, e.g. nesting=1,keyctl=1",
+  "unprivileged": "boolean",
   "region": "string",
   "az": "string"
 }
 ```
+
+`size` must be one of the `instance_sizes` in `config.yaml`.
 
 #### GET `/lxc/instances`
 
@@ -475,7 +489,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/scale`
 
-Scale container resources. Same `instance_ids` handling as `/lxc/instances/start` above; `memory`/`cpulimit`/`storage_size` are real options, not positional.
+Scale container resources. Same `instance_ids` handling as `/lxc/instances/start` above. The fields are `memory` (MB), `cpulimit`, `cpucores`, `storage_size` and `net_limit` (MB/s), as in `lxc scale`. `storage_size` grows the root disk with `pct resize` (`"64G"`, or `"+8G"` to add 8 GiB); disks cannot shrink. `disk_read_limit` and `disk_write_limit` are refused: Proxmox has no disk bandwidth limits for containers.
 
 ```bash
 curl -X POST \
@@ -506,19 +520,21 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/exec`
 
-Execute command in container.
+Execute a command in a container. `command` is a string, split into words like a shell would split it, or a list of strings; it runs in the container without a shell.
 
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "command": "apt update && apt upgrade -y",
+    "command": "apt-get -y upgrade",
     "region": "eu-south-1",
     "az": "az1"
   }' \
   http://localhost:8080/api/v1/lxc/instances/100/exec
 ```
+
+As with `/px/exec`, commands that contain any of `` ; & | ` $ ( ) { } `` are refused. Send one request per command.
 
 #### POST `/lxc/instances/{instance_id}/snapshots`
 
@@ -593,13 +609,13 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/migrate`
 
-Migrate a container to another Proxmox host. `target_host` is a real option, not positional.
+Migrate a container to another node of the same Proxmox cluster. `target_host` is the node name as the cluster knows it, not a zone from `config.yaml`. `"restart": true` moves a running container by stopping it and starting it on the target; `target_storage` puts its disks on another storage there.
 
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
-  -d '{"target_host": "proxmox2.example.com"}' \
+  -d '{"target_host": "pve2", "restart": true}' \
   http://localhost:8080/api/v1/lxc/instances/100/migrate
 ```
 
@@ -657,31 +673,35 @@ curl -H "X-API-Key: your-key" \
   "http://localhost:8080/api/v1/lxc/instances/100/health-check"
 ```
 
-`--fix` on `lxc health-check` is a bare Click flag (`is_flag=True`, takes no value). `run_lws_command` only omits a `--flag` as a boolean when the value is an actual Python `bool`; Flask's `request.args` always yields strings, so `?fix=true` is forwarded as the literal `--fix true`, which `lxc health-check` rejects (`Error: Got unexpected extra argument (true)`). There is currently no way to pass `--fix` through this endpoint.
+`?fix=true` adds `--fix`: when the disk is over 80% full, files older than 7 days in `/tmp` and `/var/tmp` are deleted, and when DNS fails, networking is restarted. In every query string, `true` and `false` are read as flags: `true` adds the option, `false` leaves it out.
 
 #### POST `/lxc/instances/{instance_id}/restore`
 
-Restore a container from a backup file. `backup_file` is a real option, not positional.
+Restore a vzdump backup with `pct restore`. `backup_file` is a path on the Proxmox host or a volume ID (`local:backup/...`). Optional fields: `storage` for the restored disk, `no_start` to leave the container stopped.
+
+The CLI asks for confirmation before it restores, and the API cannot answer: send `"force": true`, or the request fails. If the container exists, `force` replaces it, and its current disks are destroyed. The backup file itself is kept.
 
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
-  -d '{"backup_file": "/var/lib/vz/dump/vzdump-lxc-100.tar.gz"}' \
+  -d '{"backup_file": "/var/lib/vz/dump/vzdump-lxc-100-2026_10_10-02_00_00.tar.zst", "force": true}' \
   http://localhost:8080/api/v1/lxc/instances/100/restore
 ```
 
 #### POST `/lxc/instances/{instance_id}/backup`
 
-Create a backup of a container. All fields (`destination`, `download`, `compress_level`) are real options. An empty body is fine — it uses `lxc backup-create`'s defaults.
+Create a vzdump backup of a container. The fields are the options of `lxc backup-create`: `destination` (a directory on the host, default `/var/lib/vz/dump`) or `storage` (a Proxmox backup storage), `mode` (`snapshot`, `suspend` or `stop`) and `compress` (`zstd`, `gzip`, `lzo` or `none`). An empty body uses the defaults. The response includes the archive name.
 
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
-  -d '{"download": true}' \
+  -d '{"storage": "backups", "mode": "snapshot", "compress": "zstd"}' \
   http://localhost:8080/api/v1/lxc/instances/100/backup
 ```
+
+`download` copies the archive to the machine that runs the API, into its working directory.
 
 #### GET `/lxc/instances/{instance_id}/report`
 
@@ -705,14 +725,14 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/lxc/instances/{instance_id}/app/setup`
 
-Install Docker in a container. `package_name` is positional in `app setup`.
+Install Docker and Docker Compose in a running container. `"enable_nesting": true` first sets the LXC features Docker needs (`nesting=1`, and `keyctl=1` for unprivileged containers) and restarts the container.
 
 ```bash
 curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "package_name": "docker",
+    "enable_nesting": true,
     "region": "eu-south-1",
     "az": "az1"
   }' \
@@ -721,7 +741,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/app/run`
 
-Run Docker container.
+Run `docker run` in a container. `docker_command` holds the arguments of `docker run`, as a list or as one string.
 
 ```bash
 curl -X POST \
@@ -737,7 +757,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/app/deploy`
 
-Deploy Docker Compose app. `action` is positional in `app deploy`; `compose_file`/`auto_start` are sent as `--compose-file`/`--auto-start` options (the CLI command's flags were renamed from underscores to hyphens to match the rest of the CLI and this generic option-forwarding).
+Manage a Compose application. `action` is one of `install`, `uninstall`, `start`, `stop`, `restart` and `status`. `compose_file` is a path on the machine that runs the API, or a URL; it is copied into the container under `/opt/lws/apps/<app>/`, where `<app>` is the first service name. `auto_start` (with `install`) adds a systemd unit in the container that starts the application at boot.
 
 ```bash
 curl -X POST \
@@ -755,7 +775,7 @@ curl -X POST \
 
 #### POST `/lxc/instances/{instance_id}/app/update`
 
-Update a Compose app by re-deploying a new Compose file. `compose_file` is a required positional argument on `app update`.
+Copy a new version of the Compose file into the container, pull its images and recreate the services that changed. `compose_file` is required.
 
 ```bash
 curl -X POST \
@@ -774,7 +794,7 @@ curl -H "X-API-Key: your-key" \
   "http://localhost:8080/api/v1/lxc/instances/100/app/logs/nginx?tail=100"
 ```
 
-The query parameter is `tail` (forwarded as `app logs`'s `--tail`, a string, default `all`), not `lines` - `lines` doesn't exist as an option and is rejected with "No such option". `follow` has the same boolean-vs-string problem as `health-check`'s `--fix` above: `app logs`'s `--follow` is a bare flag, so `?follow=false` is sent as the literal `--follow false`, which fails the same way. There is currently no way to request a streamed (`--follow`) response through this endpoint.
+`tail` is the number of lines from the end of the log, or `all` (the default). Streaming (`docker logs --follow`) is not available: the request returns the log as it is when the request arrives.
 
 #### GET `/lxc/instances/{instance_id}/app/containers`
 
@@ -787,7 +807,7 @@ curl -H "X-API-Key: your-key" \
 
 #### POST `/lxc/instances/app/remove`
 
-Uninstall Docker and Compose from one or more containers. `instance_ids` is a list of positional arguments; every element must be numeric or the request is rejected with 400.
+Uninstall Docker and Compose from one or more containers. `instance_ids` is a list of positional arguments; every element must be numeric or the request is rejected with 400. `"purge": true` first removes all Docker containers, images, volumes and networks.
 
 ```bash
 curl -X POST \
@@ -891,8 +911,8 @@ curl -X POST \
   -H "X-API-Key: your-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "image_id": "local:vztmpl/ubuntu-22.04.tar.gz",
-    "size": "medium",
+    "image_id": "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.zst",
+    "size": "small",
     "hostname": "api-test"
   }' \
   http://localhost:8080/api/v1/lxc/instances
@@ -928,7 +948,7 @@ class LWSClient:
         response = requests.get(url, headers=self.headers)
         return response.json()
 
-    def create_container(self, image_id, size='medium'):
+    def create_container(self, image_id, size='small'):
         url = f"{self.base_url}/api/v1/lxc/instances"
         data = {'image_id': image_id, 'size': size}
         response = requests.post(url, json=data, headers=self.headers)

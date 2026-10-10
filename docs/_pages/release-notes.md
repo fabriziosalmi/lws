@@ -26,6 +26,44 @@ Merged into `main` after 1.4.3:
   remote shell.
 - **Web UI.** API responses are rendered as text instead of HTML, which closes
   a cross-site scripting hole in `ui.html`.
+- **`lxc exec`** ran everything after a `&&`, `;` or `|` on the Proxmox host
+  instead of in the container. The command now reaches the container as one
+  argument list; use `sh -c '...'` for shell syntax.
+- **Timeouts.** Remote commands were stopped after 60 seconds and started
+  again up to twice, which cut off and repeated backups, package installs and
+  migrations. The limit is now `ssh_command_timeout` (3600 seconds by default,
+  `0` for none), a command that timed out is never run again, and only failed
+  connections are retried. The API's limit is `api.command_timeout`.
+- **`px update`** never updated a host. It now runs `apt-get dist-upgrade` on
+  the selected host after a confirmation (`--yes` skips it).
+- **Security groups** use the Proxmox API (`pvesh`) instead of editing files.
+  `security-group-attach` used to add the group as a disabled rule; it now
+  enables it, and `--enable-firewall` turns on the container's firewall.
+  `security-group-rm` refuses a group that still has rules unless `--force`,
+  and `security-group-rule-rm` removes exact matches only.
+- **Backups.** `lxc backup-create` failed on every run (`--compress 6` is not
+  a vzdump value); it now takes `--compress zstd|gzip|lzo|none`, `--mode` and
+  `--storage`. `lxc backup-restore` restores vzdump archives with
+  `pct restore` and no longer deletes the backup afterwards.
+- **Scaling.** The example thresholds were written as percentages, so
+  `lxc scale-check` always suggested more; values above 1 are now read as
+  percentages. `lxc scale --storage-size` grows the disk with `pct resize`,
+  and `--net-limit` keeps the rest of the network settings.
+- **Docker apps.** `app setup` installs Docker and Compose from the
+  container's package manager and checks the `nesting` and `keyctl` features
+  (`--enable-nesting` sets them). `app deploy` keeps each Compose file in
+  `/opt/lws/apps/<name>/`, and `--auto-start` installs a systemd unit inside
+  the container instead of on the host.
+- **Other commands.** `lxc run` gains `--features` and `--unprivileged`;
+  `lxc clone` removes its temporary snapshot; `lxc migrate` gains
+  `--restart` and `--target-storage`; `lxc health-check --fix` no longer runs
+  placeholder commands; `lxc net` checks UDP ports with UDP.
+- **API.** Passwords no longer appear in `api.log`, error responses no longer
+  include exception text, and the Swagger page's "Try it out" calls the
+  right URLs.
+- **Configuration.** `config.yaml.example` drops the scaling, discovery and
+  `minimum_resources` keys that no command read. Existing files load
+  unchanged.
 
 ## 1.4.3 (2 October 2026)
 

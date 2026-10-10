@@ -294,7 +294,11 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
     logging.info(f"Executing command: {loggable_cmd}")
 
     try:
-        process = subprocess.Popen(full_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        # stdin is closed: a command that asks for confirmation (backup-restore
+        # over an existing container) is refused at once instead of waiting
+        # for an answer from the server's terminal until the timeout.
+        process = subprocess.Popen(full_cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                   stderr=subprocess.PIPE, text=True)
         try:
             stdout, stderr = process.communicate(timeout=COMMAND_TIMEOUT)
         except subprocess.TimeoutExpired:
@@ -316,6 +320,19 @@ def run_lws_command(command_parts, data=None, consumed_keys=None):
         logging.exception(f"Error executing command: {e}")
         # Do not expose internal details to user
         return None, "Internal error executing command.", 1
+
+def region_az_options(data):
+    """--region/--az from a request body, as arguments placed before a `--`.
+
+    run_lws_command appends options at the end of the command, which for
+    commands ending in `-- <arguments>` would pass them on as arguments.
+    """
+    parts = []
+    for key in ('region', 'az'):
+        if isinstance(data.get(key), str):
+            parts += [f'--{key}', data[key]]
+    return parts
+
 
 def format_response(stdout, stderr, return_code):
     """Formats the command output into a JSON response."""
@@ -787,17 +804,17 @@ def px_exec():
     cmd_to_exec = data['command']
     if isinstance(cmd_to_exec, str):
         cmd_to_exec_parts = shlex.split(cmd_to_exec) # Split safely
-    elif isinstance(cmd_to_exec, list):
+    elif isinstance(cmd_to_exec, list) and all(isinstance(p, str) for p in cmd_to_exec):
         cmd_to_exec_parts = cmd_to_exec
     else:
         return jsonify({"error": "'command' must be a string or a list of strings"}), 400
+    if not cmd_to_exec_parts:
+        return jsonify({"error": "'command' is empty"}), 400
 
-    cmd_parts = ['px', 'exec'] + cmd_to_exec_parts
-    
-    # Pass region/az from data if present
-    exec_data = {k: v for k, v in data.items() if k in ['region', 'az']}
-    
-    stdout, stderr, rc = run_lws_command(cmd_parts, exec_data)
+    # lws px exec [--region R] [--az A] -- <command>: after `--`, an argument
+    # such as `-h` in `df -h` is part of the command, not an lws option.
+    cmd_parts = ['px', 'exec'] + region_az_options(data) + ['--'] + cmd_to_exec_parts
+    stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/px/backup', methods=['POST'])
@@ -873,7 +890,8 @@ def lxc_scale_instances():
     data = request.get_json()
     if not data or not validate_instance_ids_list(data.get('instance_ids')):
          return jsonify({"error": "Missing or invalid 'instance_ids' (list of numeric IDs) in request body"}), 400
-    if not any(k in data for k in ['memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit', 'disk_read_limit', 'disk_write_limit']):
+    scale_fields = ('memory', 'cpulimit', 'cpucores', 'storage_size', 'net_limit', 'disk_read_limit', 'disk_write_limit')
+    if not any(k in data for k in scale_fields):
         return jsonify({"error": "Missing scaling parameters (memory, cpulimit, etc.)"}), 400
 
     cmd_parts = ['lxc', 'scale'] + data['instance_ids']
@@ -1033,22 +1051,18 @@ def lxc_exec(instance_id):
     if not data or 'command' not in data:
          return jsonify({"error": "Missing 'command' in request body"}), 400
 
-    # The command itself might have multiple parts
+    # `lws lxc exec` takes the command as one string and splits it itself.
     cmd_to_exec = data['command']
-    if isinstance(cmd_to_exec, str):
-        cmd_to_exec_parts = shlex.split(cmd_to_exec) # Split safely
-    elif isinstance(cmd_to_exec, list):
-        cmd_to_exec_parts = cmd_to_exec
-    else:
+    if isinstance(cmd_to_exec, list) and all(isinstance(p, str) for p in cmd_to_exec):
+        cmd_to_exec = shlex.join(cmd_to_exec)
+    elif not isinstance(cmd_to_exec, str):
         return jsonify({"error": "'command' must be a string or a list of strings"}), 400
+    if not cmd_to_exec.strip():
+        return jsonify({"error": "'command' is empty"}), 400
 
-    # The lws command expects the command parts after the instance ID
-    cmd_parts = ['lxc', 'exec', instance_id] + cmd_to_exec_parts
-    
-    # Pass region/az from data if present
-    exec_data = {k: v for k, v in data.items() if k in ['region', 'az']}
-
-    stdout, stderr, rc = run_lws_command(cmd_parts, exec_data)
+    # lws lxc exec [--region R] [--az A] -- <id> <command>
+    cmd_parts = ['lxc', 'exec'] + region_az_options(data) + ['--', instance_id, cmd_to_exec]
+    stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)
 
 @app.route('/api/v1/lxc/instances/<instance_id>/net-check', methods=['GET'])
@@ -1157,11 +1171,7 @@ def app_run_docker(instance_id):
     # lws app run [--region R] [--az A] <id> -- <docker run arguments>
     # Options go before `--`: everything after it is passed to docker run, so
     # `-d` and `-p` reach Docker instead of being read as lws options.
-    cmd_parts = ['app', 'run']
-    for key in ('region', 'az'):
-        if isinstance(data.get(key), str):
-            cmd_parts += [f'--{key}', data[key]]
-    cmd_parts += [instance_id, '--'] + docker_cmd_parts
+    cmd_parts = ['app', 'run'] + region_az_options(data) + [instance_id, '--'] + docker_cmd_parts
 
     stdout, stderr, rc = run_lws_command(cmd_parts, {})
     return format_response(stdout, stderr, rc)

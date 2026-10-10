@@ -164,9 +164,9 @@ def run_scp_command(ssh_password, *scp_args, timeout=None):
     """
     Runs `scp` with the given arguments, with the password passed via the
     SSHPASS environment variable and host-key verification enabled - the
-    same security properties as run_ssh_command, but without its fixed
-    60-second timeout or retry-on-connection-refused logic: a file transfer
-    can legitimately take far longer than a status command, and blindly
+    same security properties as run_ssh_command, but without its command
+    timeout or retry-on-connection-refused logic: a file transfer can
+    legitimately take far longer than a status command, and blindly
     retrying a partially-completed transfer is not safe in general.
 
     Parameters:

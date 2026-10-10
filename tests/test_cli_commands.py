@@ -133,6 +133,22 @@ class TestLxcExec:
         assert lws.run_argv.called
         assert ["pct", "exec", "100", "--", "echo", "hi;", "reboot"] in rec.calls
 
+    def test_accepts_the_argument_order_the_api_sends(self, remote):
+        """api.py sends `lxc exec --region R -- <id> <command>`."""
+        rec = remote()
+        result = run("lxc", "exec", "--region", "eu-south-1", "--az", "az1", "--", "100", "df -h /")
+        assert result.exit_code == 0, result.output
+        assert rec.calls == [["pct", "exec", "100", "--", "df", "-h", "/"]]
+
+
+class TestPxExec:
+    def test_options_of_the_command_after_the_separator(self, remote):
+        """api.py sends `px exec --region R -- <command>`; `-h` belongs to df."""
+        rec = remote()
+        result = run("px", "exec", "--region", "eu-south-1", "--", "df", "-h", "/var/lib/vz")
+        assert result.exit_code == 0, result.output
+        assert rec.calls == [["df", "-h", "/var/lib/vz"]]
+
 
 class TestPxUpdate:
     def test_upgrades_every_configured_host_after_confirmation(self, remote):
@@ -259,7 +275,8 @@ class TestSecurityGroups:
         rec = remote([
             ("hostname", ok("pve1\n")),
             pvesh_get("/cluster/firewall/groups", [{"group": "web"}]),
-            pvesh_get("/nodes/pve1/lxc/100/firewall/rules", [{"pos": 0, "type": "group", "action": "web", "enable": 0}]),
+            pvesh_get("/nodes/pve1/lxc/100/firewall/rules",
+                      [{"pos": 0, "type": "group", "action": "web", "enable": 0}]),
             pvesh_get("/cluster/firewall/options", {"enable": 1}),
             pvesh_get("/nodes/pve1/lxc/100/firewall/options", {"enable": 1}),
         ])
@@ -305,7 +322,8 @@ class TestSecurityGroups:
         rec = remote([("hostname", ok("pve1\n")), pvesh_get("/nodes/pve1/lxc/100/firewall/rules", rules)])
         result = run("px", "security-group-detach", "web", "100")
         assert result.exit_code == 0, result.output
-        assert [c for c in rec.calls if c[1:2] == ["delete"]] == [["pvesh", "delete", "/nodes/pve1/lxc/100/firewall/rules/1"]]
+        deletes = [c for c in rec.calls if c[1:2] == ["delete"]]
+        assert deletes == [["pvesh", "delete", "/nodes/pve1/lxc/100/firewall/rules/1"]]
 
 
 VZDUMP_LOG = ("INFO: starting new backup job: vzdump 100 --mode snapshot --compress zstd --dumpdir /var/lib/vz/dump\n"
@@ -525,7 +543,8 @@ class TestDocker:
 
 class TestLxcRunCloneMigrate:
     def test_run_with_features_and_a_single_net0(self, remote):
-        rec = remote([("pct list", ok("VMID       Status     Lock         Name\n100        running                 web\n"))])
+        pct_list = "VMID       Status     Lock         Name\n100        running                 web\n"
+        rec = remote([("pct list", ok(pct_list))])
         # --size choices are read from config.yaml when lws.py is imported.
         size = next(p for p in lws.lws.commands["lxc"].commands["run"].params if p.name == "size")
         with patch.object(size.type, "choices", ["small"]), \
