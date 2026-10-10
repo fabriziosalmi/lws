@@ -242,20 +242,51 @@ class TestRunSSHCommand:
 
     @pytest.mark.unit
     @pytest.mark.ssh
-    def test_timeout_with_retry(self, mock_sshpass_installed):
-        """Test timeout error triggers retry and eventually fails."""
-        host = "proxmox1.example.com"
-        user = "root"
-        password = "test_password"
-        command = ["pct", "list"]
-        
-        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(cmd=[], timeout=60)):
+    def test_timeout_is_not_retried(self, mock_sshpass_installed):
+        """A command that started and then timed out is not run again.
+
+        It may already have changed the host (a vzdump, an apt-get), and a
+        second run of a non-idempotent command is not safe.
+        """
+        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired(cmd=[], timeout=60)) as mock_run:
             with patch('time.sleep'):
-                result = run_ssh_command(host, user, password, command)
-                
-                # Should return timeout error after all retries
-                assert result.returncode == 124
-                assert "timed out" in result.stderr.lower()
+                result = run_ssh_command("proxmox1.example.com", "root", "pw", ["vzdump", "100"], timeout=60)
+
+        assert result.returncode == 124
+        assert "timed out after 60 seconds" in result.stderr
+        assert mock_run.call_count == 1
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_default_timeout_allows_long_commands(self, mock_sshpass_installed):
+        """Without ssh_command_timeout in config.yaml, a command may run for an hour."""
+        ok = Mock(returncode=0, stdout="", stderr="")
+        with patch('subprocess.run', return_value=ok) as mock_run, \
+                patch('lws_core.config.config', {}):
+            run_ssh_command("h", "root", "pw", ["pct", "list"])
+        assert mock_run.call_args.kwargs["timeout"] == 3600
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    @pytest.mark.parametrize("configured, expected", [(120, 120.0), (0, None), (None, None), ("900", 900.0)])
+    def test_timeout_from_config(self, mock_sshpass_installed, configured, expected):
+        ok = Mock(returncode=0, stdout="", stderr="")
+        with patch('subprocess.run', return_value=ok) as mock_run, \
+                patch('lws_core.config.config', {"ssh_command_timeout": configured}):
+            run_ssh_command("h", "root", "pw", ["pct", "list"])
+        assert mock_run.call_args.kwargs["timeout"] == expected
+
+    @pytest.mark.unit
+    @pytest.mark.ssh
+    def test_command_output_mentioning_refused_is_not_retried(self, mock_sshpass_installed):
+        """Only ssh's own connection errors (exit 255) are retried, not a
+        remote command that failed and printed "Connection refused"."""
+        failed = Mock(returncode=7, stdout="", stderr="curl: (7) Failed to connect: Connection refused")
+        with patch('subprocess.run', return_value=failed) as mock_run:
+            with patch('time.sleep'):
+                result = run_ssh_command("h", "root", "pw", ["pct", "exec", "100", "--", "curl", "x"])
+        assert result.returncode == 7
+        assert mock_run.call_count == 1
 
     @pytest.mark.unit
     @pytest.mark.ssh

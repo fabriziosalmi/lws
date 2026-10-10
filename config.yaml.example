@@ -2,9 +2,9 @@ use_local_only: false
 start_vmid: 10000
 default_storage: local-lvm
 default_network: vmbr0
-minimum_resources:
-  cores: 1
-  memory_mb: 512
+# Seconds one remote command may run over SSH before LWS stops it (default
+# 3600). Backups, package installs and migrations take minutes. 0 = no limit.
+ssh_command_timeout: 3600
 
 # API configuration
 # The API server runs lws, which executes pct and ssh as root on every host in
@@ -18,6 +18,7 @@ api:
   port: 8080           # Default port for the API server
   debug: false         # Set to true for development only
   log_level: "INFO"    # Log level (DEBUG, INFO, WARNING, ERROR)
+  command_timeout: 3600  # Seconds the API waits for one lws command before stopping it
   allowed_origins:     # Example: Allow localhost server and file:// origin
     - "http://localhost:8080" # If serving ui.html via python http.server
     - "null" # For file:// access (use with caution)
@@ -53,71 +54,45 @@ regions:
         user: root
         ssh_password: password
 
+# Used by `lws lxc scale-check`, which compares what a container is allocated
+# with the host's capacity and prints suggestions. Nothing is applied
+# automatically. Thresholds are fractions of the host (0.30 = 30%).
 scaling:
-  host_cpu:
-    max_threshold: 80  # Maximum percentage of host CPU usage before considering a decrease
-    min_threshold: 30  # Minimum percentage of host CPU usage before considering an increase
-    step: 1  # Base increment or decrement of CPU cores on the host
-    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
-
   lxc_cpu:
-    max_threshold: 80  # Maximum percentage of LXC CPU usage before considering a decrease
-    min_threshold: 30  # Minimum percentage of LXC CPU usage before considering an increase
-    step: 1  # Base increment or decrement of CPU cores in the LXC
-    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
-
-  host_memory:
-    max_threshold: 70  # Percentage of total memory on the host before considering a decrease
-    min_threshold: 40  # Percentage of total memory on the host before considering an increase
-    step_mb: 256  # Base amount of memory in MB to increase or decrease
-    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
+    min_threshold: 0.30       # suggest more cores below 30% of the host's cores
+    max_threshold: 0.80       # suggest fewer cores above 80%
+    step: 1                   # cores per step
+    scale_up_multiplier: 1.5
+    scale_down_multiplier: 0.5
 
   lxc_memory:
-    max_threshold: 70  # Maximum percentage of LXC memory usage before considering a decrease
-    min_threshold: 40  # Minimum percentage of LXC memory usage before considering an increase
-    step_mb: 256  # Base amount of memory in MB to increase or decrease
-    scale_up_multiplier: 1.25  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.75  # Multiplier applied to step size when scaling down
-
-  host_storage:
-    max_threshold: 85  # Maximum percentage of storage usage on the host before considering a decrease
-    min_threshold: 50  # Minimum percentage of storage usage on the host before considering an increase
-    step_gb: 10  # Base increment or decrement of storage in GB
-    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+    min_threshold: 0.40       # suggest more memory below 40% of the host's memory
+    max_threshold: 0.70       # suggest less memory above 70%
+    step_mb: 256
+    scale_up_multiplier: 1.25
+    scale_down_multiplier: 0.75
 
   lxc_storage:
-    max_threshold: 85  # Maximum percentage of storage usage in the LXC before considering a decrease
-    min_threshold: 50  # Minimum percentage of storage usage in the LXC before considering an increase
-    step_gb: 10  # Base increment or decrement of storage in GB
-    scale_up_multiplier: 1.5  # Multiplier applied to step size when scaling up
-    scale_down_multiplier: 0.5  # Multiplier applied to step size when scaling down
+    min_threshold: 0.50       # suggest a larger disk below 50% of max_storage_gb
+    max_threshold: 0.85
+    step_gb: 10
+    scale_up_multiplier: 1.5
+    scale_down_multiplier: 0.5
 
   limits:
-    min_memory_mb: 512  # Minimum allowed memory for any LXC container
-    max_memory_mb: 32768  # Maximum allowed memory for any LXC container
-    min_cpu_cores: 1  # Minimum allowed CPU cores for any LXC container
-    max_cpu_cores: 16  # Maximum allowed CPU cores for any LXC container
-    min_storage_gb: 10  # Minimum allowed storage for any LXC container
-    max_storage_gb: 1024  # Maximum allowed storage for any LXC container
+    min_cpu_cores: 1
+    max_cpu_cores: 16
+    min_memory_mb: 512
+    max_memory_mb: 32768
+    min_storage_gb: 10
+    max_storage_gb: 1024
 
-  general:
-    scaling_interval: 5  # Interval in minutes to check for resource adjustments
-    notify_user: true  # Notify user via CLI output when scaling adjustments are made
-    dry_run: false  # If true, simulate scaling adjustments without applying changes
-    scaling_log_level: DEBUG  # Log level for scaling operations (DEBUG, INFO, WARN, ERROR)
-    use_custom_scaling_algorithms: false  # Enable if custom scaling algorithms are implemented
-
+# Used by `lws sec discovery` (ping sweeps of the surrounding /24 networks).
 security:
   discovery:
-    proxmox_timeout: 2
-    lxc_timeout: 2
-    discovery_methods: ['ping']
-    max_parallel_workers: 10  # Maximum number of parallel workers
-    
+    discovery_methods: ['ping']   # ping is the only method
+    max_parallel_workers: 10      # pings in flight at once
+
 instance_sizes:
   # Generic
   micro:
@@ -198,7 +173,7 @@ instance_sizes:
     memory: 4096  # 4 GB
     cpulimit: 2   # 2 vCPUs
     storage: local-lvm:20  # 20 GB of storage
-    # Example: OPNsense for firewall and routing.
+    # Example: an nftables firewall and router. (OPNsense and pfSense are FreeBSD and need a VM.)
 
   lws-search-analytics:
     memory: 8192  # 8 GB

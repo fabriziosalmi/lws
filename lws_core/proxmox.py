@@ -6,6 +6,7 @@ or remotely via SSH.
 """
 
 import logging
+import shlex
 import subprocess
 from .ssh import run_ssh_command
 
@@ -68,3 +69,21 @@ def run_proxmox_command(local_cmd, remote_cmd=None, use_local_only=False, host_d
     if cmd is None:
         raise ValueError("Command cannot be None.")
     return execute_command(cmd, use_local_only, host_details)
+
+
+def run_argv(argv, use_local_only=False, host_details=None):
+    """
+    Runs one command, given as an argument list, with the same arguments
+    locally and over SSH.
+
+    OpenSSH joins the arguments that follow user@host into a single string,
+    which the remote shell parses again. An argument list that is safe for
+    subprocess is therefore not safe remotely: `pct exec 100 -- ls && reboot`
+    would run `reboot` on the host. Quoting every argument with shlex.join
+    makes the remote shell see exactly `argv`, as subprocess does locally.
+
+    For a pipeline or `&&` inside a container, pass it explicitly to a shell
+    in the container: ["pct", "exec", id, "--", "sh", "-c", "a && b"].
+    """
+    argv = [str(a) for a in argv]
+    return run_proxmox_command(argv, [shlex.join(argv)], use_local_only, host_details)

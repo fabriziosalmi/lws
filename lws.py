@@ -6,6 +6,7 @@
 # lws
 
 import os
+import math
 import time
 import subprocess
 import shutil
@@ -34,6 +35,7 @@ from lws_core import (
     run_ssh_command,
     run_scp_command,
     run_proxmox_command,
+    run_argv,
     execute_command,
     process_instance_command,
     build_resize_command,
@@ -155,32 +157,41 @@ def validate_configuration_command():
         sys.exit(1)
 
 
+def _open_private(path, mode):
+    """Open a new file readable and writable by its owner only (0600)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    os.chmod(path, 0o600)  # also when the file already existed
+    return os.fdopen(fd, mode)
+
+
 @conf.command('backup')
-@click.argument('destination_path')
-@click.option('--timestamp', is_flag=True, help="Append timestamp to the backup file name.")
-@click.option('--compress', is_flag=True, help="Compress the backup file.")
+@click.argument('destination_path', callback=_validate_pattern(_SAFE_PATH_RE, "destination path"))
+@click.option('--timestamp', is_flag=True, help="Add a timestamp to the file name, before its extension.")
+@click.option('--compress', is_flag=True, help="Compress the backup file with gzip.")
 def backup_config(destination_path, timestamp, compress):
-    """💾 Backup the current configuration to a file."""
+    """💾 Backup the current configuration to a file.
+
+    The copy includes SSH passwords and the API key in clear text, so it is
+    written with 0600 permissions.
+    """
     if timestamp:
-        destination_path = f"{destination_path}_{time.strftime('%Y%m%d%H%M%S')}"
+        stem, ext = os.path.splitext(destination_path)
+        destination_path = f"{stem}_{time.strftime('%Y%m%d%H%M%S')}{ext}"
 
     logging.info(f"Backing up configuration to {destination_path}")
 
     try:
-        # Write the configuration to a file
-        with open(destination_path, 'w') as backup_file:
-            yaml.dump(config, backup_file)
-        
-        click.secho(f"✅ Configuration backed up to {destination_path}.", fg='green')
-        logging.info(f"✅ Configuration backed up to {destination_path}")
-
         if compress:
-            compressed_path = f"{destination_path}.gz"
-            with open(destination_path, 'rb') as f_in, gzip.open(compressed_path, 'wb') as f_out:
-                shutil.copyfileobj(f_in, f_out)
-            os.remove(destination_path)  # Remove the uncompressed file
-            click.secho(f"✅ Backup compressed to {compressed_path}.", fg='green')
-            logging.info(f"✅ Backup compressed to {compressed_path}")
+            destination_path = f"{destination_path}.gz"
+            with _open_private(destination_path, 'wb') as raw, gzip.GzipFile(fileobj=raw, mode='wb') as backup_file:
+                backup_file.write(yaml.dump(config).encode('utf-8'))
+        else:
+            with _open_private(destination_path, 'w') as backup_file:
+                yaml.dump(config, backup_file)
+
+        click.secho(f"✅ Configuration backed up to {destination_path}.", fg='green')
+        click.secho("⚠️ The file contains passwords and the API key in clear text.", fg='yellow')
+        logging.info(f"✅ Configuration backed up to {destination_path}")
     except Exception as e:
         click.secho(f"❌ Error backing up configuration: {str(e)}", fg='red')
         logging.error(f"❌ Error backing up configuration: {str(e)}")
@@ -367,7 +378,7 @@ def px_status(region, az):
     
     commands = {
         "Load Avg": ["cat", "/proc/loadavg"],
-        "Memory Info": ["cat", "/proc/meminfo"],
+        "Memory Usage": ["cat", "/proc/meminfo"],
         "Disk Space": ["df", "-h", "/"],
         "Swap Space": ["cat", "/proc/swaps"]
     }
@@ -434,17 +445,56 @@ def px_list_clusters(region, az):
         sys.exit(1)
 
 
-@px.command('update')
-def px_update_hosts():
-    """🔄 Update all Proxmox hosts."""
-    command = ["apt-get", "update", "&&", "apt-get", "upgrade", "-y"]
-    result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+# Proxmox VE is upgraded with dist-upgrade (full-upgrade): plain `upgrade`
+# never installs new dependencies, such as the next kernel package, and can
+# leave a host half-updated. Existing configuration files are kept.
+PX_UPGRADE_SCRIPT = (
+    "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get -y "
+    "-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold dist-upgrade"
+)
 
-    if result.returncode == 0:
-        click.secho("✅ All hosts updated successfully.", fg='green')
-    else:
-        click.secho(f"❌ Failed to update hosts: {result.stderr}", fg='red')
+
+@px.command('update')
+@click.option('--region', '--location', default=None, help="Only hosts in this region. Default: every configured host.")
+@click.option('--az', '--node', default=None, help="Only this availability zone (requires --region).")
+@click.option('--yes', is_flag=True, help="Do not ask for confirmation.")
+def px_update_hosts(region, az, yes):
+    """🔄 Update the packages of Proxmox hosts (apt-get dist-upgrade)."""
+    if az and not region:
+        raise click.UsageError("--az requires --region.")
+    targets = []
+    for region_name, region_config in config.get('regions', {}).items():
+        if region and region_name != region:
+            continue
+        for az_name, host_details in region_config.get('availability_zones', {}).items():
+            if az and az_name != az:
+                continue
+            targets.append((region_name, az_name, host_details))
+    if not targets:
+        click.secho("❌ No matching hosts in config.yaml.", fg='red')
         sys.exit(1)
+    if config.get('use_local_only'):
+        # Local mode manages the host LWS runs on, once.
+        targets = targets[:1]
+
+    names = ", ".join(f"{r}/{a} ({h['host']})" for r, a, h in targets)
+    if not yes:
+        click.confirm(f"⚠️ Run apt-get dist-upgrade on: {names}?", abort=True)
+
+    failed = []
+    for region_name, az_name, host_details in targets:
+        click.secho(f"🔄 Updating {region_name}/{az_name} ({host_details['host']})...", fg='cyan')
+        result = run_argv(["sh", "-c", PX_UPGRADE_SCRIPT], config.get('use_local_only', False), host_details)
+        if result.returncode == 0:
+            click.secho(f"✅ {region_name}/{az_name} updated.", fg='green')
+        else:
+            click.secho(f"❌ Failed to update {region_name}/{az_name}: {result.stderr.strip()}", fg='red')
+            failed.append(f"{region_name}/{az_name}")
+
+    if failed:
+        click.secho(f"❌ Update failed on: {', '.join(failed)}", fg='red')
+        sys.exit(1)
+    click.secho("✅ All selected hosts updated. A new kernel takes effect after a reboot.", fg='green')
 
 @px.command('cluster-start')
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
@@ -569,7 +619,9 @@ def px_create_backup(vmid, storage, mode, region, az):
 @click.option('--size', default='small', type=click.Choice(list(config['instance_sizes'].keys())), help="Instance size.")
 @click.option('--hostname', default=None, help="Hostname for the container.")
 @click.option('--net0', default=f"name=eth0,bridge={config.get('default_network', 'vmbr0')}", help="Network settings for the container.")
-@click.option('--storage-size', default=None, help="Override storage size for the container (e.g., 16G).")
+@click.option('--storage-size', default=None, callback=_validate_pattern(re.compile(r'^\d+(\.\d+)?G?$'), "storage size"), help="Root disk size in GiB, replacing the size's own (e.g., 16). Uses default_storage.")
+@click.option('--features', default=None, callback=_validate_pattern(re.compile(r'^[a-z]+=[0-9a-z;]+(,[a-z]+=[0-9a-z;]+)*$'), "features"), help="LXC features, e.g. nesting=1 (needed for Docker) or nesting=1,keyctl=1.")
+@click.option('--unprivileged', is_flag=True, help="Create an unprivileged container (recommended by Proxmox).")
 @click.option('--onboot', default=config.get('default_onboot', True), help="Start the container on boot.")
 @click.option('--lock', default=None, help="Set lock for the container. By default, no lock is set.")
 @click.option('--init', default=False, is_flag=True, help="Run initialization script after container creation.")
@@ -583,14 +635,21 @@ def px_create_backup(vmid, storage, mode, region, az):
 @click.option('--gateway', default=None, help="Set the gateway for the container's network.")
 @click.option('--dns', default=None, help="Set DNS servers for the container (comma-separated).")
 @click.option('--dhcp', is_flag=True, default=False, help="Enable DHCP for the container.")
-def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, lock, init, region, az, max_retries, retry_delay, password, ip, netmask, gateway, dns, dhcp):
+def run_instances(image_id, count, size, hostname, net0, storage_size, features, unprivileged, onboot, lock, init, region, az, max_retries, retry_delay, password, ip, netmask, gateway, dns, dhcp):
     """🛠️ Create and start LXC containers with optional network configuration, root password, gateway, and DNS settings."""
     start_vmid = config.get('start_vmid', 10000)
     instance_config = config['instance_sizes'][size]
     storage = instance_config['storage']
 
     if storage_size:
-        storage = f"{config['default_storage']}:{storage_size}"
+        # Proxmox reads STORAGE:SIZE as a size in GiB, without a unit.
+        storage = f"{config['default_storage']}:{storage_size.rstrip('G')}"
+
+    # One net0 value: --dhcp and --ip add to the base definition.
+    if dhcp:
+        net0 = f"{net0},ip=dhcp"
+    elif ip:
+        net0 = f"{net0},ip={ip}/{netmask}" + (f",gw={gateway}" if gateway else "")
 
     host_details = config['regions'][region]['availability_zones'][az]
 
@@ -615,18 +674,15 @@ def run_instances(image_id, count, size, hostname, net0, storage_size, onboot, l
         if password:
             create_cmd.extend(["--password", password])
 
-        # Set up network configuration
-        if dhcp:
-            create_cmd.extend(["--net0", f"{net0},ip=dhcp"])
-        elif ip:
-            net_config = f"{net0},ip={ip}/{netmask}"
-            if gateway:
-                net_config += f",gw={gateway}"
-            create_cmd.extend(["--net0", net_config])
+        if features:
+            create_cmd.extend(["--features", features])
 
-        # Add DNS settings if provided
+        if unprivileged:
+            create_cmd.extend(["--unprivileged", "1"])
+
+        # Add DNS settings if provided (pct takes a space-separated list)
         if dns:
-            create_cmd.extend(["--nameserver", dns])
+            create_cmd.extend(["--nameserver", dns.replace(",", " ")])
 
         # create_cmd runs unmodified when local (no shell involved - quoting
         # would corrupt the values, not protect them). When remote, OpenSSH
@@ -711,60 +767,76 @@ def describe_instances(instance_ids, region, az):
             click.secho(f"❌ Failed to list instances: {list_result.stderr}", fg='red')
             sys.exit(1)
 
+_DISK_SIZE_RE = re.compile(r'^\+?\d+(\.\d+)?[KMGT]?$')
+
+
 @lxc.command('scale')
-@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.option('--memory', default=None, help="New memory size in MB.")
-@click.option('--cpulimit', default=None, help="New CPU limit.")
-@click.option('--cpucores', default=None, help="New number of CPU cores.")
-@click.option('--storage-size', default=None, help="New root storage size (e.g., 16G).")
-@click.option('--net-limit', default=None, help="Network bandwidth limit (e.g., 10mbit).")
-@click.option('--disk-read-limit', default=None, help="Disk read limit (e.g., 50mb).")
-@click.option('--disk-write-limit', default=None, help="Disk write limit (e.g., 30mb).")
+@click.argument('instance_ids', nargs=-1, required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.option('--memory', type=click.IntRange(min=16), default=None, help="Memory in MB.")
+@click.option('--cpulimit', type=click.FloatRange(min=0, max=8192), default=None, help="CPU time limit, in CPUs (0 removes the limit).")
+@click.option('--cpucores', type=click.IntRange(min=1, max=8192), default=None, help="Number of CPU cores the container sees.")
+@click.option('--storage-size', default=None, callback=_validate_pattern(_DISK_SIZE_RE, "storage size"),
+              help="New root disk size, such as 32G, or +8G to add 8 GiB. Disks can only grow.")
+@click.option('--net-limit', type=click.FloatRange(min=0), default=None, help="Rate limit of net0, in MB/s (0 removes the limit).")
+@click.option('--disk-read-limit', default=None, hidden=True)
+@click.option('--disk-write-limit', default=None, hidden=True)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def scale_instances(instance_ids, memory, cpulimit, cpucores, storage_size, net_limit, disk_read_limit, disk_write_limit, region, az):
-    """📏 Scale resources LXC containers."""
-    
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-    
-    # Loop through each instance ID and apply the scaling configuration
+    """📏 Change the CPU, memory, disk and network limits of LXC containers."""
+    if disk_read_limit or disk_write_limit:
+        raise click.UsageError("--disk-read-limit and --disk-write-limit were removed: Proxmox has no "
+                               "disk bandwidth limits for containers.")
+    if all(v is None for v in (memory, cpulimit, cpucores, storage_size, net_limit)):
+        raise click.UsageError("Nothing to change: pass at least one of --memory, --cpulimit, --cpucores, "
+                               "--storage-size, --net-limit.")
+
+    host_details = _host_details(region, az)
+    use_local = config['use_local_only']
+    failed = []
+
     for instance_id in instance_ids:
-        # Build the command to set the new resource parameters
-        scale_cmd = ["pct", "set", instance_id]
-        
-        if memory:
-            scale_cmd.extend(["--memory", str(memory)])
-        
-        if cpulimit:
-            scale_cmd.extend(["--cpulimit", str(cpulimit)])
-        
-        if cpucores:
-            scale_cmd.extend(["--cores", str(cpucores)])
-        
+        set_cmd = ["pct", "set", instance_id]
+        if memory is not None:
+            set_cmd += ["--memory", str(memory)]
+        if cpulimit is not None:
+            set_cmd += ["--cpulimit", f"{cpulimit:g}"]
+        if cpucores is not None:
+            set_cmd += ["--cores", str(cpucores)]
+        if net_limit is not None:
+            # net0 is replaced as a whole, so the rate goes into the current definition.
+            current = run_argv(["pct", "config", instance_id], use_local, host_details)
+            net0 = next((line.split(":", 1)[1].strip() for line in current.stdout.splitlines()
+                         if line.startswith("net0:")), None) if current.returncode == 0 else None
+            if not net0:
+                click.secho(f"❌ Container {instance_id} has no net0 to limit.", fg='red')
+                failed.append(instance_id)
+                continue
+            options = [o for o in net0.split(",") if o and not o.startswith("rate=")]
+            if net_limit > 0:
+                options.append(f"rate={net_limit:g}")
+            set_cmd += ["--net0", ",".join(options)]
+
+        if len(set_cmd) > 3:
+            result = run_argv(set_cmd, use_local, host_details)
+            if result.returncode != 0:
+                click.secho(f"❌ Failed to scale instance '{instance_id}': {result.stderr.strip()}", fg='red')
+                failed.append(instance_id)
+                continue
+
         if storage_size:
-            scale_cmd.extend(["--rootfs", f"{config['default_storage']}:{storage_size}"])
-        
-        if net_limit:
-            scale_cmd.extend(["--net0", f"rate={net_limit}"])
+            size = storage_size if storage_size[-1] in "KMGT" else f"{storage_size}G"
+            result = run_argv(["pct", "resize", instance_id, "rootfs", size], use_local, host_details)
+            if result.returncode != 0:
+                click.secho(f"❌ Failed to resize the disk of '{instance_id}': {result.stderr.strip()}", fg='red')
+                failed.append(instance_id)
+                continue
 
-        if disk_read_limit:
-            scale_cmd.extend(["--mp0", f"iops_rd={disk_read_limit}"])
+        click.secho(f"✅ Instance '{instance_id}' successfully scaled.", fg='green')
 
-        if disk_write_limit:
-            scale_cmd.extend(["--mp0", f"iops_wr={disk_write_limit}"])
-        
-        # Execute the scale command on the Proxmox host using SSH
-        result = run_proxmox_command(scale_cmd, scale_cmd, config['use_local_only'], host_details)
-        
-        # Output the result of the command
-        if result.returncode == 0:
-            click.secho(f"✅ Instance '{instance_id}' successfully scaled.", fg='green')
-        else:
-            click.secho(f"❌ Failed to scale instance '{instance_id}': {result.stderr.strip()}", fg='red')
+    if failed:
+        sys.exit(1)
+
 
 @lxc.command('snapshot-add')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
@@ -1024,24 +1096,23 @@ def service(action, service_name, instance_ids, region, az):
 
 @lxc.command('migrate')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.option('--target-host', required=True, callback=_validate_pattern(_HOSTNAME_RE, "target host"), help="Target Proxmox host where the LXC container will be migrated.")
+@click.option('--target-host', required=True, callback=_validate_pattern(_HOSTNAME_RE, "target host"), help="Name of the Proxmox node, in the same cluster, to move the container to.")
+@click.option('--restart', is_flag=True, help="Migrate a running container: stop it, move it, start it on the target (pct migrate --restart).")
+@click.option('--target-storage', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "target storage"), help="Storage on the target node for the container's disks.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def lxc_migrate(instance_id, target_host, region, az):
-    """🔄 Migrate LXC container between hosts."""
-    
-    # Load configuration
-    config = load_config()
-    host_details = config['regions'][region]['availability_zones'][az]
-    source_host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
+def lxc_migrate(instance_id, target_host, restart, target_storage, region, az):
+    """🔄 Migrate an LXC container to another node of the same Proxmox cluster."""
+    host_details = _host_details(region, az)
 
-    # Command to migrate the LXC container
     migrate_cmd = ["pct", "migrate", instance_id, target_host]
+    if restart:
+        migrate_cmd.append("--restart")
+    if target_storage:
+        migrate_cmd += ["--target-storage", target_storage]
 
-    # Execute the migration command on the source host
-    result = run_ssh_command(source_host, user, ssh_password, migrate_cmd)
+    # Runs on the source node; Proxmox moves the data between nodes itself.
+    result = run_argv(migrate_cmd, config['use_local_only'], host_details)
 
     # Output the result of the command
     if result.returncode == 0:
@@ -1051,237 +1122,266 @@ def lxc_migrate(instance_id, target_host, region, az):
         sys.exit(1)
 
 
+# --- Firewall security groups -------------------------------------------------
+# These commands go through pvesh, the command-line client of the Proxmox VE
+# API that every host has. The API validates rules, numbers them, writes
+# /etc/pve/firewall/*.fw atomically and refuses to delete a group that still
+# has rules. Editing those files with sed, as earlier versions did, could
+# delete neighbouring groups and wrote group references in the disabled form.
+
+_REGION_OPTION = click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+_AZ_OPTION = click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+_RULE_FIELDS = ('type', 'action', 'proto', 'sport', 'dport', 'source', 'dest')
+
+
+def _host_details(region, az):
+    try:
+        return config['regions'][region]['availability_zones'][az]
+    except KeyError:
+        click.secho(f"❌ Invalid region '{region}' or availability zone '{az}'.", fg='red')
+        sys.exit(1)
+
+
+def pvesh(verb, path, host_details, **params):
+    """Run `pvesh <verb> <path> --key value ...`; None values are left out."""
+    argv = ["pvesh", verb, path]
+    for key, value in params.items():
+        if value is not None:
+            argv += [f"--{key}", str(value)]
+    return run_argv(argv, config['use_local_only'], host_details)
+
+
+def pvesh_json(path, host_details):
+    """`pvesh get <path>` parsed as JSON; exits with a message if it fails."""
+    result = run_argv(["pvesh", "get", path, "--output-format", "json"], config['use_local_only'], host_details)
+    if result.returncode != 0:
+        click.secho(f"❌ pvesh get {path} failed: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    try:
+        return json.loads(result.stdout or "null")
+    except ValueError:
+        click.secho(f"❌ Unexpected output from pvesh get {path}.", fg='red')
+        sys.exit(1)
+
+
+def proxmox_node_name(host_details):
+    """The node name Proxmox uses for this host (its short hostname)."""
+    result = run_argv(["hostname"], config['use_local_only'], host_details)
+    name = result.stdout.strip().split('.')[0] if result.returncode == 0 else ""
+    if not name:
+        click.secho(f"❌ Could not read the host name: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    return name
+
+
+def _rule_fields(direction, action, protocol, source_ip, source_port, destination_ip, destination_port):
+    return {
+        'type': direction.lower(), 'action': action, 'proto': protocol,
+        'sport': source_port, 'dport': destination_port,
+        'source': source_ip, 'dest': destination_ip,
+    }
+
+
+def _describe_rule(fields):
+    """A rule as one line, in the order Proxmox shows it in its .fw files."""
+    parts = [str(fields.get('type', '')).upper(), str(fields.get('action', ''))]
+    labels = (('macro', '-macro'), ('proto', '-p'), ('source', '--source'), ('sport', '--sport'),
+              ('dest', '--dest'), ('dport', '--dport'))
+    parts += [f"{flag} {fields[key]}" for key, flag in labels if fields.get(key)]
+    return " ".join(p for p in parts if p)
+
+
+def _rule_options(func):
+    for decorator in reversed([
+        click.option('--direction', type=click.Choice(['IN', 'OUT'], case_sensitive=False), required=True, help="Direction of the rule (IN or OUT)."),
+        click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT'], case_sensitive=False), default='ACCEPT', help="Action of the rule. Default: ACCEPT."),
+        click.option('--protocol', default='tcp', callback=_validate_pattern(_PROTOCOL_RE, "protocol"), help="Protocol (e.g., tcp, udp, icmp). Default: tcp."),
+        click.option('--source-ip', default=None, callback=_validate_ip_or_cidr, help="Source IP or CIDR."),
+        click.option('--source-port', default=None, callback=_validate_pattern(_PORT_RE, "source port"), help="Source port or range (e.g., 22, 80:443)."),
+        click.option('--destination-ip', default=None, callback=_validate_ip_or_cidr, help="Destination IP or CIDR."),
+        click.option('--destination-port', default=None, callback=_validate_pattern(_PORT_RE, "destination port"), help="Destination port or range (e.g., 22, 80:443)."),
+    ]):
+        func = decorator(func)
+    return func
+
+
 @px.command('security-group-add')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
-@click.option('--description', default='', help="Description of the security group.")
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def create_security_group_cluster(group_name, description, region, az):
-    """🔐 Create security group on Proxmox host."""
-
-    # Prepare the line to add to the cluster.fw file
-    security_group_line = f"[group {group_name}]"
-    #### security_group_line = f"[group {group_name}] # {description}"
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Command to append the security group to the cluster.fw file
-    append_cmd = f"echo '{security_group_line}' | tee -a /etc/pve/firewall/cluster.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [append_cmd])
-
-    # Output the result of the command
+@click.option('--description', default=None, callback=_validate_pattern(_SAFE_FREETEXT_RE, "description"), help="Description of the security group.")
+@_REGION_OPTION
+@_AZ_OPTION
+def create_security_group(group_name, description, region, az):
+    """🔐 Create a security group in the cluster firewall."""
+    host_details = _host_details(region, az)
+    result = pvesh("create", "/cluster/firewall/groups", host_details, group=group_name, comment=description or None)
     if result.returncode == 0:
-        click.secho(f"✅ Security group '{group_name}' successfully added to cluster.fw on host {host}.", fg='green')
+        click.secho(f"✅ Security group '{group_name}' created.", fg='green')
     else:
-        click.secho(f"❌ Failed to add security group on host {host}: {result.stderr.strip()}", fg='red')
+        click.secho(f"❌ Failed to create security group '{group_name}': {result.stderr.strip()}", fg='red')
         sys.exit(1)
+
 
 @px.command('security-group-rm')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def remove_security_group_cluster(group_name, region, az):
-    """🗑️ Delete a security group on Proxmox host."""
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Command to delete the security group section from the cluster.fw file
-    remove_cmd = f"sed -i '/\\[group {group_name}\\]/,/^$/d' /etc/pve/firewall/cluster.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [remove_cmd])
-
-    # Output the result of the command
-    if result.returncode == 0:
-        # Validate that the group has been removed
-        validate_cmd = f"grep -q '\\[group {group_name}\\]' /etc/pve/firewall/cluster.fw"
-        validation_result = run_ssh_command(host, user, ssh_password, [validate_cmd])
-
-        if validation_result.returncode != 0:
-            click.secho(f"✅ Security group '{group_name}' successfully removed from cluster.fw on host {host}.", fg='green')
-        else:
-            click.secho(f"❌ Security group '{group_name}' was not fully removed from cluster.fw on host {host}.", fg='red')
+@click.option('--force', is_flag=True, help="Also delete the group's rules. Without it, a group that has rules is not deleted.")
+@_REGION_OPTION
+@_AZ_OPTION
+def delete_security_group(group_name, force, region, az):
+    """🗑️ Delete a security group from the cluster firewall."""
+    host_details = _host_details(region, az)
+    rules = pvesh_json(f"/cluster/firewall/groups/{group_name}", host_details) or []
+    if rules and not force:
+        click.secho(f"❌ Security group '{group_name}' has {len(rules)} rule(s). Remove them first, or pass --force.", fg='red')
+        sys.exit(1)
+    # Highest position first, so the remaining positions do not shift.
+    for rule in sorted(rules, key=lambda r: int(r['pos']), reverse=True):
+        result = pvesh("delete", f"/cluster/firewall/groups/{group_name}/{int(rule['pos'])}", host_details)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to delete rule {rule['pos']} of '{group_name}': {result.stderr.strip()}", fg='red')
             sys.exit(1)
+    result = pvesh("delete", f"/cluster/firewall/groups/{group_name}", host_details)
+    if result.returncode == 0:
+        click.secho(f"✅ Security group '{group_name}' deleted.", fg='green')
     else:
-        click.secho(f"❌ Failed to remove security group on host {host}: {result.stderr.strip()}", fg='red')
+        click.secho(f"❌ Failed to delete security group '{group_name}': {result.stderr.strip()}", fg='red')
         sys.exit(1)
 
 
 @px.command('security-group-rule-add')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
-@click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
-@click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
-@click.option('--protocol', default='tcp', callback=_validate_pattern(_PROTOCOL_RE, "protocol"), help="Protocol (e.g., tcp, udp, icmp).")
-@click.option('--source-ip', default=None, callback=_validate_ip_or_cidr, help="Source IP or CIDR for ingress rules.")
-@click.option('--source-port', default=None, callback=_validate_pattern(_PORT_RE, "source port"), help="Source port number or range (e.g., 22, 80:443).")
-@click.option('--destination-ip', default=None, callback=_validate_ip_or_cidr, help="Destination IP or CIDR for egress rules.")
-@click.option('--destination-port', default=None, callback=_validate_pattern(_PORT_RE, "destination port"), help="Destination port number or range (e.g., 22, 80:443).")
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def add_rule_to_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
-    """➕ Add a rule to a existing security group."""
-
-    # Construct the rule based on provided options
-    rule = f"{direction} {action} -p {protocol}"
-
-    if source_ip:
-        rule += f" --source {source_ip}"
-    if source_port:
-        rule += f" --sport {source_port}"
-    if destination_ip:
-        rule += f" --dest {destination_ip}"
-    if destination_port:
-        rule += f" --dport {destination_port}"
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Command to add the rule to the specific security group in the cluster.fw file
-    append_cmd = f"sed -i '/\\[group {group_name}\\]/a {rule}' /etc/pve/firewall/cluster.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [append_cmd])
-
-    # Output the result of the command
+@_rule_options
+@_REGION_OPTION
+@_AZ_OPTION
+def add_security_group_rule(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
+    """➕ Add a rule to an existing security group."""
+    host_details = _host_details(region, az)
+    fields = _rule_fields(direction, action.upper(), protocol, source_ip, source_port, destination_ip, destination_port)
+    result = pvesh("create", f"/cluster/firewall/groups/{group_name}", host_details, enable=1, **fields)
     if result.returncode == 0:
-        click.secho(f"✅ Rule '{rule}' successfully added to group '{group_name}' in cluster.fw on host {host}.", fg='green')
+        click.secho(f"✅ Rule '{_describe_rule(fields)}' added to security group '{group_name}'.", fg='green')
     else:
-        click.secho(f"❌ Failed to add rule to group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
+        click.secho(f"❌ Failed to add the rule to '{group_name}': {result.stderr.strip()}", fg='red')
         sys.exit(1)
+
 
 @px.command('security-group-rule-rm')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
-@click.option('--direction', type=click.Choice(['IN', 'OUT']), required=True, help="Direction of the rule (IN or OUT).")
-@click.option('--action', type=click.Choice(['ACCEPT', 'DROP', 'REJECT']), default='ACCEPT', help="Action to take on the traffic (ACCEPT, DROP, REJECT).")
-@click.option('--protocol', default='tcp', callback=_validate_pattern(_PROTOCOL_RE, "protocol"), help="Protocol (e.g., tcp, udp, icmp).")
-@click.option('--source-ip', default=None, callback=_validate_ip_or_cidr, help="Source IP or CIDR for ingress rules.")
-@click.option('--source-port', default=None, callback=_validate_pattern(_PORT_RE, "source port"), help="Source port number or range (e.g., 22, 80:443).")
-@click.option('--destination-ip', default=None, callback=_validate_ip_or_cidr, help="Destination IP or CIDR for egress rules.")
-@click.option('--destination-port', default=None, callback=_validate_pattern(_PORT_RE, "destination port"), help="Destination port number or range (e.g., 22, 80:443).")
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def remove_rule_from_group(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
-    """➖ Remove a rule from an existing security group."""
+@_rule_options
+@_REGION_OPTION
+@_AZ_OPTION
+def remove_security_group_rule(group_name, direction, action, protocol, source_ip, source_port, destination_ip, destination_port, region, az):
+    """➖ Remove a rule from a security group.
 
-    # Construct the rule based on provided options
-    rule = f"{direction} {action} -p {protocol}"
-
-    if source_ip:
-        rule += f" --source {source_ip}"
-    if source_port:
-        rule += f" --sport {source_port}"
-    if destination_ip:
-        rule += f" --dest {destination_ip}"
-    if destination_port:
-        rule += f" --dport {destination_port}"
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Command to remove the rule from the specific security group in the cluster.fw file
-    remove_cmd = f"sed -i '/\\[group {group_name}\\]/,/^$/ {{ /{rule}/d }}' /etc/pve/firewall/cluster.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [remove_cmd])
-
-    # Output the result of the command
-    if result.returncode == 0:
-        click.secho(f"✅ Rule '{rule}' successfully removed from group '{group_name}' in cluster.fw on host {host}.", fg='green')
-    else:
-        click.secho(f"❌ Failed to remove rule from group '{group_name}' on host {host}: {result.stderr.strip()}", fg='red')
+    Removes the rules whose direction, action, protocol, addresses and ports
+    are exactly the ones given; options left out must be absent from the rule.
+    """
+    host_details = _host_details(region, az)
+    wanted = _rule_fields(direction, action.upper(), protocol, source_ip, source_port, destination_ip, destination_port)
+    rules = pvesh_json(f"/cluster/firewall/groups/{group_name}", host_details) or []
+    matches = [r for r in rules if all(str(r.get(k) or '') == str(wanted[k] or '') for k in _RULE_FIELDS)]
+    if not matches:
+        click.secho(f"❌ No rule '{_describe_rule(wanted)}' in security group '{group_name}'.", fg='red')
         sys.exit(1)
+    for rule in sorted(matches, key=lambda r: int(r['pos']), reverse=True):
+        result = pvesh("delete", f"/cluster/firewall/groups/{group_name}/{int(rule['pos'])}", host_details)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to remove the rule from '{group_name}': {result.stderr.strip()}", fg='red')
+            sys.exit(1)
+    click.secho(f"✅ Removed {len(matches)} rule(s) '{_describe_rule(wanted)}' from '{group_name}'.", fg='green')
+
+
+def _enable_container_firewall(vmid, node, host_details):
+    """Turn on the container's firewall and the firewall flag of each of its NICs."""
+    result = pvesh("set", f"/nodes/{node}/lxc/{vmid}/firewall/options", host_details, enable=1)
+    if result.returncode != 0:
+        click.secho(f"❌ Failed to enable the firewall of container {vmid}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    ct_config = pvesh_json(f"/nodes/{node}/lxc/{vmid}/config", host_details) or {}
+    for key in sorted(k for k in ct_config if re.fullmatch(r'net\d+', k)):
+        current = [o for o in str(ct_config[key]).split(',') if o]
+        if 'firewall=1' in current:
+            continue
+        updated = [o for o in current if not o.startswith('firewall=')] + ['firewall=1']
+        result = run_argv(["pct", "set", vmid, f"--{key}", ",".join(updated)],
+                          config['use_local_only'], host_details)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to set firewall=1 on {key} of container {vmid}: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
+    click.secho(f"✅ Firewall enabled for container {vmid} and its network interfaces.", fg='green')
+
+
+def _warn_if_firewall_inactive(vmid, node, host_details):
+    """Say which switch is still off, since Proxmox applies none of the rules then."""
+    datacenter = pvesh_json("/cluster/firewall/options", host_details) or {}
+    if str(datacenter.get('enable', 0)) != '1':
+        click.secho("⚠️ The datacenter firewall is disabled, so no firewall rule is applied yet. LWS does not "
+                    "turn it on: without rules that allow SSH (22) and the web interface (8006), enabling it "
+                    "can lock you out. Enable it under Datacenter > Firewall > Options when ready.", fg='yellow')
+    container = pvesh_json(f"/nodes/{node}/lxc/{vmid}/firewall/options", host_details) or {}
+    if str(container.get('enable', 0)) != '1':
+        click.secho(f"⚠️ The firewall of container {vmid} is off. Run the command again with --enable-firewall, "
+                    "or enable it under the container's Firewall > Options.", fg='yellow')
+
 
 @px.command('security-group-attach')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def attach_security_group_to_lxc(group_name, vmid, region, az):
-    """🔗 Attach security group to an LXC container."""
-
-    # Prepare the line to add to the VMID.fw file under the [RULES] section
-    security_group_line = f"|GROUP {group_name}"
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Check if [RULES] section exists; if not, add it
-    check_rules_section_cmd = f"grep -q '^\\[RULES\\]' /etc/pve/firewall/{vmid}.fw || echo '[RULES]' >> /etc/pve/firewall/{vmid}.fw"
-
-    # Execute the command to ensure [RULES] section exists
-    ensure_rules_section = run_ssh_command(host, user, ssh_password, [check_rules_section_cmd])
-
-    if ensure_rules_section.returncode != 0:
-        click.secho(f"❌ Failed to ensure [RULES] section in LXC '{vmid}' on host {host}: {ensure_rules_section.stderr.strip()}", fg='red')
-        return
-
-    # Command to append the security group to the LXC's firewall configuration file
-    append_cmd = f"sed -i '/^\\[RULES\\]/a {security_group_line}' /etc/pve/firewall/{vmid}.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [append_cmd])
-
-    # Output the result of the command
-    if result.returncode == 0:
-        click.secho(f"✅ Security group '{group_name}' successfully attached to LXC '{vmid}' on host {host}.", fg='green')
-    else:
-        click.secho(f"❌ Failed to attach security group to LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
+@click.option('--enable-firewall', is_flag=True, help="Also enable the container's firewall and set firewall=1 on its network interfaces.")
+@_REGION_OPTION
+@_AZ_OPTION
+def attach_security_group_to_lxc(group_name, vmid, enable_firewall, region, az):
+    """🔗 Attach a security group to an LXC container."""
+    host_details = _host_details(region, az)
+    node = proxmox_node_name(host_details)
+    groups = pvesh_json("/cluster/firewall/groups", host_details) or []
+    if group_name not in {g.get('group') for g in groups}:
+        click.secho(f"❌ Security group '{group_name}' does not exist. Create it with: lws px security-group-add {group_name}", fg='red')
         sys.exit(1)
+
+    rules_path = f"/nodes/{node}/lxc/{vmid}/firewall/rules"
+    existing = [r for r in (pvesh_json(rules_path, host_details) or [])
+                if r.get('type') == 'group' and r.get('action') == group_name]
+    if existing:
+        for rule in existing:
+            if str(rule.get('enable', 1)) != '1':
+                result = pvesh("set", f"{rules_path}/{int(rule['pos'])}", host_details, enable=1)
+                if result.returncode != 0:
+                    click.secho(f"❌ Failed to enable the reference to '{group_name}': {result.stderr.strip()}", fg='red')
+                    sys.exit(1)
+        click.secho(f"✅ Security group '{group_name}' is attached to container {vmid}.", fg='green')
+    else:
+        result = pvesh("create", rules_path, host_details, type='group', action=group_name, enable=1)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to attach '{group_name}' to container {vmid}: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
+        click.secho(f"✅ Security group '{group_name}' attached to container {vmid}.", fg='green')
+
+    if enable_firewall:
+        _enable_container_firewall(vmid, node, host_details)
+    _warn_if_firewall_inactive(vmid, node, host_details)
+
 
 @px.command('security-group-detach')
 @click.argument('group_name', callback=_validate_pattern(_SAFE_NAME_RE, "group name"))
 @click.argument('vmid', callback=_validate_pattern(_VMID_RE, "vmid"))
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+@_REGION_OPTION
+@_AZ_OPTION
 def detach_security_group_from_lxc(group_name, vmid, region, az):
-    """🔓 Detach security group from an LXC container."""
-
-    # Prepare the line to remove from the VMID.fw file under the [RULES] section
-    security_group_line = f"|GROUP {group_name}"
-
-    # Retrieve the host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    host = host_details['host']
-    user = host_details['user']
-    ssh_password = host_details['ssh_password']
-
-    # Command to remove the security group from the LXC's firewall configuration file
-    remove_cmd = f"sed -i '/{security_group_line}/d' /etc/pve/firewall/{vmid}.fw"
-
-    # Execute the command on the Proxmox host using SSH
-    result = run_ssh_command(host, user, ssh_password, [remove_cmd])
-
-    # Validation command to check if the security group line was successfully removed
-    validate_cmd = f"grep -q '{security_group_line}' /etc/pve/firewall/{vmid}.fw"
-
-    # Execute the validation command
-    validation_result = run_ssh_command(host, user, ssh_password, [validate_cmd])
-
-    # Output the result of the command
-    if result.returncode == 0 and validation_result.returncode != 0:
-        click.secho(f"✅ Security group '{group_name}' successfully detached from LXC '{vmid}' on host {host}.", fg='green')
-    else:
-        click.secho(f"❌ Failed to detach security group '{group_name}' from LXC '{vmid}' on host {host}: {result.stderr.strip()}", fg='red')
+    """🔓 Detach a security group from an LXC container."""
+    host_details = _host_details(region, az)
+    node = proxmox_node_name(host_details)
+    rules_path = f"/nodes/{node}/lxc/{vmid}/firewall/rules"
+    references = [r for r in (pvesh_json(rules_path, host_details) or [])
+                  if r.get('type') == 'group' and r.get('action') == group_name]
+    if not references:
+        click.secho(f"❌ Security group '{group_name}' is not attached to container {vmid}.", fg='red')
         sys.exit(1)
+    for rule in sorted(references, key=lambda r: int(r['pos']), reverse=True):
+        result = pvesh("delete", f"{rules_path}/{int(rule['pos'])}", host_details)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to detach '{group_name}' from container {vmid}: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
+    click.secho(f"✅ Security group '{group_name}' detached from container {vmid}.", fg='green')
 
 @lxc.command('show-storage')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
@@ -1392,245 +1492,93 @@ def app():
     """🐳 Manage Docker on LXC containers."""
     pass
 
-@app.command('setup')
-@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))  # Accept a single instance ID
-@click.argument('package_name', default='docker')
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
-def install_docker(instance_id, package_name, region, az):
-    """📦 Install Docker and Compose on an LXC container."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    logging.debug(f"🔧 Processing LXC container {instance_id} on host {host_details['host']}")
+# --- Docker inside containers -------------------------------------------------
+# Everything that runs in the container goes through run_argv, so the remote
+# copy is quoted and the same argument list works over SSH and locally.
+# Compose files live in the container under APPS_DIR/<app>/, where <app> is
+# the first service name of the file; it is also the Compose project name, so
+# repeated deploys and updates address the same containers.
 
-    click.secho(f"🔧 Processing LXC container {instance_id}...", fg='yellow')
-
-    # Check if the container is running
-    status_cmd = ["pct", "status", instance_id]
-    logging.debug(f"🔎 Checking status with command: {' '.join(status_cmd)}")
-    
-    status_result = run_proxmox_command(
-        status_cmd,
-        status_cmd,
-        config['use_local_only'], host_details
-    )
-
-    if status_result is None or "status: running" not in status_result.stdout:
-        logging.error(f"❌ LXC container {instance_id} is not running.")
-        click.secho(f"❌ LXC container {instance_id} is not running.", fg='red')
-        return
-
-    logging.debug(f"✅ LXC container {instance_id} is running.")
-
-    # Check if Docker is already installed inside the container
-    docker_check_cmd = ["pct", "exec", instance_id, "--", "which", "docker"]
-    logging.debug(f"🔎 Checking if Docker is installed with command: {' '.join(docker_check_cmd)}")
-
-    docker_check_result = run_proxmox_command(docker_check_cmd, docker_check_cmd, config['use_local_only'], host_details)
-
-    if docker_check_result.returncode == 0:
-        logging.info(f"✅ Docker is already installed on instance {instance_id}.")
-        click.secho(f"✅ Docker is already installed on instance {instance_id}.", fg='green')
-    else:
-        # Install Docker and Docker Compose using apt inside the LXC container
-        docker_install_cmd = [
-            "pct", "exec", instance_id, "--", "bash", "-c",
-            "\"apt-get update && apt-get install -y docker.io docker-compose\""
-        ]
-        logging.debug(f"🔧 Installing Docker and Docker Compose with command: {' '.join(docker_install_cmd)}")
-        docker_install_result = run_proxmox_command(
-            docker_install_cmd, docker_install_cmd, config['use_local_only'], host_details
-        )
-
-        if docker_install_result.returncode == 0:
-            logging.info(f"✅ Docker and Docker Compose installed successfully on instance {instance_id}.")
-            click.secho(f"✅ Docker and Docker Compose installed successfully on instance {instance_id}.", fg='green')
-        else:
-            logging.error(f"❌ Failed to install Docker and Docker Compose on instance {instance_id}: {docker_install_result.stderr}")
-            click.secho(f"❌ Failed to install Docker and Docker Compose on instance {instance_id}.", fg='red')
-            return
-
-    logging.info(f"🔧 Finished processing LXC container {instance_id}.")
-    click.secho(f"🔧 Finished processing LXC container {instance_id}.\n", fg='yellow')
+APPS_DIR = "/opt/lws/apps"
+DOCKER_INSTALL_SCRIPT = (
+    "apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y docker.io && "
+    # Compose v2: docker-compose-v2 on Ubuntu; the docker-compose package elsewhere.
+    "(DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose-v2 || "
+    "DEBIAN_FRONTEND=noninteractive apt-get install -y docker-compose)"
+)
+DOCKER_PACKAGES = ("docker.io", "docker-compose", "docker-compose-v2", "docker-compose-plugin")
 
 
+def in_container(instance_id, argv, host_details):
+    return run_argv(["pct", "exec", instance_id, "--"] + list(argv), config['use_local_only'], host_details)
 
-@app.command('run')
-@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.argument('docker_command', nargs=-1, type=click.UNPROCESSED)
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-def run_docker(instance_id, docker_command, region, az):
-    """🚀 Execute docker run inside an LXC container."""
-    logging.debug(f"🔎 Starting dock run with instance_id: {instance_id} and docker_command: {docker_command}")
-    
-    if not docker_command:
-        click.secho("❌ No Docker command provided.", fg='red')
-        return
 
-    # Fetch host details from the configuration
-    host_details = config['regions'][region]['availability_zones'][az]
-    logging.debug(f"🔎 Host details: {host_details}")
-    
-    # Check if the container is running
-    status_cmd = ["pct", "status", instance_id]
-    status_result = run_proxmox_command(status_cmd, status_cmd, config['use_local_only'], host_details)
-    logging.debug(f"🔎 Executed status command: {status_cmd}")
-    logging.debug(f"🔎 Container status result: {status_result.stdout.strip()}")
-    logging.debug(f"🔎 Container status stderr: {status_result.stderr.strip()}")
+def container_is_running(instance_id, host_details):
+    status = run_argv(["pct", "status", instance_id], config['use_local_only'], host_details)
+    return status.returncode == 0 and "status: running" in status.stdout
 
-    if "status: running" not in status_result.stdout:
-        click.secho(f"❌ LXC container {instance_id} is not running.", fg='red')
-        return
-    
-    # Ensure Docker is installed
-    docker_check_cmd = ["pct", "exec", instance_id, "--", "docker", "--version"]
-    docker_check_result = run_proxmox_command(docker_check_cmd, docker_check_cmd, config['use_local_only'], host_details)
-    logging.debug(f"🔎 Executed Docker check command: {docker_check_cmd}")
-    logging.debug(f"🔎 Docker version check result: {docker_check_result.stdout.strip()}")
-    logging.debug(f"🔎 Docker version check stderr: {docker_check_result.stderr.strip()}")
 
-    if docker_check_result.returncode != 0:
-        click.secho(f"🔧 Docker not found on instance {instance_id}. Installing Docker...", fg='yellow')
-        install_docker_cmd = ["pct", "exec", instance_id, "--", "apt-get", "update"]
-        update_result = run_proxmox_command(install_docker_cmd, install_docker_cmd, config['use_local_only'], host_details)
-        logging.debug(f"🔎 Executed apt-get update command: {install_docker_cmd}")
-        logging.debug(f"🔎 apt-get update result stdout: {update_result.stdout.strip()}")
-        logging.debug(f"🔎 apt-get update result stderr: {update_result.stderr.strip()}")
-
-        install_docker_cmd = ["pct", "exec", instance_id, "--", "apt-get", "install", "-y", "docker.io"]
-        install_result = run_proxmox_command(install_docker_cmd, install_docker_cmd, config['use_local_only'], host_details)
-        
-        logging.debug(f"🔎 Executed Docker install command: {install_docker_cmd}")
-        logging.debug(f"🔎 Docker install result stdout: {install_result.stdout.strip()}")
-        logging.debug(f"🔎 Docker install result stderr: {install_result.stderr.strip()}")
-
-        if install_result.returncode == 0:
-            click.secho(f"✅ Docker installed successfully on instance {instance_id}.", fg='green')
-        else:
-            click.secho(f"❌ Docker installation failed on instance {instance_id}: {install_result.stderr.strip()}", fg='red')
-            return
-
-    # Prepend "docker run" to the Docker command, remove "-d" if it conflicts with port mapping
-    docker_run_cmd = ["pct", "exec", instance_id, "--", "docker", "run"] + list(docker_command)
-    logging.debug(f"🔎 Final Docker command to execute: {docker_run_cmd}")
-
-    run_result = run_proxmox_command(
-        docker_run_cmd,
-        docker_run_cmd,
-        config['use_local_only'], host_details
-    )
-    
-    logging.debug(f"🔎 Docker command execution stdout: {run_result.stdout.strip()}")
-    logging.debug(f"🔎 Docker command execution stderr: {run_result.stderr.strip()}")
-
-    if run_result.returncode == 0:
-        click.secho(f"✅ Docker command executed successfully on instance {instance_id}:\n{run_result.stdout.strip()}", fg='green')
-    else:
-        click.secho(f"❌ Failed to execute Docker command on instance {instance_id}: {run_result.stderr.strip()}", fg='red')
+def require_running(instance_id, host_details):
+    if not container_is_running(instance_id, host_details):
+        click.secho(f"❌ LXC container {instance_id} is not running. Start it with: lws lxc start {instance_id}", fg='red')
         sys.exit(1)
 
 
-### compose
-@app.command('deploy')
-@click.argument('action', type=click.Choice(['install', 'uninstall', 'start', 'stop', 'restart', 'status']))
-@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))  # Instance ID is now a positional argument
-@click.option('--compose-file', required=True, help="Local path or remote URL to the Docker Compose YAML file.")
-@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
-@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--auto-start', is_flag=True, help="Enable auto-start for the application.")
-def compose(action, instance_id, compose_file, region, az, auto_start):
-    """🚀 Manage apps with Compose on LXC containers."""
-    host_details = config['regions'][region]['availability_zones'][az]
+def container_features(instance_id, host_details):
+    """(features dict, unprivileged bool) from `pct config`."""
+    result = run_argv(["pct", "config", instance_id], config['use_local_only'], host_details)
+    features, unprivileged = {}, False
+    for line in result.stdout.splitlines():
+        key, _, value = line.partition(":")
+        if key.strip() == "features":
+            for item in value.strip().split(","):
+                name, _, setting = item.partition("=")
+                if name:
+                    features[name.strip()] = setting.strip()
+        elif key.strip() == "unprivileged":
+            unprivileged = value.strip() == "1"
+    return features, unprivileged
 
-    # Ensure the Docker Compose file is available locally
-    if not os.path.exists(compose_file):
-        if compose_file.startswith("http://") or compose_file.startswith("https://"):
-            click.secho(f"🔧 Downloading Docker Compose file from {compose_file}...", fg='yellow')
-            # Use secure temporary file creation instead of hardcoded /tmp
-            temp_fd, local_compose_file = tempfile.mkstemp(suffix=".yml", prefix="docker-compose-")
-            try:
-                # Add timeout to prevent indefinite blocking
-                response = requests.get(compose_file, timeout=30)
-                response.raise_for_status()
-                with os.fdopen(temp_fd, 'wb') as file:
-                    file.write(response.content)
-                compose_file = local_compose_file
-                click.secho(f"✅ Docker Compose file downloaded to {compose_file}.", fg='green')
-            except requests.exceptions.RequestException as e:
-                click.secho(f"❌ Failed to download Docker Compose file: {e}", fg='red')
-                return
-        else:
-            click.secho(f"❌ Docker Compose file not found at {compose_file}.", fg='red')
-            return
 
-    # Extract APP_NAME from the Docker Compose file
-    app_name = extract_app_name_from_compose(compose_file)
-    if not app_name:
-        click.secho(f"❌ Failed to extract application name from Docker Compose file.", fg='red')
-        return
+def docker_features_missing(instance_id, host_details):
+    """The LXC features Docker needs that the container lacks, and the full new features value."""
+    features, unprivileged = container_features(instance_id, host_details)
+    needed = {"nesting": "1"}
+    if unprivileged:
+        needed["keyctl"] = "1"
+    missing = [k for k, v in needed.items() if features.get(k) != v]
+    merged = {**features, **needed}
+    return missing, ",".join(f"{k}={v}" for k, v in merged.items())
 
-    # Upload the Compose file to the Proxmox host using secure temp directory
-    # Use timestamp to ensure uniqueness and avoid collisions
-    timestamp = int(time.time())
-    remote_host_path = f"/var/tmp/lws-{app_name}-{timestamp}-docker-compose.yml"
-    result = run_scp_command(host_details['ssh_password'], compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}")
-    if result.returncode != 0:
-        click.secho(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}", fg='red')
-        return
-    
-    click.secho(f"✅ Docker Compose file uploaded to Proxmox host at {remote_host_path}.", fg='green')
 
-    # Transfer the file to the LXC container using pct push
-    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], ["pct", "push", instance_id, remote_host_path, remote_host_path])
-    if result.returncode != 0:
-        click.secho(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}", fg='red')
-        return
-    
-    click.secho(f"✅ Docker Compose file transferred to {remote_host_path} on instance {instance_id}.", fg='green')
+def compose_command(instance_id, host_details):
+    """["docker", "compose"] or ["docker-compose"], whichever the container has; None if neither."""
+    if in_container(instance_id, ["docker", "compose", "version"], host_details).returncode == 0:
+        return ["docker", "compose"]
+    if in_container(instance_id, ["docker-compose", "version"], host_details).returncode == 0:
+        return ["docker-compose"]
+    return None
 
-    # Verify the file inside the container
-    verify_cmd = ["pct", "exec", instance_id, "--", "cat", remote_host_path]
-    result = run_proxmox_command(verify_cmd, verify_cmd, config['use_local_only'], host_details)
-    if result.returncode != 0:
-        click.secho(f"❌ Failed to verify Docker Compose file inside LXC container: {result.stderr.strip()}", fg='red')
-        return
-    click.secho(f"📄 Docker Compose file content:\n{result.stdout}", fg='cyan')
 
-    # Ensure Docker Compose is installed in the container
-    if not check_and_install_docker_compose(instance_id, host_details):
-        return
-    
-    # Define the base Docker Compose command
-    compose_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "-f", remote_host_path]
-    
-    # Define actions
-    if action == 'install':
-        compose_cmd.append("up -d")
-    elif action == 'uninstall':
-        compose_cmd.append("down")
-    elif action in ['start', 'stop', 'restart']:
-        compose_cmd.append(action)
-    elif action == 'status':
-        compose_cmd.append("ps")
-    
-    # Execute the command
-    result = run_proxmox_command(compose_cmd, compose_cmd, config['use_local_only'], host_details)
-    
-    # Handle the output and check for errors during Docker Compose execution
-    if result.returncode == 0:
-        click.secho(f"✅ Instance {instance_id} - Application '{app_name}' {action} successfully executed.", fg='green')
-    else:
-        click.secho(f"❌ Instance {instance_id} - Failed to {action} application '{app_name}': {result.stderr.strip()}", fg='red')
-        return
+def fetch_compose_file(compose_file):
+    """A local path to the Compose file, downloading it first if it is a URL."""
+    if os.path.exists(compose_file):
+        return compose_file
+    if compose_file.startswith(("http://", "https://")):
+        click.secho(f"🔧 Downloading Docker Compose file from {compose_file}...", fg='yellow')
+        fd, local_path = tempfile.mkstemp(suffix=".yml", prefix="docker-compose-")
+        try:
+            response = requests.get(compose_file, timeout=30)
+            response.raise_for_status()
+            with os.fdopen(fd, 'wb') as file:
+                file.write(response.content)
+        except requests.exceptions.RequestException as e:
+            click.secho(f"❌ Failed to download Docker Compose file: {e}", fg='red')
+            sys.exit(1)
+        return local_path
+    click.secho(f"❌ Docker Compose file not found at {compose_file}.", fg='red')
+    sys.exit(1)
 
-    # Verify that the Docker containers are running
-    if action == 'install':
-        verify_docker_service_running(instance_id, host_details)
-
-    # Handle auto-start if required
-    if action == 'install' and auto_start:
-        setup_auto_start(instance_id, app_name, remote_host_path, host_details)
-        click.secho(f"🔧 Auto-start enabled for '{app_name}' on instance {instance_id}.", fg='green')
 
 def extract_app_name_from_compose(compose_file):
     """Extract the application name from the Docker Compose file."""
@@ -1640,11 +1588,9 @@ def extract_app_name_from_compose(compose_file):
             if 'services' in compose_content:
                 service_names = list(compose_content['services'].keys())
                 if service_names:
-                    # Use the first service name as the app_name. This value
-                    # later gets embedded in remote file paths and a shell
-                    # string sent over SSH (setup_auto_start), so it must be
-                    # restricted to a safe charset before it leaves this
-                    # function rather than escaped at each call site.
+                    # Use the first service name as the app_name. It becomes
+                    # part of paths in the container and the Compose project
+                    # name, so it is restricted to a safe charset here.
                     app_name = service_names[0]
                     if not _SAFE_NAME_RE.match(app_name):
                         logging.error(f"❌ Unsafe service name in Docker Compose file: {app_name!r}")
@@ -1654,88 +1600,195 @@ def extract_app_name_from_compose(compose_file):
         logging.error(f"❌ Failed to parse Docker Compose file: {str(e)}")
     return None
 
-def verify_docker_service_running(instance_id, host_details):
-    """Check that the Docker service is running correctly after the Docker Compose command."""
-    # First, check if any containers are running
-    verify_cmd = ["pct", "exec", instance_id, "--", "docker", "ps"]
-    result = run_proxmox_command(verify_cmd, verify_cmd, config['use_local_only'], host_details)
-    if result.returncode == 0:
-        if result.stdout.strip():
-            click.secho(f"✅ Docker containers running on instance {instance_id}:\n{result.stdout}", fg='green')
+
+def push_file_to_container(instance_id, local_path, container_path, host_details):
+    """Copy a local file into a container, through the Proxmox host when remote."""
+    directory = os.path.dirname(container_path)
+    mkdir = in_container(instance_id, ["mkdir", "-p", directory], host_details)
+    if mkdir.returncode != 0:
+        click.secho(f"❌ Failed to create {directory} in container {instance_id}: {mkdir.stderr.strip()}", fg='red')
+        sys.exit(1)
+    source = local_path
+    staged = None
+    if not config['use_local_only']:
+        staged = f"/var/tmp/lws-{instance_id}-{int(time.time())}-{os.path.basename(container_path)}"
+        upload = run_scp_command(host_details['ssh_password'], local_path,
+                                 f"{host_details['user']}@{host_details['host']}:{staged}")
+        if upload.returncode != 0:
+            click.secho(f"❌ Failed to upload {os.path.basename(local_path)} to the Proxmox host: {upload.stderr.strip()}", fg='red')
+            sys.exit(1)
+        source = staged
+    push = run_argv(["pct", "push", instance_id, source, container_path], config['use_local_only'], host_details)
+    if staged:
+        run_argv(["rm", "-f", staged], config['use_local_only'], host_details)
+    if push.returncode != 0:
+        click.secho(f"❌ Failed to copy the file into container {instance_id}: {push.stderr.strip()}", fg='red')
+        sys.exit(1)
+
+
+@app.command('setup')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.argument('package_name', default='docker')
+@click.option('--enable-nesting', is_flag=True,
+              help="Turn on the LXC features Docker needs (nesting, and keyctl for unprivileged containers), restarting the container.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1.")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1.")
+def install_docker(instance_id, package_name, enable_nesting, region, az):
+    """📦 Install Docker and Docker Compose in an LXC container (Debian or Ubuntu)."""
+    host_details = _host_details(region, az)
+    require_running(instance_id, host_details)
+
+    missing, features = docker_features_missing(instance_id, host_details)
+    if missing:
+        if enable_nesting:
+            click.secho(f"🔧 Setting features {features} on container {instance_id} and restarting it...", fg='yellow')
+            result = run_argv(["pct", "set", instance_id, "--features", features], config['use_local_only'], host_details)
+            if result.returncode != 0:
+                click.secho(f"❌ Failed to set the container features: {result.stderr.strip()}", fg='red')
+                sys.exit(1)
+            result = run_argv(["pct", "reboot", instance_id], config['use_local_only'], host_details)
+            if result.returncode != 0:
+                click.secho(f"❌ Failed to restart container {instance_id}: {result.stderr.strip()}", fg='red')
+                sys.exit(1)
         else:
-            click.secho(f"❌ No Docker containers are running on instance {instance_id}.", fg='red')
-            # Since no containers are running, let's dig deeper
-            diagnose_docker_compose_issue(instance_id, host_details)
-    else:
-        click.secho(f"❌ Failed to verify running Docker containers on instance {instance_id}: {result.stderr.strip()}", fg='red')
+            click.secho(f"⚠️ Container {instance_id} lacks the LXC feature(s) {', '.join(missing)}, which Docker "
+                        f"usually needs. Run again with --enable-nesting to set them (the container restarts).", fg='yellow')
 
+    if in_container(instance_id, ["docker", "--version"], host_details).returncode == 0 and \
+            compose_command(instance_id, host_details):
+        click.secho(f"✅ Docker and Docker Compose are already installed in container {instance_id}.", fg='green')
+        return
 
-def diagnose_docker_compose_issue(instance_id, host_details):
-    """Diagnose issues with Docker Compose by checking the logs and service status."""
-    # Check Docker Compose service status
-    compose_ps_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "ps"]
-    result = run_proxmox_command(compose_ps_cmd, compose_ps_cmd, config['use_local_only'], host_details)
-    if result.returncode == 0:
-        click.secho(f"📋 Docker Compose service status on instance {instance_id}:\n{result.stdout}", fg='cyan')
-    else:
-        click.secho(f"❌ Failed to get Docker Compose service status on instance {instance_id}: {result.stderr.strip()}", fg='red')
-    
-    # Check Docker Compose logs for any errors
-    compose_logs_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "logs"]
-    result = run_proxmox_command(compose_logs_cmd, compose_logs_cmd, config['use_local_only'], host_details)
-    if result.returncode == 0:
-        click.secho(f"📄 Docker Compose logs on instance {instance_id}:\n{result.stdout}", fg='yellow')
-    else:
-        click.secho(f"❌ Failed to get Docker Compose logs on instance {instance_id}: {result.stderr.strip()}", fg='red')
-
-def check_and_install_docker_compose(instance_id, host_details):
-    """Check if Docker Compose is installed in the LXC container and install it if not."""
-    compose_check_cmd = ["pct", "exec", instance_id, "--", "which", "docker-compose"]
-    result = run_proxmox_command(compose_check_cmd, compose_check_cmd, config['use_local_only'], host_details)
-    
+    click.secho(f"📦 Installing Docker and Docker Compose in container {instance_id}...", fg='yellow')
+    result = in_container(instance_id, ["sh", "-c", DOCKER_INSTALL_SCRIPT], host_details)
     if result.returncode != 0:
-        click.secho(f"🔧 Docker Compose not found in instance {instance_id}. Installing Docker Compose...", fg='yellow')
-        
-        install_cmds = [
-            ["pct", "exec", instance_id, "--", "curl", "-L", "https://github.com/docker/compose/releases/latest/download/docker-compose-`uname -s`-`uname -m`", "-o", "/usr/local/bin/docker-compose"],
-            ["pct", "exec", instance_id, "--", "chmod", "+x", "/usr/local/bin/docker-compose"]
-        ]
-        
-        for cmd in install_cmds:
-            install_result = run_proxmox_command(cmd, cmd, config['use_local_only'], host_details)
-            if install_result.returncode != 0:
-                click.secho(f"❌ Failed to install Docker Compose on instance {instance_id}: {install_result.stderr.strip()}", fg='red')
-                return False
-        click.secho(f"✅ Docker Compose installed successfully on instance {instance_id}.", fg='green')
-    return True
+        click.secho(f"❌ Failed to install Docker in container {instance_id}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    click.secho(f"✅ Docker and Docker Compose installed in container {instance_id}.", fg='green')
 
-def setup_auto_start(instance_id, app_name, compose_file, host_details):
-    """Set up auto-start for the Docker Compose application."""
-    service_name = f"{app_name}-{instance_id}.service"
-    systemd_service = f"""
-[Unit]
-Description=Docker Compose Application Service for {app_name} on Instance {instance_id}
-After=docker.service
+
+@app.command('run')
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.argument('docker_command', nargs=-1, type=click.UNPROCESSED)
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+def run_docker(instance_id, docker_command, region, az):
+    """🚀 Execute docker run inside an LXC container.
+
+    Arguments after `--` are passed to `docker run` one by one:
+    lws app run 100 -- -d -p 80:80 nginx
+    """
+    if not docker_command:
+        click.secho("❌ No Docker command provided.", fg='red')
+        sys.exit(1)
+    host_details = _host_details(region, az)
+    require_running(instance_id, host_details)
+
+    if in_container(instance_id, ["docker", "--version"], host_details).returncode != 0:
+        click.secho(f"❌ Docker is not installed in container {instance_id}. Install it with: lws app setup {instance_id}", fg='red')
+        sys.exit(1)
+
+    result = in_container(instance_id, ["docker", "run"] + list(docker_command), host_details)
+    if result.returncode == 0:
+        click.secho(f"✅ Docker command executed successfully on instance {instance_id}:\n{result.stdout.strip()}", fg='green')
+    else:
+        click.secho(f"❌ Failed to execute Docker command on instance {instance_id}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+
+
+_COMPOSE_ACTIONS = {
+    'install': ['up', '-d'],
+    'uninstall': ['down'],
+    'start': ['start'],
+    'stop': ['stop'],
+    'restart': ['restart'],
+    'status': ['ps'],
+}
+
+
+@app.command('deploy')
+@click.argument('action', type=click.Choice(list(_COMPOSE_ACTIONS)))
+@click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.option('--compose-file', required=True, help="Local path or URL of the Docker Compose file. Its first service name is the app name.")
+@click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
+@click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
+@click.option('--auto-start', is_flag=True, help="With install: start the app at boot with a systemd unit in the container.")
+def compose(action, instance_id, compose_file, region, az, auto_start):
+    """🚀 Manage apps with Compose on LXC containers."""
+    host_details = _host_details(region, az)
+    require_running(instance_id, host_details)
+
+    local_file = fetch_compose_file(compose_file)
+    app_name = extract_app_name_from_compose(local_file)
+    if not app_name:
+        click.secho("❌ Failed to extract application name from Docker Compose file.", fg='red')
+        sys.exit(1)
+
+    compose_cmd = compose_command(instance_id, host_details)
+    if not compose_cmd:
+        click.secho(f"❌ Docker Compose is not installed in container {instance_id}. Install it with: lws app setup {instance_id}", fg='red')
+        sys.exit(1)
+
+    app_dir = f"{APPS_DIR}/{app_name}"
+    container_file = f"{app_dir}/docker-compose.yml"
+    if action == 'install':
+        push_file_to_container(instance_id, local_file, container_file, host_details)
+        click.secho(f"✅ Compose file copied to {container_file} in container {instance_id}.", fg='green')
+    elif in_container(instance_id, ["test", "-f", container_file], host_details).returncode != 0:
+        click.secho(f"❌ Application '{app_name}' is not installed in container {instance_id} ({container_file} is missing).", fg='red')
+        sys.exit(1)
+
+    result = in_container(instance_id, compose_cmd + ["-p", app_name, "-f", container_file] + _COMPOSE_ACTIONS[action], host_details)
+    if result.returncode != 0:
+        click.secho(f"❌ Instance {instance_id} - Failed to {action} application '{app_name}': {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    if action == 'status' and result.stdout.strip():
+        click.echo(result.stdout.rstrip())
+    click.secho(f"✅ Instance {instance_id} - Application '{app_name}' {action} successfully executed.", fg='green')
+
+    if action == 'install' and auto_start:
+        setup_auto_start(instance_id, app_name, container_file, compose_cmd, host_details)
+    if action == 'uninstall':
+        unit = f"lws-{app_name}.service"
+        in_container(instance_id, ["sh", "-c",
+                                   f"systemctl disable {unit} 2>/dev/null; rm -f /etc/systemd/system/{unit}; systemctl daemon-reload"],
+                     host_details)
+
+
+def setup_auto_start(instance_id, app_name, container_file, compose_cmd, host_details):
+    """Install and enable a systemd unit in the container that brings the app up at boot."""
+    unit_name = f"lws-{app_name}.service"
+    compose = " ".join(["/usr/bin/env"] + compose_cmd + ["-p", app_name, "-f", container_file])
+    unit = f"""[Unit]
+Description=LWS app {app_name} (Docker Compose)
 Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
 
 [Service]
-Restart=always
-WorkingDirectory={os.path.dirname(compose_file)}
-ExecStart=/usr/local/bin/docker-compose -f {compose_file} up -d
-ExecStop=/usr/local/bin/docker-compose -f {compose_file} down
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory={os.path.dirname(container_file)}
+ExecStart={compose} up -d
+ExecStop={compose} down
+TimeoutStartSec=0
 
 [Install]
 WantedBy=multi-user.target
 """
-    service_path = f"/etc/systemd/system/{service_name}"
-    
-    # Create the systemd service file
-    create_cmd = ["pct", "exec", instance_id, "--", "bash", "-c", f"echo '{systemd_service}' > {service_path}"]
-    run_proxmox_command(create_cmd, create_cmd, config['use_local_only'], host_details)
+    fd, local_unit = tempfile.mkstemp(suffix=".service", prefix="lws-")
+    try:
+        with os.fdopen(fd, 'w') as file:
+            file.write(unit)
+        push_file_to_container(instance_id, local_unit, f"/etc/systemd/system/{unit_name}", host_details)
+    finally:
+        os.remove(local_unit)
+    result = in_container(instance_id, ["sh", "-c", f"systemctl daemon-reload && systemctl enable {unit_name}"], host_details)
+    if result.returncode != 0:
+        click.secho(f"❌ Failed to enable {unit_name}: {result.stderr.strip()}", fg='red')
+        sys.exit(1)
+    click.secho(f"🔧 Auto-start enabled for '{app_name}' on instance {instance_id} ({unit_name}).", fg='green')
 
-    # Enable and start the systemd service
-    subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "enable", service_name])
-    subprocess.run(["pct", "exec", instance_id, "--", "systemctl", "start", service_name])
 
 @app.command('update')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
@@ -1743,94 +1796,52 @@ WantedBy=multi-user.target
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def compose_update(instance_id, compose_file, region, az):
-    """🆕 Update app within an LXC container via Compose."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    logging.info(f"✅ Starting Docker Compose update for instance {instance_id}")
+    """🆕 Update an app: copy the new Compose file, pull its images and recreate what changed."""
+    host_details = _host_details(region, az)
+    require_running(instance_id, host_details)
 
-    # Ensure the Docker Compose file is available locally
-    if not os.path.exists(compose_file):
-        click.secho(f"❌ Docker Compose file not found at {compose_file}.", fg='red')
-        logging.error(f"❌ Docker Compose file not found: {compose_file}")
-        return
+    local_file = fetch_compose_file(compose_file)
+    app_name = extract_app_name_from_compose(local_file)
+    if not app_name:
+        click.secho("❌ Failed to extract application name from Docker Compose file.", fg='red')
+        sys.exit(1)
+    compose_cmd = compose_command(instance_id, host_details)
+    if not compose_cmd:
+        click.secho(f"❌ Docker Compose is not installed in container {instance_id}. Install it with: lws app setup {instance_id}", fg='red')
+        sys.exit(1)
 
-    # Upload the Compose file to the Proxmox host using secure temp directory
-    timestamp = int(time.time())
-    compose_basename = os.path.basename(compose_file)
-    remote_host_path = f"/var/tmp/lws-{timestamp}-{compose_basename}"
-    result = run_scp_command(host_details['ssh_password'], compose_file, f"{host_details['user']}@{host_details['host']}:{remote_host_path}")
-    if result.returncode != 0:
-        click.secho(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to upload Docker Compose file to Proxmox host: {result.stderr.strip()}")
-        return
-
-    click.secho(f"✅ Docker Compose file uploaded to Proxmox host at {remote_host_path}.", fg='green')
-    logging.info(f"✅ Docker Compose file uploaded to Proxmox host: {remote_host_path}")
-
-    # Transfer the file to the LXC container using pct push
-    result = run_ssh_command(host_details['host'], host_details['user'], host_details['ssh_password'], ["pct", "push", instance_id, remote_host_path, remote_host_path])
-    if result.returncode != 0:
-        click.secho(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to transfer Docker Compose file to LXC container: {result.stderr.strip()}")
-        return
-    
-    click.secho(f"✅ Docker Compose file transferred to {remote_host_path} on instance {instance_id}.", fg='green')
-    logging.info(f"✅ Docker Compose file transferred to LXC container: {remote_host_path}")
-
-    # Define the Docker Compose update commands
-    compose_pull_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "-f", remote_host_path, "pull"]
-    compose_up_cmd = ["pct", "exec", instance_id, "--", "docker-compose", "-f", remote_host_path, "up", "-d"]
-
-    # Execute docker-compose pull
-    logging.info(f"Pulling Docker Compose images for instance {instance_id}")
-    pull_result = run_proxmox_command(compose_pull_cmd, compose_pull_cmd, config['use_local_only'], host_details)
-    if pull_result.returncode == 0:
-        click.secho(f"✅ Docker Compose application images pulled successfully on instance {instance_id}.", fg='green')
-        logging.info(f"✅ Docker Compose application images pulled successfully on instance {instance_id}")
-    else:
-        click.secho(f"❌ Failed to pull Docker Compose images on instance {instance_id}: {pull_result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to pull Docker Compose images on instance {instance_id}: {pull_result.stderr.strip()}")
-        return
-
-    # Execute docker-compose up -d
-    logging.info(f"Starting Docker Compose application on instance {instance_id}")
-    up_result = run_proxmox_command(compose_up_cmd, compose_up_cmd, config['use_local_only'], host_details)
-    if up_result.returncode == 0:
-        click.secho(f"✅ Docker Compose application updated successfully on instance {instance_id}.", fg='green')
-        logging.info(f"✅ Docker Compose application updated successfully on instance {instance_id}")
-    else:
-        click.secho(f"❌ Failed to update Docker Compose application on instance {instance_id}: {up_result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to update Docker Compose application on instance {instance_id}: {up_result.stderr.strip()}")
+    container_file = f"{APPS_DIR}/{app_name}/docker-compose.yml"
+    push_file_to_container(instance_id, local_file, container_file, host_details)
+    base = compose_cmd + ["-p", app_name, "-f", container_file]
+    for step, label in ((["pull"], "pulled the images of"), (["up", "-d"], "updated")):
+        result = in_container(instance_id, base + step, host_details)
+        if result.returncode != 0:
+            click.secho(f"❌ Failed to update '{app_name}' on instance {instance_id}: {result.stderr.strip()}", fg='red')
+            sys.exit(1)
+        click.secho(f"✅ Instance {instance_id}: {label} '{app_name}'.", fg='green')
 
 
 @app.command('logs')
 @click.argument('instance_id', callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.argument('container_name_or_id')
+@click.argument('container_name_or_id', callback=_validate_pattern(re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$'), "container name or id"))
+@click.option('--tail', default='all', callback=_validate_pattern(re.compile(r'^(all|\d{1,7})$'), "tail"), help="Number of lines to show from the end of the logs. Default: all.")
+@click.option('--follow', is_flag=True, hidden=True)
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--tail', default='all', help="Number of lines to show from the end of the logs.")
-@click.option('--follow', is_flag=True, help="Stream logs in real-time.")
-def logs(instance_id, container_name_or_id, region, az, tail, follow):
-    """📄 Fetch Docker logs from an LXC container."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    logging.info(f"Fetching logs for container {container_name_or_id} on instance {instance_id}")
-
-    # Build the docker logs command
-    logs_cmd = ["pct", "exec", instance_id, "--", "docker", "logs"]
+def logs(instance_id, container_name_or_id, tail, follow, region, az):
+    """📄 Show the logs of a Docker container inside an LXC container."""
+    host_details = _host_details(region, az)
     if follow:
-        logs_cmd.append("-f")
-    if tail != 'all':
-        logs_cmd.extend(["--tail", tail])
-    logs_cmd.append(container_name_or_id)
-
-    # Execute the command
-    result = run_proxmox_command(logs_cmd, logs_cmd, config['use_local_only'], host_details)
-
-    if result.returncode == 0:
-        click.secho(f"📄 Logs for container {container_name_or_id} on instance {instance_id}:\n{result.stdout}", fg='cyan')
-        logging.info(f"📄 Logs fetched for container {container_name_or_id} on instance {instance_id}")
-    else:
+        click.secho("⚠️ --follow cannot stream through LWS; showing the current logs. To follow them, run "
+                    f"`pct exec {instance_id} -- docker logs -f {container_name_or_id}` on the host.", fg='yellow')
+    cmd = ["docker", "logs"] + ([] if tail == 'all' else ["--tail", tail]) + [container_name_or_id]
+    result = in_container(instance_id, cmd, host_details)
+    if result.returncode != 0:
         click.secho(f"❌ Failed to fetch logs for container {container_name_or_id} on instance {instance_id}: {result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to fetch logs for container {container_name_or_id} on instance {instance_id}: {result.stderr.strip()}")
+        sys.exit(1)
+    # docker logs writes the container's stderr stream to stderr.
+    click.secho(f"📄 Logs for container {container_name_or_id} on instance {instance_id}:", fg='cyan')
+    click.echo((result.stdout + result.stderr).rstrip())
 
 
 @app.command('list')
@@ -1838,56 +1849,48 @@ def logs(instance_id, container_name_or_id, region, az, tail, follow):
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
 def containers(instance_id, region, az):
-    """📦 List Docker containers in an LXC container."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    logging.info(f"Listing running Docker containers on instance {instance_id}")
-
-    # Build the docker ps command
-    ps_cmd = ["pct", "exec", instance_id, "--", "docker", "ps", "--format", "'{{.ID}}: {{.Names}} ({{.Image}})'"]
-
-    # Execute the command
-    result = run_proxmox_command(ps_cmd, ps_cmd, config['use_local_only'], host_details)
-
-    if result.returncode == 0:
-        click.secho(f"📦 Running containers on instance {instance_id}:\n{result.stdout}", fg='cyan')
-        logging.info(f"📦 Listed running containers on instance {instance_id}")
-    else:
+    """📦 List running Docker containers inside an LXC container."""
+    host_details = _host_details(region, az)
+    result = in_container(instance_id, ["docker", "ps", "--format", "{{.ID}}: {{.Names}} ({{.Image}})"], host_details)
+    if result.returncode != 0:
         click.secho(f"❌ Failed to list running containers on instance {instance_id}: {result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to list running containers on instance {instance_id}: {result.stderr.strip()}")
+        sys.exit(1)
+    click.secho(f"📦 Running containers on instance {instance_id}:", fg='cyan')
+    click.echo(result.stdout.rstrip() or "(none)")
 
 
 @app.command('remove')
-@click.argument('instance_ids', nargs=-1, callback=_validate_pattern(_VMID_RE, "instance id"))  # Accept multiple instance IDs
+@click.argument('instance_ids', nargs=-1, required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
+@click.option('--purge', is_flag=True, help="First remove all Docker images, containers, volumes and networks.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate. Default to eu-south-1")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target. Default to az1")
-@click.option('--purge', is_flag=True, help="Remove all Docker images, containers, volumes, and networks.")
-def remove(instance_ids, region, az, purge):
-    """🗑️ Uninstall Docker and Compose from LXC containers."""
-    host_details = config['regions'][region]['availability_zones'][az]
-
+def remove(instance_ids, purge, region, az):
+    """🗑️ Uninstall Docker and Docker Compose from LXC containers."""
+    host_details = _host_details(region, az)
+    # Remove only the packages that are installed: apt-get refuses the whole
+    # command if one of the names is unknown to it.
+    script = (
+        'pkgs=""; for p in ' + " ".join(DOCKER_PACKAGES) + '; do '
+        'dpkg -s "$p" >/dev/null 2>&1 && pkgs="$pkgs $p"; done; '
+        'if [ -n "$pkgs" ]; then DEBIAN_FRONTEND=noninteractive apt-get remove -y $pkgs; fi'
+    )
+    failed = []
     for instance_id in instance_ids:
         click.secho(f"🔧 Removing Docker and Docker Compose from LXC container {instance_id}...", fg='yellow')
-        logging.info(f"Removing Docker and Docker Compose from instance {instance_id}")
-
         if purge:
-            # Purge all Docker resources
-            purge_cmd = ["pct", "exec", instance_id, "--", "docker", "system", "prune", "-a", "-f", "--volumes"]
-            purge_result = run_proxmox_command(purge_cmd, purge_cmd, config['use_local_only'], host_details)
-            if purge_result.returncode != 0:
-                click.secho(f"❌ Failed to purge Docker resources on instance {instance_id}: {purge_result.stderr.strip()}", fg='red')
-                logging.error(f"❌ Failed to purge Docker resources on instance {instance_id}: {purge_result.stderr.strip()}")
+            result = in_container(instance_id, ["docker", "system", "prune", "-a", "-f", "--volumes"], host_details)
+            if result.returncode != 0:
+                click.secho(f"❌ Failed to purge Docker resources on instance {instance_id}: {result.stderr.strip()}", fg='red')
+                failed.append(instance_id)
                 continue
-
-        # Remove Docker and Docker Compose
-        remove_cmd = ["pct", "exec", instance_id, "--", "apt-get", "remove", "-y", "docker.io", "docker-compose-plugin"]
-        remove_result = run_proxmox_command(remove_cmd, remove_cmd, config['use_local_only'], host_details)
-
-        if remove_result.returncode == 0:
-            click.secho(f"✅ Docker and Docker Compose removed successfully from instance {instance_id}.", fg='green')
-            logging.info(f"✅ Docker and Docker Compose removed from instance {instance_id}")
+        result = in_container(instance_id, ["sh", "-c", script], host_details)
+        if result.returncode == 0:
+            click.secho(f"✅ Docker and Docker Compose removed from instance {instance_id}.", fg='green')
         else:
-            click.secho(f"❌ Failed to remove Docker and Docker Compose from instance {instance_id}: {remove_result.stderr.strip()}", fg='red')
-            logging.error(f"❌ Failed to remove Docker and Docker Compose from instance {instance_id}: {remove_result.stderr.strip()}")
+            click.secho(f"❌ Failed to remove Docker from instance {instance_id}: {result.stderr.strip()}", fg='red')
+            failed.append(instance_id)
+    if failed:
+        sys.exit(1)
 
 
 @lxc.command('clone')
@@ -1904,62 +1907,59 @@ def remove(instance_ids, region, az, purge):
 @click.option('--bwlimit', default=None, callback=_validate_pattern(_VMID_RE, "bwlimit"), help="Override I/O bandwidth limit (in KiB/s).")
 @click.option('--start/--no-start', default=True, help="Start the cloned container after creation. Default is true.")
 def clone(source_instance_id, target_instance_id, region, az, target_host, description, hostname, storage, full, pool, bwlimit, start):
-    """🔄 Clone an LXC container locally or remote."""
-    host_details = config['regions'][region]['availability_zones'][az]
+    """🔄 Clone an LXC container, on this node or (--target-host) another node of the cluster.
+
+    A temporary snapshot of the source is taken so a running container can be
+    cloned, and removed once the clone exists.
+    """
+    host_details = _host_details(region, az)
+    use_local = config['use_local_only']
     logging.info(f"Cloning LXC container {source_instance_id} to {target_instance_id}")
 
-    # Generate a unique snapshot name
-    snapshot_name = f"snapshot-{time.strftime('%Y%m%d%H%M%S')}"
-
-    # Create a snapshot
-    snapshot_cmd = ["pct", "snapshot", source_instance_id, snapshot_name]
-    snapshot_result = run_proxmox_command(snapshot_cmd, snapshot_cmd, config['use_local_only'], host_details)
-
+    snapshot_name = f"lws-clone-{time.strftime('%Y%m%d%H%M%S')}"
+    snapshot_result = run_argv(["pct", "snapshot", source_instance_id, snapshot_name], use_local, host_details)
     if snapshot_result.returncode != 0:
         click.secho(f"❌ Failed to create snapshot {snapshot_name} on instance {source_instance_id}: {snapshot_result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to create snapshot {snapshot_name} on instance {source_instance_id}: {snapshot_result.stderr.strip()}")
-        return
+        sys.exit(1)
 
-    # Construct the clone command
     clone_cmd = ["pct", "clone", source_instance_id, target_instance_id, "--snapname", snapshot_name]
-
     if description:
-        clone_cmd.extend(["--description", description])
+        clone_cmd += ["--description", description]
     if hostname:
-        clone_cmd.extend(["--hostname", hostname])
+        clone_cmd += ["--hostname", hostname]
     if storage:
-        clone_cmd.extend(["--storage", storage])
+        clone_cmd += ["--storage", storage]
     if full:
         clone_cmd.append("--full")
     if pool:
-        clone_cmd.extend(["--pool", pool])
+        clone_cmd += ["--pool", pool]
     if bwlimit:
-        clone_cmd.extend(["--bwlimit", bwlimit])
+        clone_cmd += ["--bwlimit", bwlimit]
     if target_host:
-        clone_cmd.extend(["--target", target_host])
+        clone_cmd += ["--target", target_host]
+    clone_result = run_argv(clone_cmd, use_local, host_details)
 
-    # Execute the clone command
-    clone_result = run_proxmox_command(clone_cmd, clone_cmd, config['use_local_only'], host_details)
+    cleanup = run_argv(["pct", "delsnapshot", source_instance_id, snapshot_name], use_local, host_details)
+    if cleanup.returncode != 0:
+        click.secho(f"⚠️ Could not remove the temporary snapshot {snapshot_name} of {source_instance_id}: "
+                    f"{cleanup.stderr.strip()}. Remove it with: lws lxc snapshot-rm {source_instance_id} {snapshot_name}", fg='yellow')
 
-    if clone_result.returncode == 0:
-        click.secho(f"✅ Successfully cloned instance {source_instance_id} to {target_instance_id} from snapshot {snapshot_name}.", fg='green')
-        logging.info(f"✅ Successfully cloned instance {source_instance_id} to {target_instance_id} from snapshot {snapshot_name}")
-
-        # Automatically start the cloned container if the option is enabled
-        if start:
-            logging.info(f"Starting cloned LXC container {target_instance_id}")
-            start_cmd = ["pct", "start", target_instance_id]
-            start_result = run_proxmox_command(start_cmd, start_cmd, config['use_local_only'], host_details)
-
-            if start_result.returncode == 0:
-                click.secho(f"✅ Cloned container {target_instance_id} started successfully.", fg='green')
-                logging.info(f"✅ Cloned container {target_instance_id} started successfully")
-            else:
-                click.secho(f"❌ Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}", fg='red')
-                logging.error(f"❌ Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}")
-    else:
+    if clone_result.returncode != 0:
         click.secho(f"❌ Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}", fg='red')
-        logging.error(f"❌ Failed to clone instance {source_instance_id} to {target_instance_id}: {clone_result.stderr.strip()}")
+        sys.exit(1)
+    click.secho(f"✅ Successfully cloned instance {source_instance_id} to {target_instance_id}.", fg='green')
+
+    if start:
+        if target_host:
+            # The clone lives on the target node; the cluster API starts it there.
+            start_cmd = ["pvesh", "create", f"/nodes/{target_host}/lxc/{target_instance_id}/status/start"]
+        else:
+            start_cmd = ["pct", "start", target_instance_id]
+        start_result = run_argv(start_cmd, use_local, host_details)
+        if start_result.returncode != 0:
+            click.secho(f"❌ Failed to start cloned container {target_instance_id}: {start_result.stderr.strip()}", fg='red')
+            sys.exit(1)
+        click.secho(f"✅ Cloned container {target_instance_id} started successfully.", fg='green')
 
 
 @lxc.command('exec')
@@ -1993,7 +1993,10 @@ def exec_in_container(instance_ids, command, region, az):
         logging.info(f"Executing command in instance {instance_id}: {command}")
         click.secho(f"🔧 Executing command in instance {instance_id}: {command}", fg='cyan')
 
-        exec_result = run_proxmox_command(exec_cmd, exec_cmd, config['use_local_only'], host_details)
+        # run_argv quotes the remote copy, so `&&`, `;` or `|` in the command
+        # reach the container as arguments instead of being run by the
+        # Proxmox host's shell. For a pipeline, pass `sh -c '...'` explicitly.
+        exec_result = run_argv(exec_cmd, config['use_local_only'], host_details)
 
         if exec_result.returncode == 0:
             logging.info(f"✅ Command executed successfully in instance {instance_id}.")
@@ -2040,14 +2043,13 @@ def net_check(instance_id, protocol, port, region, az, timeout):
 
     click.secho(f"ℹ️ Instance {instance_id} is running. Proceeding with network check...", fg='yellow')
 
-    # Step 2: Attempt to check the port from within the LXC container
-    check_port_cmd = ["nc", "-zv", "-w", str(timeout), f"127.0.0.1", str(port)]
-    port_check_result = run_proxmox_command(
-        local_cmd=check_port_cmd,
-        remote_cmd=["pct", "exec", instance_id, "--"] + check_port_cmd,
-        use_local_only=config['use_local_only'],
-        host_details=host_details
-    )
+    # Step 2: Attempt to check the port from within the LXC container.
+    # nc -u can only tell that a UDP port is closed if an ICMP "port
+    # unreachable" comes back, so a UDP "open" is a best guess.
+    nc_flags = ["-zvu"] if protocol == 'udp' else ["-zv"]
+    check_port_cmd = ["nc"] + nc_flags + ["-w", str(timeout), "127.0.0.1", str(port)]
+    port_check_result = run_argv(["pct", "exec", instance_id, "--"] + check_port_cmd,
+                                 config['use_local_only'], host_details)
 
     if port_check_result.returncode == 0:
         click.secho(f"🟢 {protocol.upper()} port {port} on instance {instance_id} is open.", fg='green')
@@ -2071,7 +2073,7 @@ def net_check(instance_id, protocol, port, region, az, timeout):
     lxc_ip = lxc_ip_result.stdout.strip().split()[0]
     click.secho(f"ℹ️ Retrieved LXC IP: {lxc_ip}. Checking port from Proxmox host...", fg='yellow')
 
-    proxmox_to_lxc_check_cmd = ["nc", "-zv", "-w", str(timeout), lxc_ip, str(port)]
+    proxmox_to_lxc_check_cmd = ["nc"] + nc_flags + ["-w", str(timeout), lxc_ip, str(port)]
     proxmox_to_lxc_result = run_proxmox_command(
         local_cmd=proxmox_to_lxc_check_cmd,
         remote_cmd=proxmox_to_lxc_check_cmd,
@@ -2137,49 +2139,23 @@ def list_templates(region, az):
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
 def list_security_groups(region, az):
     """🔐 List all security groups and their rules in the Proxmox cluster."""
-    
-    host_details = config['regions'][region]['availability_zones'][az]
-    
-    # Command to read the entire cluster.fw file
-    list_sg_cmd = ["cat", "/etc/pve/firewall/cluster.fw"]
-    
-    try:
-        # Run the command on the Proxmox host
-        result = run_proxmox_command(
-            local_cmd=list_sg_cmd,
-            remote_cmd=list_sg_cmd,
-            use_local_only=config['use_local_only'],
-            host_details=host_details
-        )
-        
-        if result and result.returncode == 0:
-            click.secho("🔐 Security Groups and their rules in the cluster:\n", fg='cyan')
-            
-            lines = result.stdout.splitlines()
-            inside_group = False
-            
-            for line in lines:
-                line = line.strip()
-                
-                if line.startswith("[group "):
-                    # Print the security group name
-                    click.secho(f"\n{line}", fg='yellow')
-                    inside_group = True
-                elif inside_group:
-                    if line == "":
-                        inside_group = False
-                    else:
-                        # Print the rules within the group
-                        click.secho(f"  {line}", fg='white')
-                        
-        else:
-            click.secho(f"❌ Failed to list security groups: {result.stderr.strip()}", fg='red')
-            sys.exit(1)
-    
-    except Exception as e:
-        click.secho(f"❌ An error occurred while listing security groups: {str(e)}", fg='red')
-        logging.error(f"❌ An error occurred while listing security groups: {str(e)}")
-        sys.exit(1)
+    host_details = _host_details(region, az)
+    groups = pvesh_json("/cluster/firewall/groups", host_details) or []
+    if not groups:
+        click.secho("ℹ️ No security groups are defined.", fg='yellow')
+        return
+    click.secho("🔐 Security groups and their rules:\n", fg='cyan')
+    for group in sorted(groups, key=lambda g: g.get('group', '')):
+        name = group.get('group', '')
+        comment = f" - {group['comment']}" if group.get('comment') else ""
+        click.secho(f"[group {name}]{comment}", fg='yellow')
+        rules = pvesh_json(f"/cluster/firewall/groups/{name}", host_details) or []
+        if not rules:
+            click.secho("    (no rules)", fg='white')
+        for rule in sorted(rules, key=lambda r: int(r.get('pos', 0))):
+            state = "" if str(rule.get('enable', 1)) == '1' else " (disabled)"
+            click.secho(f"    {rule.get('pos')}: {_describe_rule(rule)}{state}", fg='white')
+        click.echo("")
 
 
 @lxc.command('show-info')
@@ -2374,25 +2350,26 @@ def scale_check_suggest_resources(instance_id, region, az):
     
     config = scale_check_load_config()
     host_details = scale_check_get_proxmox_host_details(region, az)
-
-    logging.debug(f"Retrieved host details: {host_details}")
+    if host_details is None:
+        click.secho(f"❌ Invalid region '{region}' or availability zone '{az}'.", fg='red')
+        sys.exit(1)
 
     # Retrieve host resource usage
     total_cores, total_memory, free_memory = scale_check_get_host_free_resources(host_details)
-    if total_cores is None or total_memory is None:
+    if not total_cores or not total_memory:
         logging.error("Failed to retrieve host resources.")
         click.secho("❌ Could not retrieve host resources.", fg='red')
-        return
+        sys.exit(1)
 
     logging.info(f"Proxmox Host resources - Total cores: {total_cores}, Total memory: {total_memory} MB, Free memory: {free_memory} MB")
     click.secho(f"ℹ️ Proxmox Host: {total_cores} cores, {free_memory} MB free memory", fg='cyan')
 
     # Retrieve LXC resource usage
-    cpulimit, cpuunits, memory, storage = scale_check_get_lxc_resources(instance_id, host_details)
+    cpulimit, cpuunits, memory, storage = scale_check_get_lxc_resources(instance_id, host_details, total_cores)
     if cpulimit is None or memory is None or storage is None:
         logging.error(f"Failed to retrieve resources for container {instance_id}.")
         click.secho(f"❌ Could not retrieve resources for container {instance_id}.", fg='red')
-        return
+        sys.exit(1)
 
     logging.info(f"Instance {instance_id} resources - CPU cores: {cpulimit}, Memory: {memory} MB, Storage: {storage} GB")
     click.secho(f"ℹ️ Instance {instance_id}: {cpulimit} cores, {memory} MB total memory, {storage} GB storage", fg='cyan')
@@ -2405,6 +2382,8 @@ def scale_check_suggest_resources(instance_id, region, az):
     storage_thresholds_host = config.get('scaling', {}).get('host_storage', {})
     storage_thresholds_lxc = config.get('scaling', {}).get('lxc_storage', {})
     limits = config.get('scaling', {}).get('limits', {})
+    for thresholds in (cpu_thresholds_lxc, memory_thresholds_lxc, storage_thresholds_lxc):
+        normalize_thresholds(thresholds)
 
     min_cores = limits.get('min_cpu_cores', 1)
     max_cores = limits.get('max_cpu_cores', total_cores)
@@ -2455,6 +2434,7 @@ def scale_check_suggest_resources(instance_id, region, az):
     if suggestions:
         logging.info("Suggestions made for scaling adjustments.")
         click.secho("\n".join(suggestions), fg='green')
+        click.secho(f"ℹ️ Apply them with: lws lxc scale {instance_id} --cpucores <n> --memory <MB> --storage-size <GB>G", fg='cyan')
     else:
         logging.info("No changes recommended based on current resource usage.")
         click.secho("🔧 No changes recommended.", fg='green')
@@ -2481,12 +2461,11 @@ def scale_check_get_host_free_resources(host_details):
         cpu_info = cpu_result.stdout
         mem_info = mem_result.stdout
 
-        # Extract CPU cores count
+        # Extract CPU cores count from the "CPU(s):" line, not "On-line CPU(s) list:"
         total_cores = 0
-        for line in cpu_info.splitlines():
-            if "CPU(s):" in line:
-                total_cores = int(line.split(":")[1].strip())
-                break
+        match = re.search(r'^CPU\(s\):\s*(\d+)', cpu_info, re.M)
+        if match:
+            total_cores = int(match.group(1))
 
         # Extract memory info
         mem_info_lines = mem_info.splitlines()
@@ -2498,32 +2477,61 @@ def scale_check_get_host_free_resources(host_details):
         logging.error(f"Failed to retrieve host resources: {cpu_result.stderr} {mem_result.stderr}")
         return None, None, None
 
-def scale_check_get_lxc_resources(instance_id, host_details):
-    """Retrieve the allocated CPU cores, CPU units, memory, and storage resources of an LXC container."""
+_SIZE_UNITS_GB = {'K': 1 / (1024 * 1024), 'M': 1 / 1024, 'G': 1, 'T': 1024}
+
+
+def normalize_thresholds(thresholds):
+    """Read threshold values above 1 as percentages (80 -> 0.80), in place.
+
+    The code compares against fractions, but earlier versions of
+    config.yaml.example wrote 30 and 80, which made every check suggest an
+    increase.
+    """
+    for key in ('min_threshold', 'max_threshold'):
+        value = thresholds.get(key)
+        if isinstance(value, (int, float)) and value > 1:
+            thresholds[key] = value / 100.0
+
+
+def scale_check_get_lxc_resources(instance_id, host_details, host_cores=None):
+    """
+    The cores, CPU units, memory (MB) and root disk size (GB) allocated to a container.
+
+    A container without a `cores` setting may use every CPU of the host; its
+    `cpulimit`, if set, caps the time it gets, so that is used instead.
+    """
     command = ["pct", "config", instance_id]
     result = run_proxmox_command(command, command, config['use_local_only'], host_details)
 
     if result.returncode == 0:
-        config_lines = result.stdout.splitlines()
-        cpulimit = None
-        cpuunits = None
-        memory = None
+        settings = {}
+        for line in result.stdout.splitlines():
+            key, sep, value = line.partition(":")
+            if sep:
+                settings[key.strip()] = value.strip()
+
+        cores = None
+        try:
+            if 'cores' in settings:
+                cores = int(settings['cores'])
+            elif float(settings.get('cpulimit', 0) or 0) > 0:
+                cores = max(1, math.ceil(float(settings['cpulimit'])))
+            elif host_cores:
+                cores = int(host_cores)
+            cpuunits = int(settings['cpuunits']) if 'cpuunits' in settings else None
+            memory = int(settings['memory']) if 'memory' in settings else None
+        except ValueError:
+            logging.error(f"Unexpected values in pct config for {instance_id}: {settings}")
+            return None, None, None, None
+
         storage = None
+        match = re.search(r'size=(\d+(?:\.\d+)?)([KMGT])', settings.get('rootfs', ''))
+        if match:
+            storage = round(float(match.group(1)) * _SIZE_UNITS_GB[match.group(2)], 2)
+            if storage == int(storage):
+                storage = int(storage)
 
-        for line in config_lines:
-            if "cores" in line:
-                cpulimit = int(line.split(":")[1].strip())
-            elif "cpuunits" in line:
-                cpuunits = int(line.split(":")[1].strip())
-            elif "memory" in line:
-                memory = int(line.split(":")[1].strip())
-            elif "rootfs" in line:
-                # Extracting the storage size from the rootfs line
-                storage_part = line.split(",")[1]
-                if "size=" in storage_part:
-                    storage = int(storage_part.split("=")[1].replace("G", "").strip())
-
-        return cpulimit, cpuunits, memory, storage
+        return cores, cpuunits, memory, storage
     else:
         logging.error(f"Failed to retrieve LXC resources for {instance_id}: {result.stderr}")
         return None, None, None, None
@@ -2793,11 +2801,41 @@ def diagnose_network(host_details, lxc_id=None):
 
     return diagnostics
 
+_CPU_IDLE_RE = re.compile(r'([\d.]+)\s*%?\s*id\b')
+
+
+def container_cpu_usage(instance_id, host_details):
+    """
+    CPU usage of a container in percent, from one `top -bn1` run inside it,
+    or None if it cannot be read. The Cpu(s) line is parsed here rather than
+    with `| grep` in the command, which would run on the Proxmox host over
+    SSH and not at all in local mode.
+    """
+    result = run_argv(["pct", "exec", instance_id, "--", "top", "-bn1"], config['use_local_only'], host_details)
+    if result.returncode != 0:
+        return None
+    for line in result.stdout.splitlines():
+        if "Cpu" in line:
+            match = _CPU_IDLE_RE.search(line)
+            if match:
+                return max(0.0, 100.0 - float(match.group(1)))
+    return None
+
+
+def show_top_processes(instance_id, host_details, sort_key, count=5):
+    """Print the container's top processes by `sort_key` (`-%cpu` or `-%mem`)."""
+    result = run_argv(["pct", "exec", instance_id, "--", "ps", "aux", f"--sort={sort_key}"],
+                      config['use_local_only'], host_details)
+    if result.returncode == 0:
+        lines = result.stdout.strip().splitlines()[:count + 1]
+        click.secho("   Busiest processes:\n" + "\n".join(f"   {line}" for line in lines), fg='white')
+
+
 @lxc.command('health-check')
 @click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
-@click.option('--fix', is_flag=True, help="Attempt to fix common issues.")
+@click.option('--fix', is_flag=True, help="When the disk is over 80% full, delete files older than 7 days in /tmp and /var/tmp; when DNS fails, restart networking.")
 def container_health_check(instance_id, region, az, fix):
     """💊 Perform health check on an LXC container."""
     host_details = config['regions'][region]['availability_zones'][az]
@@ -2812,24 +2850,15 @@ def container_health_check(instance_id, region, az, fix):
         click.secho(f"❌ Container {instance_id} is not running.", fg='red')
         return
     
-    # Check for high CPU usage
-    cpu_cmd = ["pct", "exec", instance_id, "--", "top", "-bn1", "|", "grep", "Cpu"]
-    cpu_result = run_proxmox_command(cpu_cmd, cpu_cmd, config['use_local_only'], host_details)
-    
-    if cpu_result.returncode == 0:
-        cpu_line = cpu_result.stdout.strip()
-        if "id," in cpu_line:  # Look for idle percentage
-            idle_pct = float(cpu_line.split("id,")[0].split()[-1])
-            usage_pct = 100.0 - idle_pct
-            if usage_pct > 80:
-                click.secho(f"⚠️ High CPU usage detected: {usage_pct:.1f}%", fg='yellow')
-                if fix:
-                    click.secho("🔧 Attempting to reduce CPU usage...", fg='yellow')
-                    # Example fix: Restart high CPU usage processes
-                    restart_cmd = ["pct", "exec", instance_id, "--", "pkill", "-f", "high_cpu_process"]
-                    run_proxmox_command(restart_cmd, restart_cmd, config['use_local_only'], host_details)
-            else:
-                click.secho(f"✅ CPU usage is normal: {usage_pct:.1f}%", fg='green')
+    # Check for high CPU usage. There is no automatic fix: which process to
+    # stop is a decision for the operator, so the busiest ones are listed.
+    usage_pct = container_cpu_usage(instance_id, host_details)
+    if usage_pct is not None:
+        if usage_pct > 80:
+            click.secho(f"⚠️ High CPU usage detected: {usage_pct:.1f}%", fg='yellow')
+            show_top_processes(instance_id, host_details, "-%cpu")
+        else:
+            click.secho(f"✅ CPU usage is normal: {usage_pct:.1f}%", fg='green')
     
     # Check for high memory usage
     mem_cmd = ["pct", "exec", instance_id, "--", "free", "-m"]
@@ -2844,11 +2873,7 @@ def container_health_check(instance_id, region, az, fix):
             mem_usage_pct = (used_mem / total_mem) * 100
             if mem_usage_pct > 80:
                 click.secho(f"⚠️ High memory usage detected: {mem_usage_pct:.1f}%", fg='yellow')
-                if fix:
-                    click.secho("🔧 Attempting to reduce memory usage...", fg='yellow')
-                    # Example fix: Restart high memory usage processes
-                    restart_cmd = ["pct", "exec", instance_id, "--", "pkill", "-f", "high_mem_process"]
-                    run_proxmox_command(restart_cmd, restart_cmd, config['use_local_only'], host_details)
+                show_top_processes(instance_id, host_details, "-%mem")
             else:
                 click.secho(f"✅ Memory usage is normal: {mem_usage_pct:.1f}%", fg='green')
     
@@ -2864,12 +2889,13 @@ def container_health_check(instance_id, region, az, fix):
             if disk_usage_pct > 80:
                 click.secho(f"⚠️ High disk space usage detected: {disk_usage_pct:.1f}%", fg='yellow')
                 if fix:
-                    click.secho("🔧 Attempting to free up disk space...", fg='yellow')
-                    # Example fix: Clean up temporary files using safer approach
-                    # Only remove files older than 7 days to avoid breaking running processes
-                    cleanup_cmd = ["pct", "exec", instance_id, "--", "find", "/tmp", "/var/tmp", 
-                                 "-type", "f", "-mtime", "+7", "-delete", "2>/dev/null", "||", "true"]
-                    run_proxmox_command(cleanup_cmd, cleanup_cmd, config['use_local_only'], host_details)
+                    click.secho("🔧 Removing files older than 7 days from /tmp and /var/tmp...", fg='yellow')
+                    # Only old temporary files, to avoid breaking running processes.
+                    cleanup_cmd = ["pct", "exec", instance_id, "--", "find", "/tmp", "/var/tmp",
+                                   "-xdev", "-type", "f", "-mtime", "+7", "-delete"]
+                    cleanup_result = run_argv(cleanup_cmd, config['use_local_only'], host_details)
+                    if cleanup_result.returncode != 0:
+                        click.secho(f"⚠️ Cleanup finished with errors: {cleanup_result.stderr.strip()}", fg='yellow')
             else:
                 click.secho(f"✅ Disk space usage is normal: {disk_usage_pct:.1f}%", fg='green')
     
@@ -2879,173 +2905,167 @@ def container_health_check(instance_id, region, az, fix):
         click.secho("⚠️ Network issues detected: DNS resolution failed", fg='yellow')
         if fix:
             click.secho("🔧 Attempting to fix DNS resolution...", fg='yellow')
-            # Example fix: Restart networking service
             restart_cmd = ["pct", "exec", instance_id, "--", "systemctl", "restart", "networking"]
-            run_proxmox_command(restart_cmd, restart_cmd, config['use_local_only'], host_details)
+            restart_result = run_argv(restart_cmd, config['use_local_only'], host_details)
+            if restart_result.returncode != 0:
+                click.secho(f"⚠️ Could not restart networking: {restart_result.stderr.strip()}", fg='yellow')
     else:
         click.secho("✅ Network is functioning normally.", fg='green')
     
     click.secho(f"✅ Health check for container {instance_id} completed.", fg='green')
 
+# vzdump reports the archive it writes as
+#   INFO: creating vzdump archive '/var/lib/vz/dump/vzdump-lxc-100-2026_10_10-08_00_00.tar.zst'
+# (older versions: "creating archive '...'"), on stdout or stderr.
+VZDUMP_ARCHIVE_RE = re.compile(r"creating (?:vzdump )?archive '([^']+)'")
+# A Proxmox volume ID such as local:backup/vzdump-lxc-100-....tar.zst
+_VOLUME_ID_RE = re.compile(r'^[A-Za-z0-9_-]+:\S+$')
+
+
 @lxc.command('backup-restore')
 @click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.option('--backup-file', required=True, help="Path to the backup file to restore.")
+@click.option('--backup-file', required=True,
+              help="A vzdump archive: a path on the Proxmox host, a volume ID (local:backup/vzdump-lxc-...), or a file on this machine, which is uploaded.")
+@click.option('--storage', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "storage"),
+              help="Storage for the restored root disk. Default: the storage in the backup.")
+@click.option('--start/--no-start', default=True, help="Start the container after the restore. Default: start.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
-@click.option('--force', is_flag=True, help="Force restore without confirmation.")
-def restore_container(instance_id, backup_file, region, az, force):
-    """🔄 Restore an LXC container from a backup file."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    
+@click.option('--force', is_flag=True, help="Do not ask for confirmation.")
+def restore_container(instance_id, backup_file, storage, start, region, az, force):
+    """🔄 Restore an LXC container from a vzdump backup.
+
+    If INSTANCE_ID exists, it is stopped and replaced by the backup: its
+    current disks are destroyed. The backup file itself is never deleted.
+    """
+    host_details = _host_details(region, az)
+    use_local = config['use_local_only']
+
+    status = run_argv(["pct", "status", instance_id], use_local, host_details)
+    exists = status.returncode == 0
+    running = exists and "status: running" in status.stdout
+
     if not force:
-        click.confirm(f"⚠️ This will overwrite the current state of container {instance_id}. Are you sure?", abort=True)
-    
-    # Check if the container exists and is stopped
-    status_cmd = ["pct", "status", instance_id]
-    status_result = run_proxmox_command(status_cmd, status_cmd, config['use_local_only'], host_details)
-    
-    if status_result.returncode != 0:
-        click.secho(f"❌ Failed to get status of container {instance_id}: {status_result.stderr}", fg='red')
-        return
-    
-    if "status: running" in status_result.stdout:
-        click.secho("⚠️ Container is running. Stopping container before restore...", fg='yellow')
-        stop_cmd = ["pct", "stop", instance_id]
-        stop_result = run_proxmox_command(stop_cmd, stop_cmd, config['use_local_only'], host_details)
-        
-        if stop_result.returncode != 0:
-            click.secho(f"❌ Failed to stop container {instance_id}: {stop_result.stderr}", fg='red')
-            return
-        
-        click.secho("✅ Container stopped successfully.", fg='green')
-    
-    # First, check if backup file exists on local system
-    if os.path.exists(backup_file):
-        # Upload backup to Proxmox host using secure temp directory
-        click.secho(f"📤 Uploading backup file to Proxmox host...", fg='yellow')
-        timestamp = int(time.time())
-        remote_backup_path = f"/var/tmp/lws-backup-{instance_id}-{timestamp}.tar.gz"
-        
-        scp_result = run_scp_command(host_details['ssh_password'], backup_file, f"{host_details['user']}@{host_details['host']}:{remote_backup_path}")
-        
-        if scp_result.returncode != 0:
-            click.secho(f"❌ Failed to upload backup file: {scp_result.stderr}", fg='red')
-            return
-        
-        backup_path = remote_backup_path
-    else:
-        # Check if file exists on remote host
-        check_file_cmd = ["test", "-f", backup_file, "&&", "echo", "exists"]
-        file_check_result = run_proxmox_command(check_file_cmd, check_file_cmd, config['use_local_only'], host_details)
-        
-        if "exists" not in file_check_result.stdout:
-            click.secho(f"❌ Backup file not found: {backup_file}", fg='red')
-            return
-        
-        backup_path = backup_file
-    
-    click.secho(f"🔄 Restoring container {instance_id} from backup...", fg='yellow')
-    
-    # Extract the backup to a secure temporary directory
-    timestamp = int(time.time())
-    temp_dir = f"/var/tmp/lws-restore-{instance_id}-{timestamp}"
-    mkdir_cmd = ["mkdir", "-p", temp_dir]
-    mkdir_result = run_proxmox_command(mkdir_cmd, mkdir_cmd, config['use_local_only'], host_details)
-    
-    if mkdir_result.returncode != 0:
-        click.secho(f"❌ Failed to create temporary directory: {mkdir_result.stderr}", fg='red')
-        return
-    
-    # Extract the backup
-    extract_cmd = ["tar", "-xzf", backup_path, "-C", temp_dir]
-    extract_result = run_proxmox_command(extract_cmd, extract_cmd, config['use_local_only'], host_details)
-    
-    if extract_result.returncode != 0:
-        click.secho(f"❌ Failed to extract backup: {extract_result.stderr}", fg='red')
-        return
-    
-    # Restore the configuration
-    restore_config_cmd = ["pct", "restore", instance_id, f"{temp_dir}/vzdump-lxc-{instance_id}.tar.gz", "--force"]
-    restore_result = run_proxmox_command(restore_config_cmd, restore_config_cmd, config['use_local_only'], host_details)
-    
-    if restore_result.returncode != 0:
-        click.secho(f"❌ Failed to restore container: {restore_result.stderr}", fg='red')
-        return
-    
-    # Clean up temporary files
-    cleanup_cmd = ["rm", "-rf", temp_dir, backup_path]
-    run_proxmox_command(cleanup_cmd, cleanup_cmd, config['use_local_only'], host_details)
-    
-    click.secho(f"✅ Container {instance_id} restored successfully.", fg='green')
-    
-    # Start the container
-    start_cmd = ["pct", "start", instance_id]
-    start_result = run_proxmox_command(start_cmd, start_cmd, config['use_local_only'], host_details)
-    
-    if start_result.returncode == 0:
-        click.secho(f"✅ Container {instance_id} started successfully.", fg='green')
-    else:
-        click.secho(f"❌ Failed to start container {instance_id}: {start_result.stderr}", fg='red')
+        if exists:
+            click.confirm(f"⚠️ Container {instance_id} exists. Replace it with the backup? Its current disks "
+                          "are destroyed.", abort=True)
+        else:
+            click.confirm(f"Restore {backup_file} as new container {instance_id}?", abort=True)
+
+    source = backup_file
+    uploaded = None
+    if os.path.isfile(backup_file) and not use_local:
+        # Keep the archive's own name: pct restore reads the format from the extension.
+        uploaded = f"/var/tmp/lws-restore-{int(time.time())}-{os.path.basename(backup_file)}"
+        click.secho("📤 Uploading backup file to Proxmox host...", fg='yellow')
+        upload = run_scp_command(host_details['ssh_password'], backup_file,
+                                 f"{host_details['user']}@{host_details['host']}:{uploaded}")
+        if upload.returncode != 0:
+            click.secho(f"❌ Failed to upload backup file: {upload.stderr.strip()}", fg='red')
+            sys.exit(1)
+        source = uploaded
+    elif not _VOLUME_ID_RE.match(backup_file):
+        check = run_argv(["test", "-f", backup_file], use_local, host_details)
+        if check.returncode != 0:
+            click.secho(f"❌ Backup file not found on the Proxmox host: {backup_file}", fg='red')
+            sys.exit(1)
+
+    if running:
+        click.secho("⚠️ Container is running. Stopping it before the restore...", fg='yellow')
+        stop = run_argv(["pct", "stop", instance_id], use_local, host_details)
+        if stop.returncode != 0:
+            click.secho(f"❌ Failed to stop container {instance_id}: {stop.stderr.strip()}", fg='red')
+            sys.exit(1)
+
+    restore_cmd = ["pct", "restore", instance_id, source]
+    if exists:
+        restore_cmd += ["--force", "1"]
+    if storage:
+        restore_cmd += ["--storage", storage]
+    click.secho(f"🔄 Restoring container {instance_id} from {backup_file}...", fg='yellow')
+    restore = run_argv(restore_cmd, use_local, host_details)
+
+    if uploaded:
+        # Only the temporary copy LWS made; the original stays where it was.
+        run_argv(["rm", "-f", uploaded], use_local, host_details)
+
+    if restore.returncode != 0:
+        click.secho(f"❌ Failed to restore container {instance_id}: {restore.stderr.strip()}", fg='red')
         sys.exit(1)
+    click.secho(f"✅ Container {instance_id} restored.", fg='green')
+
+    if start:
+        started = run_argv(["pct", "start", instance_id], use_local, host_details)
+        if started.returncode != 0:
+            click.secho(f"❌ Failed to start container {instance_id}: {started.stderr.strip()}", fg='red')
+            sys.exit(1)
+        click.secho(f"✅ Container {instance_id} started.", fg='green')
+
 
 @lxc.command('backup-create')
 @click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
-@click.option('--destination', default="/var/lib/vz/dump", help="Destination directory for the backup.")
+@click.option('--destination', default="/var/lib/vz/dump", callback=_validate_pattern(_SAFE_PATH_RE, "destination"),
+              help="Directory on the Proxmox host for the archive (vzdump --dumpdir). Default: /var/lib/vz/dump.")
+@click.option('--storage', default=None, callback=_validate_pattern(_SAFE_NAME_RE, "storage"),
+              help="A Proxmox backup storage to write to instead of --destination (vzdump --storage).")
+@click.option('--mode', type=click.Choice(['snapshot', 'suspend', 'stop']), default='snapshot',
+              help="vzdump mode. Default: snapshot (no downtime; needs storage that supports snapshots).")
+@click.option('--compress', type=click.Choice(['zstd', 'gzip', 'lzo', 'none']), default='zstd',
+              help="Compression of the archive. Default: zstd.")
+@click.option('--compress-level', default=None, type=int, hidden=True,
+              help="Deprecated and ignored: vzdump has no compression level setting.")
 @click.option('--region', '--location', default='eu-south-1', help="Region in which to operate.")
 @click.option('--az', '--node', default='az1', help="Availability zone (Proxmox host) to target.")
-@click.option('--download', is_flag=True, help="Download the backup file to local system.")
-@click.option('--compress-level', default=6, type=int, help="Compression level (1-9).")
-def create_container_backup(instance_id, destination, region, az, download, compress_level):
-    """💾 Create a backup of an LXC container."""
-    host_details = config['regions'][region]['availability_zones'][az]
-    
-    # Create the destination directory if it doesn't exist
-    mkdir_cmd = ["mkdir", "-p", destination]
-    mkdir_result = run_proxmox_command(mkdir_cmd, mkdir_cmd, config['use_local_only'], host_details)
-    
-    if mkdir_result.returncode != 0:
-        click.secho(f"❌ Failed to create destination directory: {mkdir_result.stderr}", fg='red')
-        return
-    
-    # Create the backup using vzdump
-    timestamp = time.strftime("%Y%m%d-%H%M%S")
-    backup_filename = f"backup-{instance_id}-{timestamp}.tar.gz"
-    backup_path = os.path.join(destination, backup_filename)
-    
-    click.secho(f"📦 Creating backup of container {instance_id}...", fg='yellow')
-    backup_cmd = [
-        "vzdump", instance_id, 
-        "--compress", str(compress_level),
-        "--dumpdir", destination,
-        "--mode", "snapshot"
-    ]
-    
-    backup_result = run_proxmox_command(backup_cmd, backup_cmd, config['use_local_only'], host_details)
-    
-    if backup_result.returncode != 0:
-        click.secho(f"❌ Failed to create backup: {backup_result.stderr}", fg='red')
-        return
-    
-    # Get the actual backup filename from the output
-    for line in backup_result.stdout.splitlines():
-        if "creating archive" in line:
-            backup_path = line.split("creating archive '")[1].split("'")[0]
-            break
-    
-    click.secho(f"✅ Backup created successfully: {backup_path}", fg='green')
-    
-    # Download the backup if requested
-    if download:
-        click.secho(f"📥 Downloading backup file to current directory...", fg='yellow')
-        local_path = os.path.basename(backup_path)
-        
-        scp_result = run_scp_command(host_details['ssh_password'], f"{host_details['user']}@{host_details['host']}:{backup_path}", local_path)
-        
-        if scp_result.returncode == 0:
-            click.secho(f"✅ Backup downloaded successfully to {os.path.abspath(local_path)}", fg='green')
-        else:
-            click.secho(f"❌ Failed to download backup: {scp_result.stderr}", fg='red')
+@click.option('--download', is_flag=True, help="Copy the archive into the current directory afterwards.")
+def create_container_backup(instance_id, destination, storage, mode, compress, compress_level, region, az, download):
+    """💾 Create a vzdump backup of an LXC container."""
+    host_details = _host_details(region, az)
+    use_local = config['use_local_only']
+
+    if compress_level is not None:
+        click.secho("⚠️ --compress-level is ignored: vzdump has no compression level. Use --compress.", fg='yellow')
+
+    backup_cmd = ["vzdump", instance_id, "--mode", mode, "--compress", "0" if compress == 'none' else compress]
+    if storage:
+        backup_cmd += ["--storage", storage]
+    else:
+        mkdir = run_argv(["mkdir", "-p", destination], use_local, host_details)
+        if mkdir.returncode != 0:
+            click.secho(f"❌ Failed to create destination directory: {mkdir.stderr.strip()}", fg='red')
             sys.exit(1)
+        backup_cmd += ["--dumpdir", destination]
+
+    click.secho(f"📦 Creating backup of container {instance_id}...", fg='yellow')
+    backup = run_argv(backup_cmd, use_local, host_details)
+    if backup.returncode != 0:
+        click.secho(f"❌ Failed to create backup: {backup.stderr.strip()}", fg='red')
+        sys.exit(1)
+
+    match = VZDUMP_ARCHIVE_RE.search(f"{backup.stdout}\n{backup.stderr}")
+    if not match:
+        click.secho("✅ Backup created. vzdump did not report a file name (for example on a Proxmox Backup "
+                    "Server storage); list it with: pvesm list <storage>", fg='green')
+        if download:
+            click.secho("❌ Nothing to download without a file name.", fg='red')
+            sys.exit(1)
+        return
+
+    backup_path = match.group(1)
+    click.secho(f"✅ Backup created: {backup_path}", fg='green')
+
+    if download:
+        if use_local:
+            click.secho(f"ℹ️ use_local_only is set: the archive is already on this machine at {backup_path}.", fg='yellow')
+            return
+        local_path = os.path.basename(backup_path)
+        click.secho("📥 Downloading backup file to the current directory...", fg='yellow')
+        scp = run_scp_command(host_details['ssh_password'],
+                              f"{host_details['user']}@{host_details['host']}:{backup_path}", local_path)
+        if scp.returncode != 0:
+            click.secho(f"❌ Failed to download backup: {scp.stderr.strip()}", fg='red')
+            sys.exit(1)
+        click.secho(f"✅ Backup downloaded to {os.path.abspath(local_path)}", fg='green')
+
 
 @sec.command('scan')
 @click.argument('instance_id', required=True, callback=_validate_pattern(_VMID_RE, "instance id"))
@@ -3066,8 +3086,8 @@ def security_scan(instance_id, region, az, scan_type):
         click.secho(f"❌ Container {instance_id} is not running.", fg='red')
         return
     
-    # Ensure required tools are installed
-    tools = ["nmap", "lynis"]
+    # Ensure required tools are installed in the container (lynis only for a full scan)
+    tools = ["nmap", "lynis"] if scan_type == 'full' else ["nmap"]
     for tool in tools:
         check_tool_cmd = ["pct", "exec", instance_id, "--", "which", tool]
         check_result = run_proxmox_command(check_tool_cmd, check_tool_cmd, config['use_local_only'], host_details)
@@ -3075,12 +3095,15 @@ def security_scan(instance_id, region, az, scan_type):
         if check_result.returncode != 0:
             # Try to install the missing tool
             click.secho(f"📦 Installing {tool} in container {instance_id}...", fg='yellow')
-            install_cmd = ["pct", "exec", instance_id, "--", "apt-get", "update", "&&", "apt-get", "install", "-y", tool]
-            install_result = run_proxmox_command(install_cmd, install_cmd, config['use_local_only'], host_details)
-            
+            # Both apt-get steps run inside the container: the script goes to the
+            # container's shell, quoted so the host's shell does not split it.
+            install_cmd = ["pct", "exec", instance_id, "--", "sh", "-c",
+                           f"apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y {tool}"]
+            install_result = run_argv(install_cmd, config['use_local_only'], host_details)
+
             if install_result.returncode != 0:
                 click.secho(f"❌ Failed to install {tool}: {install_result.stderr}", fg='red')
-                return
+                sys.exit(1)
     
     # 1. Check for exposed services using nmap
     click.secho("🔍 Checking for exposed services...", fg='yellow')
@@ -3221,9 +3244,8 @@ def monitor_container_resources(instance_id, region, az, interval, count):
             time.sleep(interval)
         
         # Get CPU usage
-        cpu_cmd = ["pct", "exec", instance_id, "--", "top", "-bn1", "|", "grep", "Cpu"]
-        cpu_result = run_proxmox_command(cpu_cmd, cpu_cmd, config['use_local_only'], host_details)
-        
+        usage_pct = container_cpu_usage(instance_id, host_details)
+
         # Get memory usage
         mem_cmd = ["pct", "exec", instance_id, "--", "free", "-m"]
         mem_result = run_proxmox_command(mem_cmd, mem_cmd, config['use_local_only'], host_details)
@@ -3233,26 +3255,17 @@ def monitor_container_resources(instance_id, region, az, interval, count):
         disk_result = run_proxmox_command(disk_cmd, disk_cmd, config['use_local_only'], host_details)
         
         # Get running processes count
-        proc_cmd = ["pct", "exec", instance_id, "--", "ps", "aux", "|", "wc", "-l"]
-        proc_result = run_proxmox_command(proc_cmd, proc_cmd, config['use_local_only'], host_details)
+        proc_result = run_argv(["pct", "exec", instance_id, "--", "ps", "-e", "--no-headers"],
+                               config['use_local_only'], host_details)
         
         click.secho(f"\n📊 Snapshot {i+1}/{count} at {time.strftime('%H:%M:%S')}", fg='yellow')
         
         # Parse and display CPU usage
-        if cpu_result.returncode == 0:
-            try:
-                cpu_line = cpu_result.stdout.strip()
-                if "id," in cpu_line:  # Look for idle percentage
-                    # Extract the idle percentage and convert to usage
-                    idle_pct = float(cpu_line.split("id,")[0].split()[-1])
-                    usage_pct = 100.0 - idle_pct
-                    cpu_color = 'green' if usage_pct < 70 else ('yellow' if usage_pct < 90 else 'red')
-                    click.secho(f"CPU Usage: {usage_pct:.1f}%", fg=cpu_color)
-            except (ValueError, IndexError, KeyError) as e:
-                logging.warning(f"Failed to parse CPU usage data: {e}")
-                click.secho(f"CPU Usage: Unable to parse", fg='red')
+        if usage_pct is not None:
+            cpu_color = 'green' if usage_pct < 70 else ('yellow' if usage_pct < 90 else 'red')
+            click.secho(f"CPU Usage: {usage_pct:.1f}%", fg=cpu_color)
         else:
-            click.secho(f"CPU Usage: Unable to retrieve", fg='red')
+            click.secho("CPU Usage: Unable to retrieve", fg='red')
         
         # Parse and display memory usage
         if mem_result.returncode == 0:
@@ -3290,7 +3303,7 @@ def monitor_container_resources(instance_id, region, az, interval, count):
         # Display process count
         if proc_result.returncode == 0:
             try:
-                proc_count = int(proc_result.stdout.strip())
+                proc_count = len(proc_result.stdout.strip().splitlines())
                 click.secho(f"Running Processes: {proc_count}", fg='cyan')
             except ValueError as e:
                 logging.warning(f"Failed to parse process count: {e}")
@@ -3464,11 +3477,12 @@ def generate_container_report(instance_id, region, az, output, file):
             report["network"] = {"error": net_result.stderr.strip()}
         
         # Running processes
-        ps_cmd = ["pct", "exec", instance_id, "--", "ps", "aux", "--sort=-%mem", "|", "head", "-n", "11"]
-        ps_result = run_proxmox_command(ps_cmd, ps_cmd, config['use_local_only'], host_details)
+        ps_cmd = ["pct", "exec", instance_id, "--", "ps", "aux", "--sort=-%mem"]
+        ps_result = run_argv(ps_cmd, config['use_local_only'], host_details)
         
         if ps_result.returncode == 0:
-            proc_lines = ps_result.stdout.strip().split('\n')
+            # Header plus the ten processes using the most memory.
+            proc_lines = ps_result.stdout.strip().split('\n')[:11]
             
             if len(proc_lines) > 1:  # Ensure we have at least a header and a process
                 top_processes = []
