@@ -1,0 +1,121 @@
+/* LWS site: the search box in the header and its result list.
+   Loaded on every page, after style.css, whose tokens it uses. */
+
+.site-search {
+    position: relative;
+    margin-left: auto;
+    flex: 0 1 260px;
+}
+
+.site-search[hidden] {
+    display: none;
+}
+
+.site-search-input {
+    width: 100%;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text);
+    background: var(--bg-subtle);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 30px 6px 10px;
+    min-height: 34px;
+}
+
+.site-search-input::placeholder {
+    color: var(--text-muted);
+    opacity: 1;
+}
+
+.site-search-input:focus {
+    background: var(--surface);
+    border-color: var(--primary);
+}
+
+.site-search-key {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    padding: 0 5px;
+    line-height: 1.5;
+    pointer-events: none;
+}
+
+.site-search-input:focus + .site-search-key {
+    display: none;
+}
+
+.site-search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: min(520px, calc(100vw - 32px));
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+    margin: 0;
+    padding: 6px;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-raised);
+}
+
+.site-search-results[hidden] {
+    display: none;
+}
+
+.site-search-results a {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: var(--text);
+    text-decoration: none;
+}
+
+.site-search-results a:hover,
+.site-search-results [aria-selected="true"] a {
+    background: var(--bg-subtle);
+}
+
+.site-search-results [aria-selected="true"] a {
+    box-shadow: inset 2px 0 0 var(--primary);
+}
+
+.search-result-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.92rem;
+}
+
+.search-result-page {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.search-result-text {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.84rem;
+    color: var(--text-muted);
+    overflow-wrap: anywhere;
+}
+
+.search-empty {
+    padding: 10px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+@media (max-width: 720px) {
+    .site-search {
+        flex: 1 1 160px;
+    }
+}
