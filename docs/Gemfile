@@ -6,7 +6,7 @@ source "https://rubygems.org"
 gem "github-pages", group: :jekyll_plugins
 
 group :test do
-  gem "html-proofer", "~> 5.0"
+  gem "html-proofer", "~> 5.2"
 end
 
 # Ruby 3 no longer bundles webrick, which `jekyll serve` needs.
