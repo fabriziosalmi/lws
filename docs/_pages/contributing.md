@@ -29,7 +29,7 @@ pip install -r requirements.txt   # includes pytest, pytest-cov and pytest-mock
 pip install ruff==0.15.6          # the version CI uses
 ```
 
-LWS supports Python 3.10 to 3.14. The floor is declared once, in
+LWS supports Python 3.10 to 3.15. The floor is declared once, in
 `pyproject.toml`; `tests/test_python_support.py` fails if the CI matrix or the
 Dockerfile disagree with it.
 
@@ -39,7 +39,7 @@ CI runs on every pull request:
 
 | Check | Command | Blocks the merge |
 |---|---|---|
-| Tests, Python 3.10 to 3.14 | `pytest` | Yes |
+| Tests, Python 3.10 to 3.15 | `pytest` | Yes |
 | Lint: real errors | `ruff check --select=E9,F63,F7,F82 .` | Yes |
 | Lint: full rule set | `ruff check .` | No, advisory: `lws.py` and `api.py` carry older findings |
 | Static analysis | slopless (`.github/workflows/slopless.yml`) | On errors |

@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 
 RUN apt update && apt dist-upgrade -y && apt install -y --no-install-recommends sshpass openssh-client && apt-get clean && rm -rf /var/lib/apt/lists/*
 
