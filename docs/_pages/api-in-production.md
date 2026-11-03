@@ -177,7 +177,7 @@ it is running, in the middle of the operation.
 
 ## Run it with Docker
 
-The image is based on `python:3.14-slim` with `sshpass` and the OpenSSH
+The image is based on `python:3.15-slim` with `sshpass` and the OpenSSH
 client. It copies `lws.py`, `api.py`, `ui.html`, `requirements.txt`,
 `lws_core/`, `lws_commands/` and `vendor/` into `/app`, runs
 `python3 api.py` as the unprivileged user `lws`, and exposes port 8080.
