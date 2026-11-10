@@ -186,7 +186,14 @@ def get_next_vmid(start_vmid=10000, use_local_only=False, host_details=None):
             # Skip the header line and extract VMID from each line
             if line.startswith("VMID"):
                 continue
-            vmid = int(line.split()[0])
+            parts = line.split()
+            if not parts:
+                continue
+            try:
+                vmid = int(parts[0])
+            except ValueError:
+                logging.warning(f"Skipping malformed pct list line: {line!r}")
+                continue
             existing_vmids.append(vmid)
 
         # Find the next available VMID
