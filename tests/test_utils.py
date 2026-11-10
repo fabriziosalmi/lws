@@ -228,6 +228,24 @@ class TestGetNextVMID:
             assert next_vmid == 20000
 
     @pytest.mark.unit
+    def test_get_next_vmid_skips_blank_and_malformed_lines(self):
+        """Test that blank or malformed pct list lines are skipped."""
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = (
+            "VMID       Status     Lock         Name\n"
+            "10001      running\n"
+            "\n"
+            "not-a-vmid stopped\n"
+            "10003      running\n"
+        )
+
+        with patch('lws_core.utils.run_proxmox_command', return_value=mock_result):
+            next_vmid = get_next_vmid(start_vmid=10000, use_local_only=True)
+
+            assert next_vmid == 10004
+
+    @pytest.mark.unit
     def test_get_next_vmid_remote_execution(self):
         """Test getting next VMID with remote execution."""
         mock_result = Mock()
