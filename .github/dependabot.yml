@@ -2,6 +2,8 @@
 version: 2
 updates:
   - package-ecosystem: "github-actions"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
@@ -12,6 +14,8 @@ updates:
           - "*"
 
   - package-ecosystem: "pip"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
@@ -25,6 +29,8 @@ updates:
           - "patch"
 
   - package-ecosystem: "docker"
+    cooldown:
+      default-days: 7
     directory: "/"
     schedule:
       interval: "weekly"
@@ -33,6 +39,8 @@ updates:
   # The docs/ site: github-pages pins the gems GitHub Pages builds with, and
   # .github/workflows/docs.yml builds with this lockfile.
   - package-ecosystem: "bundler"
+    cooldown:
+      default-days: 7
     directory: "/docs"
     schedule:
       interval: "weekly"
