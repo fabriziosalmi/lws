@@ -216,7 +216,10 @@ def is_container_locked(instance_id, host_details):
     result = run_proxmox_command(check_lock_cmd, check_lock_cmd, config['use_local_only'], host_details)
 
     if result.returncode == 0:
-        return 'lock' in result.stdout
+        # A container is locked only when the config has a "lock:" line.
+        # Substring matching would falsely flag containers whose hostname/
+        # description/etc. merely contain "lock" (e.g. "clock-10001").
+        return any(line.strip().startswith('lock:') for line in result.stdout.splitlines())
     else:
         logging.error(f"❌ Failed to check lock status for instance {instance_id}: {result.stderr}")
         return False  # Assume it's not locked if the command fails to avoid indefinite retries
