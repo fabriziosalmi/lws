@@ -302,6 +302,46 @@ class TestIsContainerLocked:
                 # Should return False on failure to avoid indefinite retries
                 assert result is False
 
+    @pytest.mark.unit
+    def test_hostname_containing_lock_is_not_locked(self):
+        """Regression: values merely *containing* 'lock' are not a lock.
+
+        A container with hostname "clock-10001" / description "blockchain-10002"
+        used to be reported as locked because 'lock' appeared anywhere in the
+        `pct config` output, causing `lws lxc run` to give up without starting it.
+        Only an actual "lock:" line means the container is locked.
+        """
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = (
+            "hostname: clock-10001\n"
+            "description: a blockchain node\n"
+            "memory: 2048\n"
+            "cores: 2\n"
+        )
+
+        host_details = {'host': 'proxmox.example.com', 'user': 'root', 'ssh_password': 'password'}
+
+        with patch('lws_core.utils.config', {'use_local_only': False}):
+            with patch('lws_core.utils.run_proxmox_command', return_value=mock_result):
+                assert is_container_locked("10001", host_details) is False
+
+    @pytest.mark.unit
+    def test_lock_line_marks_container_locked(self):
+        """A real 'lock:' config line still reports the container as locked."""
+        mock_result = Mock()
+        mock_result.returncode = 0
+        mock_result.stdout = (
+            "hostname: clock-10001\n"
+            "lock: 1\n"
+        )
+
+        host_details = {'host': 'proxmox.example.com', 'user': 'root', 'ssh_password': 'password'}
+
+        with patch('lws_core.utils.config', {'use_local_only': False}):
+            with patch('lws_core.utils.run_proxmox_command', return_value=mock_result):
+                assert is_container_locked("10001", host_details) is True
+
 
 class TestProcessInstanceCommand:
     """Tests for the process_instance_command function."""
